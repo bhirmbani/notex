@@ -1,6 +1,10 @@
 import { Hono } from 'hono'
 
 import { requireAuth, type ApiAuthEnv } from './middleware/auth'
+import { projectsApi } from '@/features/projects/api'
+import { repositoriesApi } from '@/features/repositories/api'
+import { contextsApi } from '@/features/contexts/api'
+import { filesApi } from '@/features/files/api'
 
 export const api = new Hono<ApiAuthEnv>().basePath('/api/v1')
 
@@ -19,3 +23,8 @@ api.get('/me', (c) => {
     session: auth.session,
   })
 })
+
+api.route('/projects', projectsApi)
+api.route('/', repositoriesApi)
+api.route('/', contextsApi)
+api.route('/', filesApi)

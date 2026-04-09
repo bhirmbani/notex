@@ -86,6 +86,84 @@ export const verification = sqliteTable(
   }),
 )
 
+// ── Domain Tables ────────────────────────────────────────────────────
+
+export const projects = sqliteTable('projects', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export const repositories = sqliteTable('repositories', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export const contexts = sqliteTable('contexts', {
+  id: text('id').primaryKey(),
+  repositoryId: text('repository_id')
+    .notNull()
+    .references(() => repositories.id, { onDelete: 'cascade' }),
+  question: text('question').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export const files = sqliteTable('files', {
+  id: text('id').primaryKey(),
+  contextId: text('context_id')
+    .notNull()
+    .references(() => contexts.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  contentType: text('content_type', { enum: ['text', 'upload'] }).notNull(),
+  content: text('content').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export const notes = sqliteTable('notes', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  content: text('content').notNull().default(''),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export const mermaidDiagrams = sqliteTable('mermaid_diagrams', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  content: text('content').notNull().default(''),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export const entityLinks = sqliteTable('entity_links', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  sourceType: text('source_type', {
+    enum: ['repository', 'context', 'file', 'note', 'mermaid'],
+  }).notNull(),
+  sourceId: text('source_id').notNull(),
+  targetType: text('target_type', {
+    enum: ['repository', 'context', 'file', 'note', 'mermaid'],
+  }).notNull(),
+  targetId: text('target_id').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
 // ── Schema Export ───────────────────────────────────────────────────
 
 export const schema = {
@@ -93,4 +171,11 @@ export const schema = {
   session,
   account,
   verification,
+  projects,
+  repositories,
+  contexts,
+  files,
+  notes,
+  mermaidDiagrams,
+  entityLinks,
 }

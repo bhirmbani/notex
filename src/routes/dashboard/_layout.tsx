@@ -4,12 +4,14 @@ import {
   createFileRoute,
   redirect,
   useNavigate,
+  useParams,
 } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { useState } from 'react'
 
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { Sidebar } from '@/components/Sidebar'
 import { signOutCurrentSession } from '@/features/auth/lib/client'
 import { createAuth, type AuthBindings } from '@/features/auth/lib/server'
 import {
@@ -80,9 +82,12 @@ function DashboardLayout() {
     await navigate({ to: '/login' })
   }
 
+  const params = useParams({ strict: false })
+  const projectId = (params as Record<string, string>).projectId
+
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="flex h-14 items-center justify-between border-b px-6">
+    <div className="flex h-screen flex-col bg-background">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
         <Link to="/dashboard" className="text-sm font-bold">
           Notex
         </Link>
@@ -101,9 +106,12 @@ function DashboardLayout() {
         </div>
       </header>
 
-      <main className="flex-1 p-6">
-        <Outlet />
-      </main>
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar projectId={projectId} />
+        <main className="flex-1 overflow-y-auto p-6">
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }
