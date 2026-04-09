@@ -1,0 +1,17 @@
+{
+  "name": "notex",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2024-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".output/public",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "notex",
+      "database_id": "85b25fb8-aa70-46ce-9290-ea414288e99b",
+      "remote": true,
+    },
+  ],
+}

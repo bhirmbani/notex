@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "tanstack-start-cf-d1-auth": {
+      "source": "bhirmbani/tanstack-start-cf-d1-auth-skills",
+      "sourceType": "github",
+      "computedHash": "75c71cb20cbf261d2cfea1fd85cfe793ef8e0133e587dcd105591fb8b21de8f2"
+    }
+  }
+}
