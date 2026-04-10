@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-export const Route = createFileRoute('/dashboard/p/$projectId/')({
+export const Route = createFileRoute('/dashboard/_layout/p/$projectId/')({
   component: ProjectHome,
 })
 

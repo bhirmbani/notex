@@ -5,6 +5,8 @@ import { projectsApi } from '@/features/projects/api'
 import { repositoriesApi } from '@/features/repositories/api'
 import { contextsApi } from '@/features/contexts/api'
 import { filesApi } from '@/features/files/api'
+import { notesApi } from '@/features/notes/api'
+import { mermaidApi } from '@/features/mermaid/api'
 
 export const api = new Hono<ApiAuthEnv>().basePath('/api/v1')
 
@@ -28,3 +30,5 @@ api.route('/projects', projectsApi)
 api.route('/', repositoriesApi)
 api.route('/', contextsApi)
 api.route('/', filesApi)
+api.route('/', notesApi)
+api.route('/', mermaidApi)

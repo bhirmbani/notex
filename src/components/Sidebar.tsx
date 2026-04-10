@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
   RiFolder3Line,
   RiArrowRightSLine,
@@ -7,11 +7,15 @@ import {
   RiDatabase2Line,
   RiQuestionLine,
   RiAddLine,
+  RiArticleLine,
+  RiGitBranchLine,
 } from '@remixicon/react'
 
 import { useProjects } from '@/features/projects/hooks'
 import { useRepositories } from '@/features/repositories/hooks'
 import { useContexts } from '@/features/contexts/hooks'
+import { useNotes, useCreateNote } from '@/features/notes/hooks'
+import { useMermaidDiagrams, useCreateMermaid } from '@/features/mermaid/hooks'
 import { cn } from '@/lib/utils'
 
 type SidebarProps = {
@@ -66,6 +70,132 @@ function RepoItem({
   )
 }
 
+function NotesSection({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(true)
+  const { data: notes } = useNotes(projectId)
+  const createNote = useCreateNote(projectId)
+  const navigate = useNavigate()
+  const params = useParams({ strict: false })
+  const activeNoteId = (params as Record<string, string>).noteId
+
+  const handleAddNote = async () => {
+    try {
+      const note = await createNote.mutateAsync({ title: 'Untitled' })
+      navigate({
+        to: '/dashboard/p/$projectId/notes/$noteId',
+        params: { projectId, noteId: note.id },
+      })
+    } catch {
+      // silently ignore — React Query will log the error
+    }
+  }
+
+  return (
+    <div className="space-y-0.5">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+      >
+        {open ? (
+          <RiArrowDownSLine className="size-3.5" />
+        ) : (
+          <RiArrowRightSLine className="size-3.5" />
+        )}
+        Notes
+      </button>
+      {open && (
+        <div className="space-y-0.5">
+          {notes?.map((note) => (
+            <Link
+              key={note.id}
+              to="/dashboard/p/$projectId/notes/$noteId"
+              params={{ projectId, noteId: note.id }}
+              className={cn(
+                'flex items-center gap-1 rounded px-2 py-1 text-sm hover:bg-accent',
+                activeNoteId === note.id && 'bg-accent font-medium',
+              )}
+            >
+              <RiArticleLine className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">{note.title || 'Untitled'}</span>
+            </Link>
+          ))}
+          <button
+            onClick={handleAddNote}
+            disabled={createNote.isPending}
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            <RiAddLine className="size-3.5" />
+            {createNote.isPending ? 'Creating...' : 'Add note'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MermaidSection({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(true)
+  const { data: diagrams } = useMermaidDiagrams(projectId)
+  const createDiagram = useCreateMermaid(projectId)
+  const navigate = useNavigate()
+  const params = useParams({ strict: false })
+  const activeDiagId = (params as Record<string, string>).diagId
+
+  const handleAddDiagram = async () => {
+    try {
+      const diagram = await createDiagram.mutateAsync({ name: 'Untitled' })
+      navigate({
+        to: '/dashboard/p/$projectId/mermaid/$diagId',
+        params: { projectId, diagId: diagram.id },
+      })
+    } catch {
+      // silently ignore — React Query will log the error
+    }
+  }
+
+  return (
+    <div className="space-y-0.5">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+      >
+        {open ? (
+          <RiArrowDownSLine className="size-3.5" />
+        ) : (
+          <RiArrowRightSLine className="size-3.5" />
+        )}
+        Mermaid
+      </button>
+      {open && (
+        <div className="space-y-0.5">
+          {diagrams?.map((diag) => (
+            <Link
+              key={diag.id}
+              to="/dashboard/p/$projectId/mermaid/$diagId"
+              params={{ projectId, diagId: diag.id }}
+              className={cn(
+                'flex items-center gap-1 rounded px-2 py-1 text-sm hover:bg-accent',
+                activeDiagId === diag.id && 'bg-accent font-medium',
+              )}
+            >
+              <RiGitBranchLine className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">{diag.name || 'Untitled'}</span>
+            </Link>
+          ))}
+          <button
+            onClick={handleAddDiagram}
+            disabled={createDiagram.isPending}
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            <RiAddLine className="size-3.5" />
+            {createDiagram.isPending ? 'Creating...' : 'Add diagram'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ProjectTree({ projectId }: { projectId: string }) {
   const [reposOpen, setReposOpen] = useState(true)
   const { data: repos } = useRepositories(projectId)
@@ -73,38 +203,42 @@ function ProjectTree({ projectId }: { projectId: string }) {
   const activeCtxId = (params as Record<string, string>).ctxId
 
   return (
-    <div className="space-y-0.5">
-      <button
-        onClick={() => setReposOpen((v) => !v)}
-        className="flex w-full items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
-      >
-        {reposOpen ? (
-          <RiArrowDownSLine className="size-3.5" />
-        ) : (
-          <RiArrowRightSLine className="size-3.5" />
+    <div className="space-y-2">
+      <div className="space-y-0.5">
+        <button
+          onClick={() => setReposOpen((v) => !v)}
+          className="flex w-full items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+        >
+          {reposOpen ? (
+            <RiArrowDownSLine className="size-3.5" />
+          ) : (
+            <RiArrowRightSLine className="size-3.5" />
+          )}
+          Repositories
+        </button>
+        {reposOpen && (
+          <div className="space-y-0.5">
+            {repos?.map((repo) => (
+              <RepoItem
+                key={repo.id}
+                repo={repo}
+                projectId={projectId}
+                activeContextId={activeCtxId}
+              />
+            ))}
+            <Link
+              to="/dashboard/p/$projectId/r/$repoId"
+              params={{ projectId, repoId: 'new' }}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <RiAddLine className="size-3.5" />
+              Add repository
+            </Link>
+          </div>
         )}
-        Repositories
-      </button>
-      {reposOpen && (
-        <div className="space-y-0.5">
-          {repos?.map((repo) => (
-            <RepoItem
-              key={repo.id}
-              repo={repo}
-              projectId={projectId}
-              activeContextId={activeCtxId}
-            />
-          ))}
-          <Link
-            to="/dashboard/p/$projectId/r/$repoId"
-            params={{ projectId, repoId: 'new' }}
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <RiAddLine className="size-3.5" />
-            Add repository
-          </Link>
-        </div>
-      )}
+      </div>
+      <NotesSection projectId={projectId} />
+      <MermaidSection projectId={projectId} />
     </div>
   )
 }

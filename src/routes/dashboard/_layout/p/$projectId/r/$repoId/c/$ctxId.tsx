@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute(
-  '/dashboard/p/$projectId/r/$repoId/c/$ctxId',
+  '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId',
 )({
   component: ContextPage,
 })
