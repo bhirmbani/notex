@@ -10,11 +10,15 @@ import {
   RiArticleLine,
   RiGitBranchLine,
   RiNodeTree,
+  RiFileLine,
+  RiUploadLine,
 } from '@remixicon/react'
 
 import { useProjects } from '@/features/projects/hooks'
 import { useRepositories } from '@/features/repositories/hooks'
 import { useContexts } from '@/features/contexts/hooks'
+import { useFiles } from '@/features/files/hooks'
+import { AddFileModal } from '@/features/files/AddFileModal'
 import { useNotes, useCreateNote } from '@/features/notes/hooks'
 import { useMermaidDiagrams, useCreateMermaid } from '@/features/mermaid/hooks'
 import { cn } from '@/lib/utils'
@@ -23,14 +27,121 @@ type SidebarProps = {
   projectId?: string
 }
 
+function ContextFiles({
+  ctxId,
+  projectId,
+  repoId,
+  activeFileId,
+}: {
+  ctxId: string
+  projectId: string
+  repoId: string
+  activeFileId?: string
+}) {
+  const { data: files } = useFiles(ctxId)
+
+  if (!files?.length) return null
+
+  return (
+    <>
+      {files.map((file) => (
+        <Link
+          key={file.id}
+          to="/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
+          params={{ projectId, repoId, ctxId, fileId: file.id }}
+          className={cn(
+            'flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent',
+            activeFileId === file.id && 'bg-accent font-medium',
+          )}
+        >
+          {file.contentType === 'upload' ? (
+            <RiUploadLine className="size-3 shrink-0 text-muted-foreground" />
+          ) : (
+            <RiFileLine className="size-3 shrink-0 text-muted-foreground" />
+          )}
+          <span className="truncate font-mono text-[10px]">{file.name}</span>
+        </Link>
+      ))}
+    </>
+  )
+}
+
+function ContextItem({
+  ctx,
+  projectId,
+  repoId,
+  activeContextId,
+  activeFileId,
+}: {
+  ctx: { id: string; question: string }
+  projectId: string
+  repoId: string
+  activeContextId?: string
+  activeFileId?: string
+}) {
+  const isActive = activeContextId === ctx.id
+  const [open, setOpen] = useState(isActive)
+  const [showAdd, setShowAdd] = useState(false)
+
+  return (
+    <div>
+      <div className="flex items-center gap-0.5">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground"
+        >
+          {open ? (
+            <RiArrowDownSLine className="size-3" />
+          ) : (
+            <RiArrowRightSLine className="size-3" />
+          )}
+        </button>
+        <Link
+          to="/dashboard/p/$projectId/r/$repoId/c/$ctxId"
+          params={{ projectId, repoId, ctxId: ctx.id }}
+          className={cn(
+            'flex flex-1 items-center gap-1 rounded px-1 py-1 text-xs hover:bg-accent min-w-0',
+            isActive && !activeFileId && 'bg-accent font-medium',
+          )}
+        >
+          <RiQuestionLine className="size-3 shrink-0 text-muted-foreground" />
+          <span className="truncate">{ctx.question}</span>
+        </Link>
+      </div>
+      {open && (
+        <div className="ml-5 border-l pl-2">
+          <ContextFiles
+            ctxId={ctx.id}
+            projectId={projectId}
+            repoId={repoId}
+            activeFileId={activeFileId}
+          />
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RiAddLine className="size-3" />
+            Add answer
+          </button>
+        </div>
+      )}
+      {showAdd && (
+        <AddFileModal contextId={ctx.id} onClose={() => setShowAdd(false)} />
+      )}
+    </div>
+  )
+}
+
 function RepoItem({
   repo,
   projectId,
   activeContextId,
+  activeFileId,
 }: {
   repo: { id: string; name: string }
   projectId: string
   activeContextId?: string
+  activeFileId?: string
 }) {
   const [open, setOpen] = useState(false)
   const { data: contexts } = useContexts(repo.id)
@@ -52,18 +163,14 @@ function RepoItem({
       {open && (
         <div className="ml-4 border-l pl-2">
           {contexts?.map((ctx) => (
-            <Link
+            <ContextItem
               key={ctx.id}
-              to="/dashboard/p/$projectId/r/$repoId/c/$ctxId"
-              params={{ projectId, repoId: repo.id, ctxId: ctx.id }}
-              className={cn(
-                'flex items-center gap-1 rounded px-2 py-1 text-xs hover:bg-accent',
-                activeContextId === ctx.id && 'bg-accent font-medium',
-              )}
-            >
-              <RiQuestionLine className="size-3 shrink-0 text-muted-foreground" />
-              <span className="truncate">{ctx.question}</span>
-            </Link>
+              ctx={ctx}
+              projectId={projectId}
+              repoId={repo.id}
+              activeContextId={activeContextId}
+              activeFileId={activeFileId}
+            />
           ))}
         </div>
       )}
@@ -202,6 +309,7 @@ function ProjectTree({ projectId }: { projectId: string }) {
   const { data: repos } = useRepositories(projectId)
   const params = useParams({ strict: false })
   const activeCtxId = (params as Record<string, string>).ctxId
+  const activeFileId = (params as Record<string, string>).fileId
 
   return (
     <div className="space-y-2">
@@ -225,6 +333,7 @@ function ProjectTree({ projectId }: { projectId: string }) {
                 repo={repo}
                 projectId={projectId}
                 activeContextId={activeCtxId}
+                activeFileId={activeFileId}
               />
             ))}
             <Link

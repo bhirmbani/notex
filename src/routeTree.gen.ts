@@ -19,7 +19,10 @@ import { Route as DashboardLayoutPProjectIdMindmapRouteImport } from './routes/d
 import { Route as DashboardLayoutPProjectIdRRepoIdRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId'
 import { Route as DashboardLayoutPProjectIdNotesNoteIdRouteImport } from './routes/dashboard/_layout/p/$projectId/notes/$noteId'
 import { Route as DashboardLayoutPProjectIdMermaidDiagIdRouteImport } from './routes/dashboard/_layout/p/$projectId/mermaid/$diagId'
+import { Route as DashboardLayoutPProjectIdRRepoIdIndexRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId/index'
 import { Route as DashboardLayoutPProjectIdRRepoIdCCtxIdRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId'
+import { Route as DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/index'
+import { Route as DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
 
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
@@ -76,11 +79,29 @@ const DashboardLayoutPProjectIdMermaidDiagIdRoute =
     path: '/p/$projectId/mermaid/$diagId',
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
+const DashboardLayoutPProjectIdRRepoIdIndexRoute =
+  DashboardLayoutPProjectIdRRepoIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DashboardLayoutPProjectIdRRepoIdRoute,
+  } as any)
 const DashboardLayoutPProjectIdRRepoIdCCtxIdRoute =
   DashboardLayoutPProjectIdRRepoIdCCtxIdRouteImport.update({
     id: '/c/$ctxId',
     path: '/c/$ctxId',
     getParentRoute: () => DashboardLayoutPProjectIdRRepoIdRoute,
+  } as any)
+const DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute =
+  DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DashboardLayoutPProjectIdRRepoIdCCtxIdRoute,
+  } as any)
+const DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute =
+  DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRouteImport.update({
+    id: '/f/$fileId',
+    path: '/f/$fileId',
+    getParentRoute: () => DashboardLayoutPProjectIdRRepoIdCCtxIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -94,7 +115,10 @@ export interface FileRoutesByFullPath {
   '/dashboard/p/$projectId/mermaid/$diagId': typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
   '/dashboard/p/$projectId/notes/$noteId': typeof DashboardLayoutPProjectIdNotesNoteIdRoute
   '/dashboard/p/$projectId/r/$repoId': typeof DashboardLayoutPProjectIdRRepoIdRouteWithChildren
-  '/dashboard/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRoute
+  '/dashboard/p/$projectId/r/$repoId/': typeof DashboardLayoutPProjectIdRRepoIdIndexRoute
+  '/dashboard/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren
+  '/dashboard/p/$projectId/r/$repoId/c/$ctxId/': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute
+  '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -105,8 +129,9 @@ export interface FileRoutesByTo {
   '/dashboard/p/$projectId': typeof DashboardLayoutPProjectIdIndexRoute
   '/dashboard/p/$projectId/mermaid/$diagId': typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
   '/dashboard/p/$projectId/notes/$noteId': typeof DashboardLayoutPProjectIdNotesNoteIdRoute
-  '/dashboard/p/$projectId/r/$repoId': typeof DashboardLayoutPProjectIdRRepoIdRouteWithChildren
-  '/dashboard/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRoute
+  '/dashboard/p/$projectId/r/$repoId': typeof DashboardLayoutPProjectIdRRepoIdIndexRoute
+  '/dashboard/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute
+  '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -120,7 +145,10 @@ export interface FileRoutesById {
   '/dashboard/_layout/p/$projectId/mermaid/$diagId': typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
   '/dashboard/_layout/p/$projectId/notes/$noteId': typeof DashboardLayoutPProjectIdNotesNoteIdRoute
   '/dashboard/_layout/p/$projectId/r/$repoId': typeof DashboardLayoutPProjectIdRRepoIdRouteWithChildren
-  '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRoute
+  '/dashboard/_layout/p/$projectId/r/$repoId/': typeof DashboardLayoutPProjectIdRRepoIdIndexRoute
+  '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren
+  '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute
+  '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -135,7 +163,10 @@ export interface FileRouteTypes {
     | '/dashboard/p/$projectId/mermaid/$diagId'
     | '/dashboard/p/$projectId/notes/$noteId'
     | '/dashboard/p/$projectId/r/$repoId'
+    | '/dashboard/p/$projectId/r/$repoId/'
     | '/dashboard/p/$projectId/r/$repoId/c/$ctxId'
+    | '/dashboard/p/$projectId/r/$repoId/c/$ctxId/'
+    | '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -148,6 +179,7 @@ export interface FileRouteTypes {
     | '/dashboard/p/$projectId/notes/$noteId'
     | '/dashboard/p/$projectId/r/$repoId'
     | '/dashboard/p/$projectId/r/$repoId/c/$ctxId'
+    | '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
   id:
     | '__root__'
     | '/'
@@ -160,7 +192,10 @@ export interface FileRouteTypes {
     | '/dashboard/_layout/p/$projectId/mermaid/$diagId'
     | '/dashboard/_layout/p/$projectId/notes/$noteId'
     | '/dashboard/_layout/p/$projectId/r/$repoId'
+    | '/dashboard/_layout/p/$projectId/r/$repoId/'
     | '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId'
+    | '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/'
+    | '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -242,6 +277,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLayoutPProjectIdMermaidDiagIdRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
+    '/dashboard/_layout/p/$projectId/r/$repoId/': {
+      id: '/dashboard/_layout/p/$projectId/r/$repoId/'
+      path: '/'
+      fullPath: '/dashboard/p/$projectId/r/$repoId/'
+      preLoaderRoute: typeof DashboardLayoutPProjectIdRRepoIdIndexRouteImport
+      parentRoute: typeof DashboardLayoutPProjectIdRRepoIdRoute
+    }
     '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId': {
       id: '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId'
       path: '/c/$ctxId'
@@ -249,17 +291,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRouteImport
       parentRoute: typeof DashboardLayoutPProjectIdRRepoIdRoute
     }
+    '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/': {
+      id: '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/'
+      path: '/'
+      fullPath: '/dashboard/p/$projectId/r/$repoId/c/$ctxId/'
+      preLoaderRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRouteImport
+      parentRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRoute
+    }
+    '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': {
+      id: '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
+      path: '/f/$fileId'
+      fullPath: '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
+      preLoaderRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRouteImport
+      parentRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRoute
+    }
   }
 }
 
+interface DashboardLayoutPProjectIdRRepoIdCCtxIdRouteChildren {
+  DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute
+  DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute
+}
+
+const DashboardLayoutPProjectIdRRepoIdCCtxIdRouteChildren: DashboardLayoutPProjectIdRRepoIdCCtxIdRouteChildren =
+  {
+    DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute:
+      DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute,
+    DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute:
+      DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute,
+  }
+
+const DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren =
+  DashboardLayoutPProjectIdRRepoIdCCtxIdRoute._addFileChildren(
+    DashboardLayoutPProjectIdRRepoIdCCtxIdRouteChildren,
+  )
+
 interface DashboardLayoutPProjectIdRRepoIdRouteChildren {
-  DashboardLayoutPProjectIdRRepoIdCCtxIdRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRoute
+  DashboardLayoutPProjectIdRRepoIdIndexRoute: typeof DashboardLayoutPProjectIdRRepoIdIndexRoute
+  DashboardLayoutPProjectIdRRepoIdCCtxIdRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren
 }
 
 const DashboardLayoutPProjectIdRRepoIdRouteChildren: DashboardLayoutPProjectIdRRepoIdRouteChildren =
   {
+    DashboardLayoutPProjectIdRRepoIdIndexRoute:
+      DashboardLayoutPProjectIdRRepoIdIndexRoute,
     DashboardLayoutPProjectIdRRepoIdCCtxIdRoute:
-      DashboardLayoutPProjectIdRRepoIdCCtxIdRoute,
+      DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren,
   }
 
 const DashboardLayoutPProjectIdRRepoIdRouteWithChildren =
