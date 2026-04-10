@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { RiAddLine, RiDatabase2Line, RiDeleteBinLine } from '@remixicon/react'
+import { RiAddLine, RiDatabase2Line, RiDeleteBinLine, RiLinkM } from '@remixicon/react'
 import { useState } from 'react'
 
 import { useProject } from '@/features/projects/hooks'
@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LinkModal } from '@/components/LinkModal'
 
 export const Route = createFileRoute('/dashboard/_layout/p/$projectId/')({
   component: ProjectHome,
@@ -86,6 +87,7 @@ function ProjectHome() {
   const { data: repos, isLoading } = useRepositories(projectId)
   const deleteRepo = useDeleteRepository(projectId)
   const [showCreate, setShowCreate] = useState(false)
+  const [linkTarget, setLinkTarget] = useState<{ id: string } | null>(null)
   const navigate = useNavigate()
 
   return (
@@ -137,16 +139,28 @@ function ProjectHome() {
                   <RiDatabase2Line className="size-5 text-muted-foreground" />
                   <h3 className="font-medium leading-tight">{repo.name}</h3>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    deleteRepo.mutate(repo.id)
-                  }}
-                  className="opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                  aria-label="Delete repository"
-                >
-                  <RiDeleteBinLine className="size-4" />
-                </button>
+                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setLinkTarget({ id: repo.id })
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Link repository"
+                  >
+                    <RiLinkM className="size-4" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteRepo.mutate(repo.id)
+                    }}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Delete repository"
+                  >
+                    <RiDeleteBinLine className="size-4" />
+                  </button>
+                </div>
               </div>
               {repo.description && (
                 <p className="text-xs text-muted-foreground line-clamp-2">
@@ -162,6 +176,14 @@ function ProjectHome() {
         <CreateRepoModal
           projectId={projectId}
           onClose={() => setShowCreate(false)}
+        />
+      )}
+      {linkTarget && (
+        <LinkModal
+          projectId={projectId}
+          entityType="repository"
+          entityId={linkTarget.id}
+          onClose={() => setLinkTarget(null)}
         />
       )}
     </div>

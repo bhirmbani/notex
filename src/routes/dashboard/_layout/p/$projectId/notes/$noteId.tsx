@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import MDEditor from '@uiw/react-md-editor'
+import { RiLinkM } from '@remixicon/react'
 
 import { useNote, useUpdateNote } from '@/features/notes/hooks'
+import { LinkModal } from '@/components/LinkModal'
 
 export const Route = createFileRoute('/dashboard/_layout/p/$projectId/notes/$noteId')({
   component: NotePage,
@@ -16,6 +18,7 @@ function NotePage() {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [initialized, setInitialized] = useState(false)
+  const [showLink, setShowLink] = useState(false)
 
   // 1. Reset when navigating to a different note
   useEffect(() => {
@@ -72,6 +75,13 @@ function NotePage() {
         {updateNote.isPending && (
           <span className="text-xs text-muted-foreground">Saving...</span>
         )}
+        <button
+          onClick={() => setShowLink(true)}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Link note"
+        >
+          <RiLinkM className="size-5" />
+        </button>
       </div>
 
       {/* Markdown editor */}
@@ -83,6 +93,15 @@ function NotePage() {
           style={{ height: '100%' }}
         />
       </div>
+
+      {showLink && (
+        <LinkModal
+          projectId={projectId}
+          entityType="note"
+          entityId={noteId}
+          onClose={() => setShowLink(false)}
+        />
+      )}
     </div>
   )
 }

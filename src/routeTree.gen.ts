@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardLayoutRouteImport } from './routes/dashboard/_layout'
 import { Route as DashboardLayoutIndexRouteImport } from './routes/dashboard/_layout/index'
 import { Route as DashboardLayoutPProjectIdIndexRouteImport } from './routes/dashboard/_layout/p/$projectId/index'
+import { Route as DashboardLayoutPProjectIdMindmapRouteImport } from './routes/dashboard/_layout/p/$projectId/mindmap'
 import { Route as DashboardLayoutPProjectIdRRepoIdRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId'
 import { Route as DashboardLayoutPProjectIdNotesNoteIdRouteImport } from './routes/dashboard/_layout/p/$projectId/notes/$noteId'
 import { Route as DashboardLayoutPProjectIdMermaidDiagIdRouteImport } from './routes/dashboard/_layout/p/$projectId/mermaid/$diagId'
@@ -51,6 +52,12 @@ const DashboardLayoutPProjectIdIndexRoute =
     path: '/p/$projectId/',
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
+const DashboardLayoutPProjectIdMindmapRoute =
+  DashboardLayoutPProjectIdMindmapRouteImport.update({
+    id: '/p/$projectId/mindmap',
+    path: '/p/$projectId/mindmap',
+    getParentRoute: () => DashboardLayoutRoute,
+  } as any)
 const DashboardLayoutPProjectIdRRepoIdRoute =
   DashboardLayoutPProjectIdRRepoIdRouteImport.update({
     id: '/p/$projectId/r/$repoId',
@@ -82,6 +89,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/dashboard': typeof DashboardLayoutRouteWithChildren
   '/dashboard/': typeof DashboardLayoutIndexRoute
+  '/dashboard/p/$projectId/mindmap': typeof DashboardLayoutPProjectIdMindmapRoute
   '/dashboard/p/$projectId/': typeof DashboardLayoutPProjectIdIndexRoute
   '/dashboard/p/$projectId/mermaid/$diagId': typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
   '/dashboard/p/$projectId/notes/$noteId': typeof DashboardLayoutPProjectIdNotesNoteIdRoute
@@ -93,6 +101,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/dashboard': typeof DashboardLayoutIndexRoute
+  '/dashboard/p/$projectId/mindmap': typeof DashboardLayoutPProjectIdMindmapRoute
   '/dashboard/p/$projectId': typeof DashboardLayoutPProjectIdIndexRoute
   '/dashboard/p/$projectId/mermaid/$diagId': typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
   '/dashboard/p/$projectId/notes/$noteId': typeof DashboardLayoutPProjectIdNotesNoteIdRoute
@@ -106,6 +115,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/dashboard/_layout': typeof DashboardLayoutRouteWithChildren
   '/dashboard/_layout/': typeof DashboardLayoutIndexRoute
+  '/dashboard/_layout/p/$projectId/mindmap': typeof DashboardLayoutPProjectIdMindmapRoute
   '/dashboard/_layout/p/$projectId/': typeof DashboardLayoutPProjectIdIndexRoute
   '/dashboard/_layout/p/$projectId/mermaid/$diagId': typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
   '/dashboard/_layout/p/$projectId/notes/$noteId': typeof DashboardLayoutPProjectIdNotesNoteIdRoute
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/dashboard'
     | '/dashboard/'
+    | '/dashboard/p/$projectId/mindmap'
     | '/dashboard/p/$projectId/'
     | '/dashboard/p/$projectId/mermaid/$diagId'
     | '/dashboard/p/$projectId/notes/$noteId'
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/dashboard'
+    | '/dashboard/p/$projectId/mindmap'
     | '/dashboard/p/$projectId'
     | '/dashboard/p/$projectId/mermaid/$diagId'
     | '/dashboard/p/$projectId/notes/$noteId'
@@ -143,6 +155,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/dashboard/_layout'
     | '/dashboard/_layout/'
+    | '/dashboard/_layout/p/$projectId/mindmap'
     | '/dashboard/_layout/p/$projectId/'
     | '/dashboard/_layout/p/$projectId/mermaid/$diagId'
     | '/dashboard/_layout/p/$projectId/notes/$noteId'
@@ -201,6 +214,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLayoutPProjectIdIndexRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
+    '/dashboard/_layout/p/$projectId/mindmap': {
+      id: '/dashboard/_layout/p/$projectId/mindmap'
+      path: '/p/$projectId/mindmap'
+      fullPath: '/dashboard/p/$projectId/mindmap'
+      preLoaderRoute: typeof DashboardLayoutPProjectIdMindmapRouteImport
+      parentRoute: typeof DashboardLayoutRoute
+    }
     '/dashboard/_layout/p/$projectId/r/$repoId': {
       id: '/dashboard/_layout/p/$projectId/r/$repoId'
       path: '/p/$projectId/r/$repoId'
@@ -249,6 +269,7 @@ const DashboardLayoutPProjectIdRRepoIdRouteWithChildren =
 
 interface DashboardLayoutRouteChildren {
   DashboardLayoutIndexRoute: typeof DashboardLayoutIndexRoute
+  DashboardLayoutPProjectIdMindmapRoute: typeof DashboardLayoutPProjectIdMindmapRoute
   DashboardLayoutPProjectIdIndexRoute: typeof DashboardLayoutPProjectIdIndexRoute
   DashboardLayoutPProjectIdMermaidDiagIdRoute: typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
   DashboardLayoutPProjectIdNotesNoteIdRoute: typeof DashboardLayoutPProjectIdNotesNoteIdRoute
@@ -257,6 +278,7 @@ interface DashboardLayoutRouteChildren {
 
 const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
   DashboardLayoutIndexRoute: DashboardLayoutIndexRoute,
+  DashboardLayoutPProjectIdMindmapRoute: DashboardLayoutPProjectIdMindmapRoute,
   DashboardLayoutPProjectIdIndexRoute: DashboardLayoutPProjectIdIndexRoute,
   DashboardLayoutPProjectIdMermaidDiagIdRoute:
     DashboardLayoutPProjectIdMermaidDiagIdRoute,

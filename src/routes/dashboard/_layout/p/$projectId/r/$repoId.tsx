@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { RiAddLine, RiDeleteBinLine, RiQuestionLine } from '@remixicon/react'
+import { RiAddLine, RiDeleteBinLine, RiQuestionLine, RiLinkM } from '@remixicon/react'
 
 import { useRepository } from '@/features/repositories/hooks'
 import {
@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LinkModal } from '@/components/LinkModal'
 
 export const Route = createFileRoute('/dashboard/_layout/p/$projectId/r/$repoId')({
   component: RepositoryPage,
@@ -75,6 +76,7 @@ function RepositoryPage() {
   const { data: contexts, isLoading } = useContexts(repoId)
   const deleteCtx = useDeleteContext(repoId)
   const [showCreate, setShowCreate] = useState(false)
+  const [linkTarget, setLinkTarget] = useState<{ id: string } | null>(null)
   const navigate = useNavigate()
 
   return (
@@ -125,16 +127,28 @@ function RepositoryPage() {
                 <RiQuestionLine className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                 <p className="text-sm">{ctx.question}</p>
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  deleteCtx.mutate(ctx.id)
-                }}
-                className="opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0"
-                aria-label="Delete context"
-              >
-                <RiDeleteBinLine className="size-4" />
-              </button>
+              <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 shrink-0">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setLinkTarget({ id: ctx.id })
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Link context"
+                >
+                  <RiLinkM className="size-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    deleteCtx.mutate(ctx.id)
+                  }}
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label="Delete context"
+                >
+                  <RiDeleteBinLine className="size-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -145,6 +159,14 @@ function RepositoryPage() {
           repoId={repoId}
           projectId={projectId}
           onClose={() => setShowCreate(false)}
+        />
+      )}
+      {linkTarget && (
+        <LinkModal
+          projectId={projectId}
+          entityType="context"
+          entityId={linkTarget.id}
+          onClose={() => setLinkTarget(null)}
         />
       )}
     </div>

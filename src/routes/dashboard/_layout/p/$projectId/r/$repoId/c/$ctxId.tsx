@@ -5,6 +5,7 @@ import {
   RiDeleteBinLine,
   RiFileLine,
   RiUploadLine,
+  RiLinkM,
 } from '@remixicon/react'
 
 import { useContext } from '@/features/contexts/hooks'
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { LinkModal } from '@/components/LinkModal'
 
 export const Route = createFileRoute(
   '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId',
@@ -161,8 +163,17 @@ function AddFileModal({
   )
 }
 
-function FileCard({ file, contextId }: { file: KbFile; contextId: string }) {
+function FileCard({
+  file,
+  contextId,
+  projectId,
+}: {
+  file: KbFile
+  contextId: string
+  projectId: string
+}) {
   const [expanded, setExpanded] = useState(false)
+  const [showLink, setShowLink] = useState(false)
   const deleteFile = useDeleteFile(contextId)
 
   return (
@@ -182,17 +193,37 @@ function FileCard({ file, contextId }: { file: KbFile; contextId: string }) {
             {file.contentType}
           </span>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            deleteFile.mutate(file.id)
-          }}
-          className="text-muted-foreground hover:text-destructive shrink-0"
-          aria-label="Delete file"
-        >
-          <RiDeleteBinLine className="size-4" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowLink(true)
+            }}
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Link file"
+          >
+            <RiLinkM className="size-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              deleteFile.mutate(file.id)
+            }}
+            className="text-muted-foreground hover:text-destructive"
+            aria-label="Delete file"
+          >
+            <RiDeleteBinLine className="size-4" />
+          </button>
+        </div>
       </div>
+      {showLink && (
+        <LinkModal
+          projectId={projectId}
+          entityType="file"
+          entityId={file.id}
+          onClose={() => setShowLink(false)}
+        />
+      )}
       {expanded && file.contentType === 'text' && (
         <div className="border-t px-3 pb-3 pt-2">
           <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
@@ -205,7 +236,7 @@ function FileCard({ file, contextId }: { file: KbFile; contextId: string }) {
 }
 
 function ContextPage() {
-  const { ctxId } = Route.useParams()
+  const { projectId, ctxId } = Route.useParams()
   const { data: ctx } = useContext(ctxId)
   const { data: files, isLoading } = useFiles(ctxId)
   const [showAdd, setShowAdd] = useState(false)
@@ -244,7 +275,7 @@ function ContextPage() {
       ) : (
         <div className="space-y-2">
           {files?.map((file) => (
-            <FileCard key={file.id} file={file} contextId={ctxId} />
+            <FileCard key={file.id} file={file} contextId={ctxId} projectId={projectId} />
           ))}
         </div>
       )}

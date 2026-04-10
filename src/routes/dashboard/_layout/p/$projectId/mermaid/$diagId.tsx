@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import mermaid from 'mermaid'
+import { RiLinkM } from '@remixicon/react'
 
 import { useMermaidDiagram, useUpdateMermaid } from '@/features/mermaid/hooks'
+import { LinkModal } from '@/components/LinkModal'
 
 mermaid.initialize({ startOnLoad: false, theme: 'default' })
 
@@ -19,6 +21,7 @@ function MermaidPage() {
   const [content, setContent] = useState('')
   const [svg, setSvg] = useState('')
   const [initialized, setInitialized] = useState(false)
+  const [showLink, setShowLink] = useState(false)
   const renderCountRef = useRef(0)
 
   // 1. Reset on diagId change
@@ -95,7 +98,23 @@ function MermaidPage() {
         {updateDiagram.isPending && (
           <span className="text-xs text-muted-foreground">Saving...</span>
         )}
+        <button
+          onClick={() => setShowLink(true)}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Link diagram"
+        >
+          <RiLinkM className="size-5" />
+        </button>
       </div>
+
+      {showLink && (
+        <LinkModal
+          projectId={projectId}
+          entityType="mermaid"
+          entityId={diagId}
+          onClose={() => setShowLink(false)}
+        />
+      )}
 
       {/* Split view */}
       <div className="flex flex-1 overflow-hidden">

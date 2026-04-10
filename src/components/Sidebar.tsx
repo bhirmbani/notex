@@ -9,6 +9,7 @@ import {
   RiAddLine,
   RiArticleLine,
   RiGitBranchLine,
+  RiNodeTree,
 } from '@remixicon/react'
 
 import { useProjects } from '@/features/projects/hooks'
@@ -239,6 +240,14 @@ function ProjectTree({ projectId }: { projectId: string }) {
       </div>
       <NotesSection projectId={projectId} />
       <MermaidSection projectId={projectId} />
+      <Link
+        to="/dashboard/p/$projectId/mindmap"
+        params={{ projectId }}
+        className="flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground [&.active]:text-foreground [&.active]:font-bold"
+      >
+        <RiNodeTree className="size-3.5" />
+        Mind Map
+      </Link>
     </div>
   )
 }
