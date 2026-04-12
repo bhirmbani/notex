@@ -1,4 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useProject } from '@/features/projects/hooks'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import {
   ReactFlow,
   Background,
@@ -44,6 +46,7 @@ function gridLayout(count: number): Array<{ x: number; y: number }> {
 
 function MindMapPage() {
   const { projectId } = Route.useParams()
+  const { data: project } = useProject(projectId)
   const { data, isLoading } = useGraphData(projectId)
   const navigate = useNavigate()
 
@@ -124,6 +127,16 @@ function MindMapPage() {
 
   return (
     <div className="flex h-full flex-col">
+      <div className="px-4 pt-3">
+        <Breadcrumb
+          items={[
+            { label: "Projects", to: "/dashboard" },
+            { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
+            { label: "Mind Map" },
+          ]}
+        />
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2">
         <h1 className="text-xl font-bold">Mind Map</h1>

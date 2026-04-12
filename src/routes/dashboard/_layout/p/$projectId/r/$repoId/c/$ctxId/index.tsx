@@ -1,27 +1,28 @@
-import { useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { useState } from "react"
+import { createFileRoute } from "@tanstack/react-router"
 import {
   RiAddLine,
   RiDeleteBinLine,
   RiFileLine,
   RiUploadLine,
   RiLinkM,
-} from '@remixicon/react'
+} from "@remixicon/react"
 
-import { useContext } from '@/features/contexts/hooks'
-import { useRepository } from '@/features/repositories/hooks'
-import { useFiles, useDeleteFile } from '@/features/files/hooks'
-import { AddFileModal } from '@/features/files/AddFileModal'
-import type { File as KbFile } from '@/features/files/types'
-import { Button } from '@/components/ui/button'
-import { LinkModal } from '@/components/LinkModal'
+import { useContext } from "@/features/contexts/hooks"
+import { useRepository } from "@/features/repositories/hooks"
+import { useProject } from "@/features/projects/hooks"
+import { useFiles, useDeleteFile } from "@/features/files/hooks"
+import { AddFileModal } from "@/features/files/AddFileModal"
+import type { File as KbFile } from "@/features/files/types"
+import { Button } from "@/components/ui/button"
+import { LinkModal } from "@/components/LinkModal"
+import { Breadcrumb } from "@/components/Breadcrumb"
 
 export const Route = createFileRoute(
-  '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/',
+  "/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/"
 )({
   component: ContextPage,
 })
-
 
 function AnswerCard({
   file,
@@ -40,26 +41,26 @@ function AnswerCard({
   const deleteFile = useDeleteFile(contextId)
 
   return (
-    <div className="group flex border bg-card mb-2 overflow-hidden hover:border-foreground/20 transition-colors">
+    <div className="group mb-2 flex overflow-hidden border bg-card transition-colors hover:border-foreground/20">
       {/* Left accent rail */}
-      <div className="w-0.5 shrink-0 bg-border group-hover:bg-amber-500 transition-colors" />
+      <div className="w-0.5 shrink-0 bg-border transition-colors group-hover:bg-amber-500" />
 
       <div className="flex-1 p-3">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="flex items-center gap-2 min-w-0">
-            {file.contentType === 'upload' ? (
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            {file.contentType === "upload" ? (
               <RiUploadLine className="size-3.5 shrink-0 text-muted-foreground" />
             ) : (
               <RiFileLine className="size-3.5 shrink-0 text-muted-foreground" />
             )}
-            <span className="font-mono text-xs font-medium text-foreground truncate">
+            <span className="truncate font-mono text-xs font-medium text-foreground">
               {file.name}
             </span>
-            <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5">
+            <span className="shrink-0 bg-muted px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
               {file.contentType}
             </span>
           </div>
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex shrink-0 items-center gap-2.5">
             <Link
               to="/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
               params={{ projectId, repoId, ctxId, fileId: file.id }}
@@ -90,16 +91,16 @@ function AnswerCard({
           </div>
         </div>
 
-        {file.contentType === 'text' && (
-          <div className="relative font-mono text-[11px] text-muted-foreground bg-background border p-2.5 max-h-24 overflow-hidden">
-            <pre className="whitespace-pre-wrap break-words leading-relaxed">
+        {file.contentType === "text" && (
+          <div className="relative max-h-24 overflow-hidden border bg-background p-2.5 font-mono text-[11px] text-muted-foreground">
+            <pre className="leading-relaxed break-words whitespace-pre-wrap">
               {file.content}
             </pre>
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent" />
+            <div className="absolute right-0 bottom-0 left-0 h-8 bg-gradient-to-t from-background to-transparent" />
           </div>
         )}
 
-        {file.contentType === 'upload' && (
+        {file.contentType === "upload" && (
           <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
             <RiUploadLine className="size-3.5 shrink-0" />
             <span>Uploaded file — click Open to view</span>
@@ -121,43 +122,46 @@ function AnswerCard({
 
 function ContextPage() {
   const { projectId, repoId, ctxId } = Route.useParams()
+  const { data: project } = useProject(projectId)
   const { data: ctx } = useContext(ctxId)
   const { data: repo } = useRepository(repoId)
   const { data: files, isLoading } = useFiles(ctxId)
   const [showAdd, setShowAdd] = useState(false)
 
   return (
-    <div>
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 mb-6 font-mono text-[10px] text-muted-foreground tracking-wide">
-        <Link
-          to="/dashboard/p/$projectId/r/$repoId"
-          params={{ projectId, repoId }}
-          className="hover:text-foreground transition-colors"
-        >
-          {repo?.name ?? '…'}
-        </Link>
-        <span>/</span>
-        <span className="text-foreground truncate">{ctx?.question ?? '…'}</span>
-      </div>
+    <div className="mx-auto max-w-3xl">
+      <Breadcrumb
+        items={[
+          { label: "Projects", to: "/dashboard" },
+          { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
+          { label: repo?.name ?? "…", to: "/dashboard/p/$projectId/r/$repoId", params: { projectId, repoId } },
+          { label: ctx?.question ?? "…" },
+        ]}
+      />
 
       {/* Question zone */}
-      <div className="pb-5 mb-5 border-b">
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-600 mb-2">
+      <div className="mb-5 border-b pb-5">
+        <p className="mb-2 font-mono text-[10px] font-semibold tracking-[0.12em] text-amber-600 uppercase">
           Question
         </p>
-        <h1 className="font-mono text-xl font-semibold text-foreground leading-snug mb-3">
-          {ctx?.question ?? '…'}
+        <h1 className="mb-3 font-mono text-xl leading-snug font-semibold text-foreground">
+          {ctx?.question ?? "…"}
         </h1>
         <p className="font-mono text-[10px] text-muted-foreground">
-          <span className="text-foreground font-medium">{files?.length ?? 0}</span> answers
+          <span className="font-medium text-foreground">
+            {files?.length ?? 0}
+          </span>{" "}
+          answers
         </p>
       </div>
 
       {/* Answers header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-3 flex items-center justify-between">
         <p className="font-mono text-xs text-muted-foreground">
-          <strong className="text-foreground font-semibold">{files?.length ?? 0}</strong> Answers
+          <strong className="font-semibold text-foreground">
+            {files?.length ?? 0}
+          </strong>{" "}
+          Answers
         </p>
         <Button size="sm" onClick={() => setShowAdd(true)}>
           <RiAddLine className="mr-1.5 size-4" />
@@ -194,9 +198,9 @@ function ContextPage() {
           ))}
           <button
             onClick={() => setShowAdd(true)}
-            className="mt-1 w-full flex items-center gap-2.5 border border-dashed px-4 py-3 font-mono text-xs text-muted-foreground hover:border-amber-500/50 hover:text-foreground transition-colors"
+            className="mt-1 flex w-full items-center gap-2.5 border border-dashed px-4 py-3 font-mono text-xs text-muted-foreground transition-colors hover:border-amber-500/50 hover:text-foreground"
           >
-            <span className="text-amber-500 text-sm leading-none">+</span>
+            <span className="text-sm leading-none text-amber-500">+</span>
             Write an answer · Upload a file
           </button>
         </>

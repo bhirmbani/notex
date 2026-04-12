@@ -4,7 +4,9 @@ import MDEditor from '@uiw/react-md-editor'
 import { RiLinkM } from '@remixicon/react'
 
 import { useNote, useUpdateNote } from '@/features/notes/hooks'
+import { useProject } from '@/features/projects/hooks'
 import { LinkModal } from '@/components/LinkModal'
+import { Breadcrumb } from '@/components/Breadcrumb'
 
 export const Route = createFileRoute('/dashboard/_layout/p/$projectId/notes/$noteId')({
   component: NotePage,
@@ -12,6 +14,7 @@ export const Route = createFileRoute('/dashboard/_layout/p/$projectId/notes/$not
 
 function NotePage() {
   const { projectId, noteId } = Route.useParams()
+  const { data: project } = useProject(projectId)
   const { data: note, isLoading } = useNote(noteId)
   const updateNote = useUpdateNote(noteId, projectId)
 
@@ -63,6 +66,15 @@ function NotePage() {
 
   return (
     <div className="flex h-full flex-col gap-3">
+      <Breadcrumb
+        items={[
+          { label: "Projects", to: "/dashboard" },
+          { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
+          { label: "Notes" },
+          { label: note.title || "Untitled" },
+        ]}
+      />
+
       {/* Title + saving indicator */}
       <div className="flex items-center gap-3">
         <input

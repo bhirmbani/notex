@@ -4,7 +4,9 @@ import mermaid from 'mermaid'
 import { RiLinkM } from '@remixicon/react'
 
 import { useMermaidDiagram, useUpdateMermaid } from '@/features/mermaid/hooks'
+import { useProject } from '@/features/projects/hooks'
 import { LinkModal } from '@/components/LinkModal'
+import { Breadcrumb } from '@/components/Breadcrumb'
 
 mermaid.initialize({ startOnLoad: false, theme: 'default' })
 
@@ -14,6 +16,7 @@ export const Route = createFileRoute('/dashboard/_layout/p/$projectId/mermaid/$d
 
 function MermaidPage() {
   const { projectId, diagId } = Route.useParams()
+  const { data: project } = useProject(projectId)
   const { data: diagram, isLoading } = useMermaidDiagram(diagId)
   const updateDiagram = useUpdateMermaid(diagId, projectId)
 
@@ -86,6 +89,17 @@ function MermaidPage() {
 
   return (
     <div className="flex h-full flex-col">
+      <div className="px-4 pt-3">
+        <Breadcrumb
+          items={[
+            { label: "Projects", to: "/dashboard" },
+            { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
+            { label: "Mermaid" },
+            { label: diagram.name || "Untitled" },
+          ]}
+        />
+      </div>
+
       {/* Header: name input + saving indicator */}
       <div className="flex items-center justify-between border-b px-4 py-2">
         <input
