@@ -37,15 +37,5 @@ export type DashboardSession = {
 }
 
 export const isDashboardSession = (value: unknown): value is DashboardSession => {
-  if (!isObject(value)) {
-    return false
-  }
-
-  const user = value.user
-
-  if (!isObject(user)) {
-    return false
-  }
-
-  return typeof user.id === 'string'
+  return isAuthSession(value)
 }
