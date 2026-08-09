@@ -37,6 +37,9 @@ repositoriesApi.post('/projects/:projectId/repositories', async (c) => {
   const { projectId } = c.req.param()
   const body = await c.req.json<{ name: string; description?: string }>()
 
+  const name = requireNonEmptyString(body.name)
+  if (!name) return badRequestResponse('name must not be empty')
+
   const [project] = await db
     .select()
     .from(schema.projects)
@@ -48,7 +51,7 @@ repositoriesApi.post('/projects/:projectId/repositories', async (c) => {
   const repo = {
     id: crypto.randomUUID(),
     projectId,
-    name: body.name,
+    name,
     description: body.description ?? null,
     createdAt: new Date(),
   }
