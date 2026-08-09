@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach } from 'vitest'
 
 import { InlineEditField } from './InlineEditField'
@@ -91,5 +91,113 @@ describe('InlineEditField', () => {
 
     expect(input.className).toContain('text-2xl')
     expect(input.className).toContain('font-semibold')
+  })
+
+  it('shows an error and stays in edit mode with the draft preserved when onSave fails', async () => {
+    const onSave = vi.fn().mockRejectedValue(new Error('network error'))
+    render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'New Name' } })
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' })
+      await Promise.resolve()
+    })
+
+    expect(onSave).toHaveBeenCalledWith('New Name')
+    expect(screen.getByRole('alert').textContent).toMatch(/could not save/i)
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('New Name')
+  })
+
+  it('clears the error and exits edit mode once a retry succeeds', async () => {
+    const onSave = vi.fn().mockRejectedValueOnce(new Error('network error')).mockResolvedValueOnce(undefined)
+    render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'New Name' } })
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' })
+      await Promise.resolve()
+    })
+    expect(screen.getByRole('alert')).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
+      await Promise.resolve()
+    })
+
+    expect(onSave).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('clears a previous error when editing is discarded via Escape', async () => {
+    const onSave = vi.fn().mockRejectedValue(new Error('network error'))
+    render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'New Name' } })
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' })
+      await Promise.resolve()
+    })
+    expect(screen.getByRole('alert')).toBeTruthy()
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' })
+
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByText('Auth System')).toBeTruthy()
+  })
+
+  it('ignores a second commit fired while the first save is still pending', async () => {
+    let resolveSave: () => void = () => {}
+    const onSave = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+    render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'New Name' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.blur(screen.getByRole('textbox'))
+
+    expect(onSave).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveSave()
+      await Promise.resolve()
+    })
+  })
+
+  it('ignores Escape while a save is still pending, keeping the draft and edit mode', async () => {
+    let resolveSave: () => void = () => {}
+    const onSave = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+    render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'New Name' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' })
+
+    expect(screen.getByRole('textbox')).toBeTruthy()
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('New Name')
+
+    await act(async () => {
+      resolveSave()
+      await Promise.resolve()
+    })
   })
 })

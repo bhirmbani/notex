@@ -129,7 +129,9 @@ function RepositoryPage() {
             <InlineEditField
               as="h1"
               value={repo.name}
-              onSave={(name) => updateRepo.mutate({ name })}
+              onSave={async (name) => {
+                await updateRepo.mutateAsync({ name })
+              }}
               ariaLabel="repository name"
               className="text-2xl font-semibold tracking-tight"
             />
