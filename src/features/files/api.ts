@@ -103,6 +103,14 @@ filesApi.patch('/files/:id', async (c) => {
     body.name = name
   }
 
+  if (body.content !== undefined) {
+    // Unlike name/question, content is stored verbatim (not trimmed) since
+    // meaningful whitespace (code blocks, trailing newlines) may be intentional.
+    if (requireNonEmptyString(body.content) === null) {
+      return badRequestResponse('content must not be empty')
+    }
+  }
+
   const [file] = await db
     .select()
     .from(schema.files)
