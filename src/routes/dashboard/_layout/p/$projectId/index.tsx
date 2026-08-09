@@ -10,7 +10,7 @@ import {
 } from '@remixicon/react'
 import { useState } from 'react'
 
-import { useProject } from '@/features/projects/hooks'
+import { useProject, useUpdateProject } from '@/features/projects/hooks'
 import {
   useRepositories,
   useCreateRepository,
@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LinkModal } from '@/components/LinkModal'
 import { Breadcrumb } from '@/components/Breadcrumb'
+import { InlineEditField } from '@/components/InlineEditField'
 
 export const Route = createFileRoute('/dashboard/_layout/p/$projectId/')({
   component: ProjectHome,
@@ -124,6 +125,7 @@ function ProjectHome() {
   const { data: repos, isLoading } = useRepositories(projectId)
   const { data: notes } = useNotes(projectId)
   const { data: diagrams } = useMermaidDiagrams(projectId)
+  const updateProject = useUpdateProject(projectId)
   const deleteRepo = useDeleteRepository(projectId)
   const [showCreate, setShowCreate] = useState(false)
   const [linkTarget, setLinkTarget] = useState<{ id: string } | null>(null)
@@ -160,9 +162,13 @@ function ProjectHome() {
       <div className="mb-8 border-b pb-6">
         {project ? (
           <>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {project.name}
-            </h1>
+            <InlineEditField
+              as="h1"
+              value={project.name}
+              onSave={(name) => updateProject.mutate({ name })}
+              ariaLabel="project name"
+              className="text-2xl font-semibold tracking-tight"
+            />
             {project.description && (
               <p className="mt-1.5 text-sm text-muted-foreground">
                 {project.description}
