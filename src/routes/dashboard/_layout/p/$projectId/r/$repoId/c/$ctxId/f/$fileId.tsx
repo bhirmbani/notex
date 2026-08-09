@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import {
   RiDeleteBinLine,
@@ -6,16 +6,19 @@ import {
   RiFileLine,
   RiUploadLine,
   RiAddLine,
+  RiPencilLine,
 } from "@remixicon/react"
 
-import { useFile, useDeleteFile } from "@/features/files/hooks"
+import { useFile, useDeleteFile, useUpdateFile } from "@/features/files/hooks"
 import { useContext } from "@/features/contexts/hooks"
 import { useRepository } from "@/features/repositories/hooks"
 import { useProject } from "@/features/projects/hooks"
 import { AddFileModal } from "@/features/files/AddFileModal"
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import { LinkModal } from "@/components/LinkModal"
 import { Breadcrumb } from "@/components/Breadcrumb"
+import { InlineEditField } from "@/components/InlineEditField"
 
 export const Route = createFileRoute(
   "/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
@@ -29,10 +32,19 @@ function FilePage() {
   const { data: repo } = useRepository(repoId)
   const { data: file, isLoading } = useFile(fileId)
   const { data: ctx } = useContext(ctxId)
+  const updateFile = useUpdateFile(fileId, ctxId)
   const deleteFile = useDeleteFile(ctxId)
   const navigate = useNavigate()
   const [showLink, setShowLink] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
+  const [editingContent, setEditingContent] = useState(false)
+  const [contentDraft, setContentDraft] = useState("")
+
+  // Discard any in-progress content edit when navigating to a different file.
+  useEffect(() => {
+    setEditingContent(false)
+    setContentDraft("")
+  }, [fileId])
 
   const handleDelete = async () => {
     await deleteFile.mutateAsync(fileId)
@@ -85,9 +97,13 @@ function FilePage() {
             ) : (
               <RiFileLine className="size-4 shrink-0 text-muted-foreground" />
             )}
-            <h1 className="font-mono text-base font-semibold tracking-tight text-foreground">
-              {file.name}
-            </h1>
+            <InlineEditField
+              as="h1"
+              value={file.name}
+              onSave={(name) => updateFile.mutate({ name })}
+              ariaLabel="answer name"
+              className="font-mono text-base font-semibold tracking-tight text-foreground"
+            />
           </div>
           <span className="bg-muted px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
             {file.contentType}
@@ -121,16 +137,65 @@ function FilePage() {
           <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
             Content
           </span>
-          {lineCount !== null && (
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {lineCount} {lineCount === 1 ? "line" : "lines"}
-            </span>
-          )}
+          <div className="flex items-center gap-2.5">
+            {lineCount !== null && (
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {lineCount} {lineCount === 1 ? "line" : "lines"}
+              </span>
+            )}
+            {file.contentType === "text" && !editingContent && (
+              <button
+                type="button"
+                onClick={() => {
+                  setContentDraft(file.content)
+                  setEditingContent(true)
+                }}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Edit content"
+              >
+                <RiPencilLine className="size-3.5" />
+              </button>
+            )}
+          </div>
         </div>
         {file.contentType === "text" ? (
-          <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground">
-            {file.content}
-          </pre>
+          editingContent ? (
+            <div className="p-4">
+              <Textarea
+                value={contentDraft}
+                onChange={(e) => setContentDraft(e.target.value)}
+                aria-label="answer content"
+                rows={12}
+                autoFocus
+                className="font-mono text-xs leading-relaxed"
+              />
+              <div className="mt-3 flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingContent(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={!contentDraft.trim() || updateFile.isPending}
+                  onClick={() => {
+                    updateFile.mutate({ content: contentDraft })
+                    setEditingContent(false)
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground">
+              {file.content}
+            </pre>
+          )
         ) : (
           <div className="p-6 text-center font-mono text-xs text-muted-foreground">
             Uploaded binary file — content cannot be previewed inline.
