@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
 
 export const contextsApi = new Hono<ApiAuthEnv>()
 
@@ -47,6 +48,9 @@ contextsApi.post('/repositories/:repoId/contexts', async (c) => {
   const { repoId } = c.req.param()
   const body = await c.req.json<{ question: string }>()
 
+  const question = requireNonEmptyString(body.question)
+  if (!question) return badRequestResponse('question must not be empty')
+
   const found = await getRepoOwnerProject(db, repoId)
   if (!found) return c.json({ error: { code: 'NOT_FOUND', message: 'Repository not found' } }, 404)
   if (found.project.userId !== auth.user.id) return forbiddenResponse()
@@ -54,7 +58,7 @@ contextsApi.post('/repositories/:repoId/contexts', async (c) => {
   const ctx = {
     id: crypto.randomUUID(),
     repositoryId: repoId,
-    question: body.question,
+    question,
     createdAt: new Date(),
   }
 
@@ -86,6 +90,12 @@ contextsApi.patch('/contexts/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
   const body = await c.req.json<{ question?: string }>()
+
+  if (body.question !== undefined) {
+    const question = requireNonEmptyString(body.question)
+    if (!question) return badRequestResponse('question must not be empty')
+    body.question = question
+  }
 
   const [ctx] = await db
     .select()

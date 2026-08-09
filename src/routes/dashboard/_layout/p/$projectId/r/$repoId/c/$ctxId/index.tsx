@@ -8,7 +8,7 @@ import {
   RiLinkM,
 } from "@remixicon/react"
 
-import { useContext } from "@/features/contexts/hooks"
+import { useContext, useUpdateContext } from "@/features/contexts/hooks"
 import { useRepository } from "@/features/repositories/hooks"
 import { useProject } from "@/features/projects/hooks"
 import { useFiles, useDeleteFile } from "@/features/files/hooks"
@@ -17,6 +17,7 @@ import type { File as KbFile } from "@/features/files/types"
 import { Button } from "@/components/ui/button"
 import { LinkModal } from "@/components/LinkModal"
 import { Breadcrumb } from "@/components/Breadcrumb"
+import { InlineEditField } from "@/components/InlineEditField"
 
 export const Route = createFileRoute(
   "/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/"
@@ -126,6 +127,7 @@ function ContextPage() {
   const { data: ctx } = useContext(ctxId)
   const { data: repo } = useRepository(repoId)
   const { data: files, isLoading } = useFiles(ctxId)
+  const updateCtx = useUpdateContext(ctxId, repoId)
   const [showAdd, setShowAdd] = useState(false)
 
   return (
@@ -144,9 +146,19 @@ function ContextPage() {
         <p className="mb-2 font-mono text-[10px] font-semibold tracking-[0.12em] text-amber-600 uppercase">
           Question
         </p>
-        <h1 className="mb-3 font-mono text-xl leading-snug font-semibold text-foreground">
-          {ctx?.question ?? "…"}
-        </h1>
+        {ctx ? (
+          <InlineEditField
+            as="h1"
+            value={ctx.question}
+            onSave={(question) => updateCtx.mutate({ question })}
+            ariaLabel="question"
+            className="mb-3 font-mono text-xl leading-snug font-semibold text-foreground"
+          />
+        ) : (
+          <h1 className="mb-3 font-mono text-xl leading-snug font-semibold text-foreground">
+            …
+          </h1>
+        )}
         <p className="font-mono text-[10px] text-muted-foreground">
           <span className="font-medium text-foreground">
             {files?.length ?? 0}
