@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
 
 export const repositoriesApi = new Hono<ApiAuthEnv>()
 
@@ -85,6 +86,12 @@ repositoriesApi.patch('/repositories/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
   const body = await c.req.json<{ name?: string; description?: string | null }>()
+
+  if (body.name !== undefined) {
+    const name = requireNonEmptyString(body.name)
+    if (!name) return badRequestResponse('name must not be empty')
+    body.name = name
+  }
 
   const [repo] = await db
     .select()

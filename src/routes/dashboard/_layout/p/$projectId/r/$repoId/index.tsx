@@ -8,7 +8,7 @@ import {
   RiArrowRightSLine,
 } from '@remixicon/react'
 
-import { useRepository } from '@/features/repositories/hooks'
+import { useRepository, useUpdateRepository } from '@/features/repositories/hooks'
 import { useProject } from '@/features/projects/hooks'
 import {
   useContexts,
@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LinkModal } from '@/components/LinkModal'
 import { Breadcrumb } from '@/components/Breadcrumb'
+import { InlineEditField } from '@/components/InlineEditField'
 
 export const Route = createFileRoute(
   '/dashboard/_layout/p/$projectId/r/$repoId/',
@@ -105,6 +106,7 @@ function RepositoryPage() {
   const { data: project } = useProject(projectId)
   const { data: repo } = useRepository(repoId)
   const { data: contexts, isLoading } = useContexts(repoId)
+  const updateRepo = useUpdateRepository(repoId, projectId)
   const deleteCtx = useDeleteContext(repoId)
   const [showCreate, setShowCreate] = useState(false)
   const [linkTarget, setLinkTarget] = useState<{ id: string } | null>(null)
@@ -124,9 +126,13 @@ function RepositoryPage() {
       <div className="mb-8 border-b pb-6">
         {repo ? (
           <>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {repo.name}
-            </h1>
+            <InlineEditField
+              as="h1"
+              value={repo.name}
+              onSave={(name) => updateRepo.mutate({ name })}
+              ariaLabel="repository name"
+              className="text-2xl font-semibold tracking-tight"
+            />
             {repo.description && (
               <p className="mt-1.5 text-sm text-muted-foreground">
                 {repo.description}
