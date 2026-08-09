@@ -75,4 +75,21 @@ describe('InlineEditField', () => {
 
     expect(onSave).not.toHaveBeenCalled()
   })
+
+  it('carries the display className onto the input so text size does not shift while editing', () => {
+    render(
+      <InlineEditField
+        value="Auth System"
+        onSave={vi.fn()}
+        ariaLabel="project name"
+        className="text-2xl font-semibold"
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
+    const input = screen.getByRole('textbox') as HTMLInputElement
+
+    expect(input.className).toContain('text-2xl')
+    expect(input.className).toContain('font-semibold')
+  })
 })
