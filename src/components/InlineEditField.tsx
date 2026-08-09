@@ -67,7 +67,7 @@ export function InlineEditField({
           }
         }}
         aria-label={ariaLabel}
-        className={inputClassName}
+        className={cn(className, inputClassName)}
       />
     )
   }
