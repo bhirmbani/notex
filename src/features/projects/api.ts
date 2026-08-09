@@ -26,10 +26,13 @@ projectsApi.post('/', async (c) => {
   const db = getDb(c.env.DB)
   const body = await c.req.json<{ name: string; description?: string }>()
 
+  const name = requireNonEmptyString(body.name)
+  if (!name) return badRequestResponse('name must not be empty')
+
   const project = {
     id: crypto.randomUUID(),
     userId: auth.user.id,
-    name: body.name,
+    name,
     description: body.description ?? null,
     createdAt: new Date(),
   }
