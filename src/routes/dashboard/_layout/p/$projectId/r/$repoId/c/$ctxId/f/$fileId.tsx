@@ -8,7 +8,7 @@ import {
   RiAddLine,
 } from "@remixicon/react"
 
-import { useFile, useDeleteFile } from "@/features/files/hooks"
+import { useFile, useDeleteFile, useUpdateFile } from "@/features/files/hooks"
 import { useContext } from "@/features/contexts/hooks"
 import { useRepository } from "@/features/repositories/hooks"
 import { useProject } from "@/features/projects/hooks"
@@ -16,6 +16,7 @@ import { AddFileModal } from "@/features/files/AddFileModal"
 import { Button } from "@/components/ui/button"
 import { LinkModal } from "@/components/LinkModal"
 import { Breadcrumb } from "@/components/Breadcrumb"
+import { InlineEditField } from "@/components/InlineEditField"
 
 export const Route = createFileRoute(
   "/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
@@ -29,6 +30,7 @@ function FilePage() {
   const { data: repo } = useRepository(repoId)
   const { data: file, isLoading } = useFile(fileId)
   const { data: ctx } = useContext(ctxId)
+  const updateFile = useUpdateFile(fileId, ctxId)
   const deleteFile = useDeleteFile(ctxId)
   const navigate = useNavigate()
   const [showLink, setShowLink] = useState(false)
@@ -85,9 +87,13 @@ function FilePage() {
             ) : (
               <RiFileLine className="size-4 shrink-0 text-muted-foreground" />
             )}
-            <h1 className="font-mono text-base font-semibold tracking-tight text-foreground">
-              {file.name}
-            </h1>
+            <InlineEditField
+              as="h1"
+              value={file.name}
+              onSave={(name) => updateFile.mutate({ name })}
+              ariaLabel="answer name"
+              className="font-mono text-base font-semibold tracking-tight text-foreground"
+            />
           </div>
           <span className="bg-muted px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
             {file.contentType}
