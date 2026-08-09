@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
 
 export const filesApi = new Hono<ApiAuthEnv>()
 
@@ -95,6 +96,12 @@ filesApi.patch('/files/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
   const body = await c.req.json<{ name?: string; content?: string }>()
+
+  if (body.name !== undefined) {
+    const name = requireNonEmptyString(body.name)
+    if (!name) return badRequestResponse('name must not be empty')
+    body.name = name
+  }
 
   const [file] = await db
     .select()
