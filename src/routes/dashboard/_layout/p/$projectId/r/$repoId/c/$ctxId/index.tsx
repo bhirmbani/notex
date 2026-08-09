@@ -150,7 +150,9 @@ function ContextPage() {
           <InlineEditField
             as="h1"
             value={ctx.question}
-            onSave={(question) => updateCtx.mutate({ question })}
+            onSave={async (question) => {
+              await updateCtx.mutateAsync({ question })
+            }}
             ariaLabel="question"
             className="mb-3 font-mono text-xl leading-snug font-semibold text-foreground"
           />

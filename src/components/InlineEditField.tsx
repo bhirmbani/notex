@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 
 type InlineEditFieldProps = {
   value: string
-  onSave: (value: string) => void
+  onSave: (value: string) => void | Promise<void>
   ariaLabel: string
   as?: React.ElementType
   className?: string
@@ -23,6 +23,8 @@ export function InlineEditField({
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -34,41 +36,66 @@ export function InlineEditField({
 
   const startEditing = () => {
     setDraft(value)
+    setError(null)
     setEditing(true)
   }
 
-  const commit = () => {
+  const commit = async () => {
+    if (saving) return
+
     const trimmed = draft.trim()
-    if (trimmed && trimmed !== value) {
-      onSave(trimmed)
+    if (!trimmed || trimmed === value) {
+      setEditing(false)
+      return
     }
-    setEditing(false)
+
+    setSaving(true)
+    try {
+      await onSave(trimmed)
+      setError(null)
+      setEditing(false)
+    } catch {
+      setError('Could not save. Try again.')
+      inputRef.current?.focus()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const discard = () => {
+    if (saving) return
     setDraft(value)
+    setError(null)
     setEditing(false)
   }
 
   if (editing) {
     return (
-      <Input
-        ref={inputRef}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            commit()
-          } else if (e.key === 'Escape') {
-            e.preventDefault()
-            discard()
-          }
-        }}
-        aria-label={ariaLabel}
-        className={cn(className, inputClassName)}
-      />
+      <div className="inline-flex flex-col gap-1">
+        <Input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          disabled={saving}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commit()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              discard()
+            }
+          }}
+          aria-label={ariaLabel}
+          className={cn(className, inputClassName)}
+        />
+        {error && (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
     )
   }
 

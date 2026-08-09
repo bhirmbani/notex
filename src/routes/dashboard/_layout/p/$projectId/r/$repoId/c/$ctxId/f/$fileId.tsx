@@ -39,12 +39,24 @@ function FilePage() {
   const [showAdd, setShowAdd] = useState(false)
   const [editingContent, setEditingContent] = useState(false)
   const [contentDraft, setContentDraft] = useState("")
+  const [contentError, setContentError] = useState<string | null>(null)
 
   // Discard any in-progress content edit when navigating to a different file.
   useEffect(() => {
     setEditingContent(false)
     setContentDraft("")
+    setContentError(null)
   }, [fileId])
+
+  const handleSaveContent = async () => {
+    setContentError(null)
+    try {
+      await updateFile.mutateAsync({ content: contentDraft })
+      setEditingContent(false)
+    } catch {
+      setContentError("Could not save. Try again.")
+    }
+  }
 
   const handleDelete = async () => {
     await deleteFile.mutateAsync(fileId)
@@ -100,7 +112,9 @@ function FilePage() {
             <InlineEditField
               as="h1"
               value={file.name}
-              onSave={(name) => updateFile.mutate({ name })}
+              onSave={async (name) => {
+                await updateFile.mutateAsync({ name })
+              }}
               ariaLabel="answer name"
               className="font-mono text-base font-semibold tracking-tight text-foreground"
             />
@@ -169,12 +183,21 @@ function FilePage() {
                 autoFocus
                 className="font-mono text-xs leading-relaxed"
               />
+              {contentError && (
+                <p role="alert" className="mt-2 text-xs text-destructive">
+                  {contentError}
+                </p>
+              )}
               <div className="mt-3 flex justify-end gap-2">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setEditingContent(false)}
+                  disabled={updateFile.isPending}
+                  onClick={() => {
+                    setEditingContent(false)
+                    setContentError(null)
+                  }}
                 >
                   Cancel
                 </Button>
@@ -182,10 +205,7 @@ function FilePage() {
                   type="button"
                   size="sm"
                   disabled={!contentDraft.trim() || updateFile.isPending}
-                  onClick={() => {
-                    updateFile.mutate({ content: contentDraft })
-                    setEditingContent(false)
-                  }}
+                  onClick={handleSaveContent}
                 >
                   Save
                 </Button>

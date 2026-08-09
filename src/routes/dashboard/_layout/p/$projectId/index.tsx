@@ -165,7 +165,9 @@ function ProjectHome() {
             <InlineEditField
               as="h1"
               value={project.name}
-              onSave={(name) => updateProject.mutate({ name })}
+              onSave={async (name) => {
+                await updateProject.mutateAsync({ name })
+              }}
               ariaLabel="project name"
               className="text-2xl font-semibold tracking-tight"
             />
