@@ -20,3 +20,21 @@ _Avoid_: File (as the user-facing term — "File" is the schema/table name, "Ans
 
 **Notes**:
 A separate freeform rich-text feature, distinct from Answers. Notes get a rich text editor; Answer content stays plain text — the two are not the same kind of content and should not share an editor.
+
+**Organization**:
+_Planned (TBR-10 map — not yet implemented)._ The top-level tenancy container that will own Projects, replacing direct user ownership. Every User gets one auto-created on signup and may hold Memberships in others.
+_Avoid_: Org (as the canonical term)
+
+**Membership**:
+_Planned (TBR-10 map)._ The join between a User and an Organization, carrying a Role. A User holds at most one Membership per Organization, and may hold Memberships in multiple Organizations.
+_Avoid_: Member (as the entity name — "member" is also a Role value, so "an admin Member" would be ambiguous; use "Membership" for the entity, `member`/`admin` for the Role)
+
+**Role**:
+_Planned (TBR-10 map)._ A Membership's privilege level within its Organization: `admin` or `member`. Admin manages Memberships and Organization settings, and has implicit full access to every Project in the Organization with no Grant needed. Member has no default Project access and must be given a Grant per Project.
+
+**Invite**:
+_Planned (TBR-10 map)._ A single-use, expiring, link-based token that creates a Membership (Role: `member`) in the issuing Organization once accepted.
+_Avoid_: Invitation
+
+**Grant**:
+_Planned (TBR-10 map)._ A per-(Membership, Project) permission record specifying `read` or `write` access. Admin Memberships never need a Grant — their access is implicit via Role.
