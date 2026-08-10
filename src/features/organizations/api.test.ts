@@ -21,8 +21,11 @@ function appWithAuth() {
 }
 
 describe('GET /organizations', () => {
-  it('returns organizations the caller has a membership in', async () => {
-    const rows = [{ id: 'org-1', name: 'Acme', createdAt: new Date() }]
+  it('returns organizations the caller has a membership in, including their role', async () => {
+    const rows = [
+      { id: 'org-1', name: 'Acme', createdAt: new Date(), role: 'admin' as const },
+      { id: 'org-2', name: 'Widgets Co', createdAt: new Date(), role: 'member' as const },
+    ]
     vi.mocked(getDb).mockReturnValue({
       select: () => ({
         from: () => ({

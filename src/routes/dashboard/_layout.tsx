@@ -12,6 +12,7 @@ import { useState } from 'react'
 
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Sidebar } from '@/components/Sidebar'
+import { OrgSwitcher } from '@/components/OrgSwitcher'
 import { signOutCurrentSession } from '@/features/auth/lib/client'
 import { createAuth, type AuthBindings } from '@/features/auth/lib/server'
 import {
@@ -89,9 +90,13 @@ function DashboardLayout() {
   return (
     <div className="flex h-screen flex-col bg-background">
       <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
-        <Link to="/dashboard" className="text-sm font-bold">
-          Notex
-        </Link>
+        {organizationId ? (
+          <OrgSwitcher organizationId={organizationId} />
+        ) : (
+          <Link to="/dashboard" className="text-sm font-bold">
+            Notex
+          </Link>
+        )}
         <div className="flex items-center gap-4">
           <span className="text-xs text-muted-foreground">
             {session.user.email}
