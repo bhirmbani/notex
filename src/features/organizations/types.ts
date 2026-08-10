@@ -4,6 +4,10 @@ export type Organization = {
   createdAt: number
 }
 
+export type OrganizationMembership = Organization & {
+  role: 'admin' | 'member'
+}
+
 export type CreateOrganizationInput = {
   name: string
 }

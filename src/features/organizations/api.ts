@@ -19,6 +19,7 @@ organizationsApi.get('/', async (c) => {
       id: schema.organizations.id,
       name: schema.organizations.name,
       createdAt: schema.organizations.createdAt,
+      role: schema.memberships.role,
     })
     .from(schema.organizations)
     .innerJoin(
