@@ -17,6 +17,7 @@ import { Route as DashboardLayoutRouteImport } from './routes/dashboard/_layout'
 import { Route as DashboardLayoutIndexRouteImport } from './routes/dashboard/_layout/index'
 import { Route as DashboardLayoutOOrganizationIdIndexRouteImport } from './routes/dashboard/_layout/o/$organizationId/index'
 import { Route as DashboardLayoutOOrganizationIdMembersRouteImport } from './routes/dashboard/_layout/o/$organizationId/members'
+import { Route as DashboardLayoutOOrganizationIdGrantsRouteImport } from './routes/dashboard/_layout/o/$organizationId/grants'
 import { Route as DashboardLayoutOOrganizationIdPProjectIdIndexRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/index'
 import { Route as DashboardLayoutOOrganizationIdPProjectIdMindmapRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/mindmap'
 import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId'
@@ -67,6 +68,12 @@ const DashboardLayoutOOrganizationIdMembersRoute =
   DashboardLayoutOOrganizationIdMembersRouteImport.update({
     id: '/o/$organizationId/members',
     path: '/o/$organizationId/members',
+    getParentRoute: () => DashboardLayoutRoute,
+  } as any)
+const DashboardLayoutOOrganizationIdGrantsRoute =
+  DashboardLayoutOOrganizationIdGrantsRouteImport.update({
+    id: '/o/$organizationId/grants',
+    path: '/o/$organizationId/grants',
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
 const DashboardLayoutOOrganizationIdPProjectIdIndexRoute =
@@ -135,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardLayoutRouteWithChildren
   '/invites/$token': typeof InvitesTokenRoute
   '/dashboard/': typeof DashboardLayoutIndexRoute
+  '/dashboard/o/$organizationId/grants': typeof DashboardLayoutOOrganizationIdGrantsRoute
   '/dashboard/o/$organizationId/members': typeof DashboardLayoutOOrganizationIdMembersRoute
   '/dashboard/o/$organizationId/': typeof DashboardLayoutOOrganizationIdIndexRoute
   '/dashboard/o/$organizationId/p/$projectId/mindmap': typeof DashboardLayoutOOrganizationIdPProjectIdMindmapRoute
@@ -153,6 +161,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/invites/$token': typeof InvitesTokenRoute
   '/dashboard': typeof DashboardLayoutIndexRoute
+  '/dashboard/o/$organizationId/grants': typeof DashboardLayoutOOrganizationIdGrantsRoute
   '/dashboard/o/$organizationId/members': typeof DashboardLayoutOOrganizationIdMembersRoute
   '/dashboard/o/$organizationId': typeof DashboardLayoutOOrganizationIdIndexRoute
   '/dashboard/o/$organizationId/p/$projectId/mindmap': typeof DashboardLayoutOOrganizationIdPProjectIdMindmapRoute
@@ -171,6 +180,7 @@ export interface FileRoutesById {
   '/dashboard/_layout': typeof DashboardLayoutRouteWithChildren
   '/invites/$token': typeof InvitesTokenRoute
   '/dashboard/_layout/': typeof DashboardLayoutIndexRoute
+  '/dashboard/_layout/o/$organizationId/grants': typeof DashboardLayoutOOrganizationIdGrantsRoute
   '/dashboard/_layout/o/$organizationId/members': typeof DashboardLayoutOOrganizationIdMembersRoute
   '/dashboard/_layout/o/$organizationId/': typeof DashboardLayoutOOrganizationIdIndexRoute
   '/dashboard/_layout/o/$organizationId/p/$projectId/mindmap': typeof DashboardLayoutOOrganizationIdPProjectIdMindmapRoute
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/invites/$token'
     | '/dashboard/'
+    | '/dashboard/o/$organizationId/grants'
     | '/dashboard/o/$organizationId/members'
     | '/dashboard/o/$organizationId/'
     | '/dashboard/o/$organizationId/p/$projectId/mindmap'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/invites/$token'
     | '/dashboard'
+    | '/dashboard/o/$organizationId/grants'
     | '/dashboard/o/$organizationId/members'
     | '/dashboard/o/$organizationId'
     | '/dashboard/o/$organizationId/p/$projectId/mindmap'
@@ -227,6 +239,7 @@ export interface FileRouteTypes {
     | '/dashboard/_layout'
     | '/invites/$token'
     | '/dashboard/_layout/'
+    | '/dashboard/_layout/o/$organizationId/grants'
     | '/dashboard/_layout/o/$organizationId/members'
     | '/dashboard/_layout/o/$organizationId/'
     | '/dashboard/_layout/o/$organizationId/p/$projectId/mindmap'
@@ -304,6 +317,13 @@ declare module '@tanstack/react-router' {
       path: '/o/$organizationId/members'
       fullPath: '/dashboard/o/$organizationId/members'
       preLoaderRoute: typeof DashboardLayoutOOrganizationIdMembersRouteImport
+      parentRoute: typeof DashboardLayoutRoute
+    }
+    '/dashboard/_layout/o/$organizationId/grants': {
+      id: '/dashboard/_layout/o/$organizationId/grants'
+      path: '/o/$organizationId/grants'
+      fullPath: '/dashboard/o/$organizationId/grants'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdGrantsRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
     '/dashboard/_layout/o/$organizationId/p/$projectId/': {
@@ -410,6 +430,7 @@ const DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteWithChildren =
 
 interface DashboardLayoutRouteChildren {
   DashboardLayoutIndexRoute: typeof DashboardLayoutIndexRoute
+  DashboardLayoutOOrganizationIdGrantsRoute: typeof DashboardLayoutOOrganizationIdGrantsRoute
   DashboardLayoutOOrganizationIdMembersRoute: typeof DashboardLayoutOOrganizationIdMembersRoute
   DashboardLayoutOOrganizationIdIndexRoute: typeof DashboardLayoutOOrganizationIdIndexRoute
   DashboardLayoutOOrganizationIdPProjectIdMindmapRoute: typeof DashboardLayoutOOrganizationIdPProjectIdMindmapRoute
@@ -421,6 +442,8 @@ interface DashboardLayoutRouteChildren {
 
 const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
   DashboardLayoutIndexRoute: DashboardLayoutIndexRoute,
+  DashboardLayoutOOrganizationIdGrantsRoute:
+    DashboardLayoutOOrganizationIdGrantsRoute,
   DashboardLayoutOOrganizationIdMembersRoute:
     DashboardLayoutOOrganizationIdMembersRoute,
   DashboardLayoutOOrganizationIdIndexRoute:

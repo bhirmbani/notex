@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
-  RiFolder3Line,
-  RiArrowRightSLine,
-  RiArrowDownSLine,
-  RiDatabase2Line,
-  RiQuestionLine,
   RiAddLine,
+  RiArrowDownSLine,
+  RiArrowRightSLine,
   RiArticleLine,
+  RiDatabase2Line,
+  RiFileLine,
+  RiFolder3Line,
   RiGitBranchLine,
   RiNodeTree,
-  RiFileLine,
+  RiQuestionLine,
+  RiShieldKeyholeLine,
   RiUploadLine,
   RiUserLine,
 } from '@remixicon/react'
@@ -20,8 +21,8 @@ import { useRepositories } from '@/features/repositories/hooks'
 import { useContexts } from '@/features/contexts/hooks'
 import { useFiles } from '@/features/files/hooks'
 import { AddFileModal } from '@/features/files/AddFileModal'
-import { useNotes, useCreateNote } from '@/features/notes/hooks'
-import { useMermaidDiagrams, useCreateMermaid } from '@/features/mermaid/hooks'
+import { useCreateNote, useNotes } from '@/features/notes/hooks'
+import { useCreateMermaid, useMermaidDiagrams } from '@/features/mermaid/hooks'
 import { cn } from '@/lib/utils'
 
 type SidebarProps = {
@@ -436,6 +437,14 @@ export function Sidebar({ organizationId, projectId }: SidebarProps) {
           >
             <RiUserLine className="size-4 shrink-0" />
             Members
+          </Link>
+          <Link
+            to="/dashboard/o/$organizationId/grants"
+            params={{ organizationId }}
+            className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RiShieldKeyholeLine className="size-4 shrink-0" />
+            Project access
           </Link>
         </div>
       </div>
