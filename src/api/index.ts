@@ -13,6 +13,7 @@ import { mermaidApi } from '@/features/mermaid/api'
 import { mindmapApi } from '@/features/mindmap/api'
 import { publicInvitesApi } from '@/features/invites/publicApi'
 import { invitesApi } from '@/features/invites/api'
+import { membershipsApi } from '@/features/memberships/api'
 
 export const api = new Hono<ApiAuthEnv>().basePath('/api/v1')
 
@@ -39,6 +40,7 @@ api.get('/me', (c) => {
 api.route('/organizations', organizationsApi)
 api.route('/', organizationProjectsApi)
 api.route('/', invitesApi)
+api.route('/', membershipsApi)
 api.route('/projects', projectsApi)
 api.route('/', repositoriesApi)
 api.route('/', contextsApi)
