@@ -11,12 +11,18 @@ import { filesApi } from '@/features/files/api'
 import { notesApi } from '@/features/notes/api'
 import { mermaidApi } from '@/features/mermaid/api'
 import { mindmapApi } from '@/features/mindmap/api'
+import { publicInvitesApi } from '@/features/invites/publicApi'
+import { invitesApi } from '@/features/invites/api'
 
 export const api = new Hono<ApiAuthEnv>().basePath('/api/v1')
 
 api.get('/health', (c) => {
   return c.json({ status: 'ok' })
 })
+
+// Unauthenticated: a logged-out Invite recipient needs to see who/what
+// they're being invited to before they've signed up or signed in.
+api.route('/', publicInvitesApi)
 
 // All routes below require authentication
 api.use('*', requireAuth)
@@ -32,6 +38,7 @@ api.get('/me', (c) => {
 
 api.route('/organizations', organizationsApi)
 api.route('/', organizationProjectsApi)
+api.route('/', invitesApi)
 api.route('/projects', projectsApi)
 api.route('/', repositoriesApi)
 api.route('/', contextsApi)

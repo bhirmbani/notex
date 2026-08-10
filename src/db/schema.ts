@@ -118,6 +118,31 @@ export const memberships = sqliteTable(
   }),
 )
 
+export const invites = sqliteTable(
+  'invites',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    token: text('token').notNull().unique(),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    redeemedAt: integer('redeemed_at', { mode: 'timestamp_ms' }),
+    redeemedByUserId: text('redeemed_by_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => ({
+    organizationIdIdx: index('invites_organization_id_idx').on(
+      table.organizationId,
+    ),
+  }),
+)
+
 export const projects = sqliteTable(
   'projects',
   {
@@ -218,6 +243,7 @@ export const schema = {
   verification,
   organizations,
   memberships,
+  invites,
   projects,
   repositories,
   contexts,

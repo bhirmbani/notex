@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InvitesTokenRouteImport } from './routes/invites/$token'
 import { Route as DashboardLayoutRouteImport } from './routes/dashboard/_layout'
 import { Route as DashboardLayoutIndexRouteImport } from './routes/dashboard/_layout/index'
 import { Route as DashboardLayoutPProjectIdIndexRouteImport } from './routes/dashboard/_layout/p/$projectId/index'
@@ -37,6 +38,11 @@ const LoginRoute = LoginRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvitesTokenRoute = InvitesTokenRouteImport.update({
+  id: '/invites/$token',
+  path: '/invites/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardLayoutRoute = DashboardLayoutRouteImport.update({
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/dashboard': typeof DashboardLayoutRouteWithChildren
+  '/invites/$token': typeof InvitesTokenRoute
   '/dashboard/': typeof DashboardLayoutIndexRoute
   '/dashboard/p/$projectId/mindmap': typeof DashboardLayoutPProjectIdMindmapRoute
   '/dashboard/p/$projectId/': typeof DashboardLayoutPProjectIdIndexRoute
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/invites/$token': typeof InvitesTokenRoute
   '/dashboard': typeof DashboardLayoutIndexRoute
   '/dashboard/p/$projectId/mindmap': typeof DashboardLayoutPProjectIdMindmapRoute
   '/dashboard/p/$projectId': typeof DashboardLayoutPProjectIdIndexRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/dashboard/_layout': typeof DashboardLayoutRouteWithChildren
+  '/invites/$token': typeof InvitesTokenRoute
   '/dashboard/_layout/': typeof DashboardLayoutIndexRoute
   '/dashboard/_layout/p/$projectId/mindmap': typeof DashboardLayoutPProjectIdMindmapRoute
   '/dashboard/_layout/p/$projectId/': typeof DashboardLayoutPProjectIdIndexRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/dashboard'
+    | '/invites/$token'
     | '/dashboard/'
     | '/dashboard/p/$projectId/mindmap'
     | '/dashboard/p/$projectId/'
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/register'
+    | '/invites/$token'
     | '/dashboard'
     | '/dashboard/p/$projectId/mindmap'
     | '/dashboard/p/$projectId'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/dashboard/_layout'
+    | '/invites/$token'
     | '/dashboard/_layout/'
     | '/dashboard/_layout/p/$projectId/mindmap'
     | '/dashboard/_layout/p/$projectId/'
@@ -203,6 +215,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   DashboardLayoutRoute: typeof DashboardLayoutRouteWithChildren
+  InvitesTokenRoute: typeof InvitesTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -226,6 +239,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invites/$token': {
+      id: '/invites/$token'
+      path: '/invites/$token'
+      fullPath: '/invites/$token'
+      preLoaderRoute: typeof InvitesTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/_layout': {
@@ -374,6 +394,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   DashboardLayoutRoute: DashboardLayoutRouteWithChildren,
+  InvitesTokenRoute: InvitesTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
