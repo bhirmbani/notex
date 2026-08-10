@@ -3,7 +3,9 @@ import { eq } from 'drizzle-orm'
 
 import { getDb, schema } from '@/db'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { forbiddenResponse } from '@/api/middleware/auth'
 import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
+import { checkOrganizationMembership } from '@/api/ownership'
 import { createOrganizationWithAdmin } from './service'
 
 export const organizationsApi = new Hono<ApiAuthEnv>()
@@ -43,4 +45,24 @@ organizationsApi.post('/', async (c) => {
   })
 
   return c.json(organization, 201)
+})
+
+organizationsApi.patch('/:id', async (c) => {
+  const auth = c.get('auth')
+  const db = getDb(c.env.DB)
+  const { id } = c.req.param()
+  const body = await c.req.json<{ name: string }>()
+
+  const name = requireNonEmptyString(body.name)
+  if (!name) return badRequestResponse('name must not be empty')
+
+  const membership = await checkOrganizationMembership(db, id, auth.user.id)
+  if (!membership || membership.role !== 'admin') return forbiddenResponse()
+
+  await db
+    .update(schema.organizations)
+    .set({ name })
+    .where(eq(schema.organizations.id, id))
+
+  return c.json({ id, name })
 })
