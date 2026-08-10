@@ -48,7 +48,7 @@ function CreateRepoModal({
 }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const create = useCreateRepository(projectId)
+  const create = useCreateRepository(organizationId, projectId)
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,11 +124,11 @@ function CreateRepoModal({
 function ProjectHome() {
   const { organizationId, projectId } = Route.useParams()
   const { data: project } = useProject(organizationId, projectId)
-  const { data: repos, isLoading } = useRepositories(projectId)
-  const { data: notes } = useNotes(projectId)
-  const { data: diagrams } = useMermaidDiagrams(projectId)
+  const { data: repos, isLoading } = useRepositories(organizationId, projectId)
+  const { data: notes } = useNotes(organizationId, projectId)
+  const { data: diagrams } = useMermaidDiagrams(organizationId, projectId)
   const updateProject = useUpdateProject(organizationId, projectId)
-  const deleteRepo = useDeleteRepository(projectId)
+  const deleteRepo = useDeleteRepository(organizationId, projectId)
   const [showCreate, setShowCreate] = useState(false)
   const [linkTarget, setLinkTarget] = useState<{ id: string } | null>(null)
   const navigate = useNavigate()
@@ -324,6 +324,7 @@ function ProjectHome() {
       )}
       {linkTarget && (
         <LinkModal
+          organizationId={organizationId}
           projectId={projectId}
           entityType="repository"
           entityId={linkTarget.id}

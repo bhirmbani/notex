@@ -29,11 +29,11 @@ export const Route = createFileRoute(
 function FilePage() {
   const { organizationId, projectId, repoId, ctxId, fileId } = Route.useParams()
   const { data: project } = useProject(organizationId, projectId)
-  const { data: repo } = useRepository(repoId)
-  const { data: file, isLoading } = useFile(fileId)
-  const { data: ctx } = useContext(ctxId)
-  const updateFile = useUpdateFile(fileId, ctxId)
-  const deleteFile = useDeleteFile(ctxId)
+  const { data: repo } = useRepository(organizationId, repoId)
+  const { data: file, isLoading } = useFile(organizationId, fileId)
+  const { data: ctx } = useContext(organizationId, ctxId)
+  const updateFile = useUpdateFile(organizationId, fileId, ctxId)
+  const deleteFile = useDeleteFile(organizationId, ctxId)
   const navigate = useNavigate()
   const [showLink, setShowLink] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
@@ -241,6 +241,7 @@ function FilePage() {
 
       {showLink && (
         <LinkModal
+          organizationId={organizationId}
           projectId={projectId}
           entityType="file"
           entityId={fileId}
@@ -249,7 +250,11 @@ function FilePage() {
       )}
 
       {showAdd && (
-        <AddFileModal contextId={ctxId} onClose={() => setShowAdd(false)} />
+        <AddFileModal
+          organizationId={organizationId}
+          contextId={ctxId}
+          onClose={() => setShowAdd(false)}
+        />
       )}
     </div>
   )

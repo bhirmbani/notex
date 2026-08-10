@@ -15,8 +15,8 @@ export const Route = createFileRoute('/dashboard/_layout/o/$organizationId/p/$pr
 function NotePage() {
   const { organizationId, projectId, noteId } = Route.useParams()
   const { data: project } = useProject(organizationId, projectId)
-  const { data: note, isLoading } = useNote(noteId)
-  const updateNote = useUpdateNote(noteId, projectId)
+  const { data: note, isLoading } = useNote(organizationId, noteId)
+  const updateNote = useUpdateNote(organizationId, noteId, projectId)
 
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -116,6 +116,7 @@ function NotePage() {
 
       {showLink && (
         <LinkModal
+          organizationId={organizationId}
           projectId={projectId}
           entityType="note"
           entityId={noteId}

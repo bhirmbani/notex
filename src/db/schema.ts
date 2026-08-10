@@ -147,16 +147,9 @@ export const projects = sqliteTable(
   'projects',
   {
     id: text('id').primaryKey(),
-    userId: text('user_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    // Nullable during the expand/migrate/contract rollout (see ADR 0002):
-    // dual-written alongside userId until the later "contract" ticket
-    // retires userId entirely.
-    organizationId: text('organization_id').references(
-      () => organizations.id,
-      { onDelete: 'cascade' },
-    ),
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

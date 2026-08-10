@@ -40,27 +40,6 @@ async function resolveOwningProject(
   return resolveOwningProject(db, { repositoryId: ctx.repositoryId })
 }
 
-export type ProjectOwnership =
-  | { status: 'not-found' }
-  | { status: 'not-owner'; project: Project }
-  | { status: 'owner'; project: Project }
-
-/**
- * Resolves the Project that a Repository/Question/Answer/Note/diagram
- * ultimately belongs to (walking the parent chain when necessary), and
- * whether `userId` currently owns it.
- */
-export async function checkProjectOwnership(
-  db: Db,
-  ref: ProjectRef,
-  userId: string,
-): Promise<ProjectOwnership> {
-  const project = await resolveOwningProject(db, ref)
-  if (!project) return { status: 'not-found' }
-  if (project.userId !== userId) return { status: 'not-owner', project }
-  return { status: 'owner', project }
-}
-
 export type ProjectAccessLevel = 'read' | 'write'
 
 export type ProjectOrganizationAccess =
@@ -74,11 +53,10 @@ export type ProjectOrganizationAccess =
     }
 
 /**
- * Organization-scoped counterpart to checkProjectOwnership: resolves the
- * same owning Project via the shared parent-chain walk, but authorizes via
- * Organization Membership and per-Project Grant instead of `projects.userId`
- * equality. A Project that hasn't been dual-written with an organizationId,
- * or that belongs to a different Organization than `organizationId`, is
+ * Resolves the Project that a Repository/Question/Answer/Note/diagram
+ * ultimately belongs to (walking the parent chain when necessary), and
+ * authorizes access via Organization Membership and per-Project Grant. A
+ * Project belonging to a different Organization than `organizationId` is
  * treated as not-found to avoid leaking cross-org project existence.
  *
  * Admin Memberships bypass Grants entirely (implicit write access to every

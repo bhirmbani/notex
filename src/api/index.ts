@@ -3,7 +3,6 @@ import { Hono } from 'hono'
 import {  requireAuth } from './middleware/auth'
 import type {ApiAuthEnv} from './middleware/auth';
 import { organizationsApi } from '@/features/organizations/api'
-import { projectsApi } from '@/features/projects/api'
 import { organizationProjectsApi } from '@/features/projects/organizationApi'
 import { repositoriesApi } from '@/features/repositories/api'
 import { contextsApi } from '@/features/contexts/api'
@@ -41,7 +40,6 @@ api.route('/organizations', organizationsApi)
 api.route('/', organizationProjectsApi)
 api.route('/', invitesApi)
 api.route('/', membershipsApi)
-api.route('/projects', projectsApi)
 api.route('/', repositoriesApi)
 api.route('/', contextsApi)
 api.route('/', filesApi)

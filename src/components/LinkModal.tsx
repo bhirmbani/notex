@@ -14,17 +14,18 @@ const TYPE_BADGE: Record<EntityType, string> = {
 }
 
 type Props = {
+  organizationId: string
   projectId: string
   entityType: EntityType
   entityId: string
   onClose: () => void
 }
 
-export function LinkModal({ projectId, entityType, entityId, onClose }: Props) {
+export function LinkModal({ organizationId, projectId, entityType, entityId, onClose }: Props) {
   const [search, setSearch] = useState('')
-  const { data } = useGraphData(projectId)
-  const createLink = useCreateLink(projectId)
-  const deleteLink = useDeleteLink(projectId)
+  const { data } = useGraphData(organizationId, projectId)
+  const createLink = useCreateLink(organizationId, projectId)
+  const deleteLink = useDeleteLink(organizationId, projectId)
 
   const myLinks = (data?.links ?? []).filter(
     (l) =>

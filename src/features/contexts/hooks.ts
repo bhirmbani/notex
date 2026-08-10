@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Context, CreateContextInput, UpdateContextInput } from './types'
 
+function orgBase(organizationId: string) {
+  return `/api/v1/organizations/${organizationId}`
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -13,26 +17,26 @@ export const contextKeys = {
   detail: (id: string) => [...contextKeys.all, 'detail', id] as const,
 }
 
-export function useContexts(repoId: string) {
+export function useContexts(organizationId: string, repoId: string) {
   return useQuery({
     queryKey: contextKeys.lists(repoId),
     queryFn: () =>
-      fetchJson<Context[]>(`/api/v1/repositories/${repoId}/contexts`),
+      fetchJson<Context[]>(`${orgBase(organizationId)}/repositories/${repoId}/contexts`),
   })
 }
 
-export function useContext(id: string) {
+export function useContext(organizationId: string, id: string) {
   return useQuery({
     queryKey: contextKeys.detail(id),
-    queryFn: () => fetchJson<Context>(`/api/v1/contexts/${id}`),
+    queryFn: () => fetchJson<Context>(`${orgBase(organizationId)}/contexts/${id}`),
   })
 }
 
-export function useCreateContext(repoId: string) {
+export function useCreateContext(organizationId: string, repoId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateContextInput) =>
-      fetchJson<Context>(`/api/v1/repositories/${repoId}/contexts`, {
+      fetchJson<Context>(`${orgBase(organizationId)}/repositories/${repoId}/contexts`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -42,11 +46,11 @@ export function useCreateContext(repoId: string) {
   })
 }
 
-export function useUpdateContext(id: string, repoId: string) {
+export function useUpdateContext(organizationId: string, id: string, repoId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: UpdateContextInput) =>
-      fetchJson<Context>(`/api/v1/contexts/${id}`, {
+      fetchJson<Context>(`${orgBase(organizationId)}/contexts/${id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -58,11 +62,11 @@ export function useUpdateContext(id: string, repoId: string) {
   })
 }
 
-export function useDeleteContext(repoId: string) {
+export function useDeleteContext(organizationId: string, repoId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) =>
-      fetchJson<{ success: boolean }>(`/api/v1/contexts/${id}`, {
+      fetchJson<{ success: boolean }>(`${orgBase(organizationId)}/contexts/${id}`, {
         method: 'DELETE',
       }),
     onSuccess: () =>

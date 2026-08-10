@@ -68,7 +68,6 @@ organizationProjectsApi.post('/organizations/:organizationId/projects', async (c
 
   const project = {
     id: crypto.randomUUID(),
-    userId: auth.user.id,
     organizationId,
     name,
     description: body.description ?? null,

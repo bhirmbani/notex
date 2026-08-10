@@ -41,7 +41,7 @@ function AnswerCard({
   ctxId: string
 }) {
   const [showLink, setShowLink] = useState(false)
-  const deleteFile = useDeleteFile(contextId)
+  const deleteFile = useDeleteFile(organizationId, contextId)
 
   return (
     <div className="group mb-2 flex overflow-hidden border bg-card transition-colors hover:border-foreground/20">
@@ -113,6 +113,7 @@ function AnswerCard({
 
       {showLink && (
         <LinkModal
+          organizationId={organizationId}
           projectId={projectId}
           entityType="file"
           entityId={file.id}
@@ -126,10 +127,10 @@ function AnswerCard({
 function ContextPage() {
   const { organizationId, projectId, repoId, ctxId } = Route.useParams()
   const { data: project } = useProject(organizationId, projectId)
-  const { data: ctx } = useContext(ctxId)
-  const { data: repo } = useRepository(repoId)
-  const { data: files, isLoading } = useFiles(ctxId)
-  const updateCtx = useUpdateContext(ctxId, repoId)
+  const { data: ctx } = useContext(organizationId, ctxId)
+  const { data: repo } = useRepository(organizationId, repoId)
+  const { data: files, isLoading } = useFiles(organizationId, ctxId)
+  const updateCtx = useUpdateContext(organizationId, ctxId, repoId)
   const [showAdd, setShowAdd] = useState(false)
 
   return (
@@ -236,7 +237,11 @@ function ContextPage() {
       )}
 
       {showAdd && (
-        <AddFileModal contextId={ctxId} onClose={() => setShowAdd(false)} />
+        <AddFileModal
+          organizationId={organizationId}
+          contextId={ctxId}
+          onClose={() => setShowAdd(false)}
+        />
       )}
     </div>
   )

@@ -6,9 +6,11 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
 export function AddFileModal({
+  organizationId,
   contextId,
   onClose,
 }: {
+  organizationId: string
   contextId: string
   onClose: () => void
 }) {
@@ -17,7 +19,7 @@ export function AddFileModal({
   const [content, setContent] = useState('')
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const create = useCreateFile(contextId)
+  const create = useCreateFile(organizationId, contextId)
 
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

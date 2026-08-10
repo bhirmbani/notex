@@ -47,7 +47,7 @@ function gridLayout(count: number): Array<{ x: number; y: number }> {
 function MindMapPage() {
   const { organizationId, projectId } = Route.useParams()
   const { data: project } = useProject(organizationId, projectId)
-  const { data, isLoading } = useGraphData(projectId)
+  const { data, isLoading } = useGraphData(organizationId, projectId)
   const navigate = useNavigate()
 
   if (isLoading) {
