@@ -13,7 +13,7 @@ import '@xyflow/react/dist/style.css'
 import { useGraphData } from '@/features/mindmap/hooks'
 import type { EntityNode, EntityType } from '@/features/mindmap/types'
 
-export const Route = createFileRoute('/dashboard/_layout/p/$projectId/mindmap')({
+export const Route = createFileRoute('/dashboard/_layout/o/$organizationId/p/$projectId/mindmap')({
   component: MindMapPage,
 })
 
@@ -45,8 +45,8 @@ function gridLayout(count: number): Array<{ x: number; y: number }> {
 }
 
 function MindMapPage() {
-  const { projectId } = Route.useParams()
-  const { data: project } = useProject(projectId)
+  const { organizationId, projectId } = Route.useParams()
+  const { data: project } = useProject(organizationId, projectId)
   const { data, isLoading } = useGraphData(projectId)
   const navigate = useNavigate()
 
@@ -90,36 +90,36 @@ function MindMapPage() {
     switch (entityType) {
       case 'repository':
         navigate({
-          to: '/dashboard/p/$projectId/r/$repoId',
-          params: { projectId, repoId: id },
+          to: '/dashboard/o/$organizationId/p/$projectId/r/$repoId',
+          params: { organizationId, projectId, repoId: id },
         })
         break
       case 'context':
         if (meta.parentId) {
           navigate({
-            to: '/dashboard/p/$projectId/r/$repoId/c/$ctxId',
-            params: { projectId, repoId: meta.parentId, ctxId: id },
+            to: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId',
+            params: { organizationId, projectId, repoId: meta.parentId, ctxId: id },
           })
         }
         break
       case 'file':
         if (meta.parentId && meta.grandParentId) {
           navigate({
-            to: '/dashboard/p/$projectId/r/$repoId/c/$ctxId',
-            params: { projectId, repoId: meta.grandParentId, ctxId: meta.parentId },
+            to: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId',
+            params: { organizationId, projectId, repoId: meta.grandParentId, ctxId: meta.parentId },
           })
         }
         break
       case 'note':
         navigate({
-          to: '/dashboard/p/$projectId/notes/$noteId',
-          params: { projectId, noteId: id },
+          to: '/dashboard/o/$organizationId/p/$projectId/notes/$noteId',
+          params: { organizationId, projectId, noteId: id },
         })
         break
       case 'mermaid':
         navigate({
-          to: '/dashboard/p/$projectId/mermaid/$diagId',
-          params: { projectId, diagId: id },
+          to: '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId',
+          params: { organizationId, projectId, diagId: id },
         })
         break
     }
@@ -130,8 +130,16 @@ function MindMapPage() {
       <div className="px-4 pt-3">
         <Breadcrumb
           items={[
-            { label: "Projects", to: "/dashboard" },
-            { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
+            {
+              label: "Projects",
+              to: "/dashboard/o/$organizationId",
+              params: { organizationId },
+            },
+            {
+              label: project?.name ?? "…",
+              to: "/dashboard/o/$organizationId/p/$projectId",
+              params: { organizationId, projectId },
+            },
             { label: "Mind Map" },
           ]}
         />

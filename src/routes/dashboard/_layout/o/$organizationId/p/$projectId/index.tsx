@@ -25,7 +25,7 @@ import { LinkModal } from '@/components/LinkModal'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { InlineEditField } from '@/components/InlineEditField'
 
-export const Route = createFileRoute('/dashboard/_layout/p/$projectId/')({
+export const Route = createFileRoute('/dashboard/_layout/o/$organizationId/p/$projectId/')({
   component: ProjectHome,
 })
 
@@ -38,9 +38,11 @@ function formatDate(ts: number) {
 }
 
 function CreateRepoModal({
+  organizationId,
   projectId,
   onClose,
 }: {
+  organizationId: string
   projectId: string
   onClose: () => void
 }) {
@@ -58,8 +60,8 @@ function CreateRepoModal({
     })
     onClose()
     navigate({
-      to: '/dashboard/p/$projectId/r/$repoId',
-      params: { projectId, repoId: repo.id },
+      to: '/dashboard/o/$organizationId/p/$projectId/r/$repoId',
+      params: { organizationId, projectId, repoId: repo.id },
     })
   }
 
@@ -120,12 +122,12 @@ function CreateRepoModal({
 }
 
 function ProjectHome() {
-  const { projectId } = Route.useParams()
-  const { data: project } = useProject(projectId)
+  const { organizationId, projectId } = Route.useParams()
+  const { data: project } = useProject(organizationId, projectId)
   const { data: repos, isLoading } = useRepositories(projectId)
   const { data: notes } = useNotes(projectId)
   const { data: diagrams } = useMermaidDiagrams(projectId)
-  const updateProject = useUpdateProject(projectId)
+  const updateProject = useUpdateProject(organizationId, projectId)
   const deleteRepo = useDeleteRepository(projectId)
   const [showCreate, setShowCreate] = useState(false)
   const [linkTarget, setLinkTarget] = useState<{ id: string } | null>(null)
@@ -153,7 +155,11 @@ function ProjectHome() {
     <div className="mx-auto max-w-3xl">
       <Breadcrumb
         items={[
-          { label: "Projects", to: "/dashboard" },
+          {
+            label: "Projects",
+            to: "/dashboard/o/$organizationId",
+            params: { organizationId },
+          },
           { label: project?.name ?? "…" },
         ]}
       />
@@ -250,8 +256,8 @@ function ProjectHome() {
                 className="group relative flex cursor-pointer items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/30 first:rounded-t-xl last:rounded-b-xl"
                 onClick={() =>
                   navigate({
-                    to: '/dashboard/p/$projectId/r/$repoId',
-                    params: { projectId, repoId: repo.id },
+                    to: '/dashboard/o/$organizationId/p/$projectId/r/$repoId',
+                    params: { organizationId, projectId, repoId: repo.id },
                   })
                 }
               >
@@ -311,6 +317,7 @@ function ProjectHome() {
 
       {showCreate && (
         <CreateRepoModal
+          organizationId={organizationId}
           projectId={projectId}
           onClose={() => setShowCreate(false)}
         />

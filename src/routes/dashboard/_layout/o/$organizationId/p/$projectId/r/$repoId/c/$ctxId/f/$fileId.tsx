@@ -21,14 +21,14 @@ import { Breadcrumb } from "@/components/Breadcrumb"
 import { InlineEditField } from "@/components/InlineEditField"
 
 export const Route = createFileRoute(
-  "/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
+  "/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
 )({
   component: FilePage,
 })
 
 function FilePage() {
-  const { projectId, repoId, ctxId, fileId } = Route.useParams()
-  const { data: project } = useProject(projectId)
+  const { organizationId, projectId, repoId, ctxId, fileId } = Route.useParams()
+  const { data: project } = useProject(organizationId, projectId)
   const { data: repo } = useRepository(repoId)
   const { data: file, isLoading } = useFile(fileId)
   const { data: ctx } = useContext(ctxId)
@@ -61,8 +61,8 @@ function FilePage() {
   const handleDelete = async () => {
     await deleteFile.mutateAsync(fileId)
     navigate({
-      to: "/dashboard/p/$projectId/r/$repoId/c/$ctxId",
-      params: { projectId, repoId, ctxId },
+      to: "/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId",
+      params: { organizationId, projectId, repoId, ctxId },
     })
   }
 
@@ -89,10 +89,26 @@ function FilePage() {
     <div className="mx-auto max-w-3xl">
       <Breadcrumb
         items={[
-          { label: "Projects", to: "/dashboard" },
-          { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
-          { label: repo?.name ?? "…", to: "/dashboard/p/$projectId/r/$repoId", params: { projectId, repoId } },
-          { label: ctx?.question ?? "…", to: "/dashboard/p/$projectId/r/$repoId/c/$ctxId", params: { projectId, repoId, ctxId } },
+          {
+            label: "Projects",
+            to: "/dashboard/o/$organizationId",
+            params: { organizationId },
+          },
+          {
+            label: project?.name ?? "…",
+            to: "/dashboard/o/$organizationId/p/$projectId",
+            params: { organizationId, projectId },
+          },
+          {
+            label: repo?.name ?? "…",
+            to: "/dashboard/o/$organizationId/p/$projectId/r/$repoId",
+            params: { organizationId, projectId, repoId },
+          },
+          {
+            label: ctx?.question ?? "…",
+            to: "/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId",
+            params: { organizationId, projectId, repoId, ctxId },
+          },
           { label: file.name },
         ]}
       />

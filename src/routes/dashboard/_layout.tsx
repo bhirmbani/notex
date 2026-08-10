@@ -83,6 +83,7 @@ function DashboardLayout() {
   }
 
   const params = useParams({ strict: false })
+  const organizationId = (params as Record<string, string>).organizationId
   const projectId = (params as Record<string, string>).projectId
 
   return (
@@ -107,7 +108,9 @@ function DashboardLayout() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar projectId={projectId} />
+        {organizationId && (
+          <Sidebar organizationId={organizationId} projectId={projectId} />
+        )}
         <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>

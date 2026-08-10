@@ -15,15 +15,16 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as InvitesTokenRouteImport } from './routes/invites/$token'
 import { Route as DashboardLayoutRouteImport } from './routes/dashboard/_layout'
 import { Route as DashboardLayoutIndexRouteImport } from './routes/dashboard/_layout/index'
-import { Route as DashboardLayoutPProjectIdIndexRouteImport } from './routes/dashboard/_layout/p/$projectId/index'
-import { Route as DashboardLayoutPProjectIdMindmapRouteImport } from './routes/dashboard/_layout/p/$projectId/mindmap'
-import { Route as DashboardLayoutPProjectIdRRepoIdRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId'
-import { Route as DashboardLayoutPProjectIdNotesNoteIdRouteImport } from './routes/dashboard/_layout/p/$projectId/notes/$noteId'
-import { Route as DashboardLayoutPProjectIdMermaidDiagIdRouteImport } from './routes/dashboard/_layout/p/$projectId/mermaid/$diagId'
-import { Route as DashboardLayoutPProjectIdRRepoIdIndexRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId/index'
-import { Route as DashboardLayoutPProjectIdRRepoIdCCtxIdRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId'
-import { Route as DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/index'
-import { Route as DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRouteImport } from './routes/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
+import { Route as DashboardLayoutOOrganizationIdIndexRouteImport } from './routes/dashboard/_layout/o/$organizationId/index'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdIndexRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/index'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdMindmapRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/mindmap'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/notes/$noteId'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/index'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/index'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
 
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
@@ -55,60 +56,70 @@ const DashboardLayoutIndexRoute = DashboardLayoutIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardLayoutRoute,
 } as any)
-const DashboardLayoutPProjectIdIndexRoute =
-  DashboardLayoutPProjectIdIndexRouteImport.update({
-    id: '/p/$projectId/',
-    path: '/p/$projectId/',
+const DashboardLayoutOOrganizationIdIndexRoute =
+  DashboardLayoutOOrganizationIdIndexRouteImport.update({
+    id: '/o/$organizationId/',
+    path: '/o/$organizationId/',
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
-const DashboardLayoutPProjectIdMindmapRoute =
-  DashboardLayoutPProjectIdMindmapRouteImport.update({
-    id: '/p/$projectId/mindmap',
-    path: '/p/$projectId/mindmap',
+const DashboardLayoutOOrganizationIdPProjectIdIndexRoute =
+  DashboardLayoutOOrganizationIdPProjectIdIndexRouteImport.update({
+    id: '/o/$organizationId/p/$projectId/',
+    path: '/o/$organizationId/p/$projectId/',
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
-const DashboardLayoutPProjectIdRRepoIdRoute =
-  DashboardLayoutPProjectIdRRepoIdRouteImport.update({
-    id: '/p/$projectId/r/$repoId',
-    path: '/p/$projectId/r/$repoId',
+const DashboardLayoutOOrganizationIdPProjectIdMindmapRoute =
+  DashboardLayoutOOrganizationIdPProjectIdMindmapRouteImport.update({
+    id: '/o/$organizationId/p/$projectId/mindmap',
+    path: '/o/$organizationId/p/$projectId/mindmap',
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
-const DashboardLayoutPProjectIdNotesNoteIdRoute =
-  DashboardLayoutPProjectIdNotesNoteIdRouteImport.update({
-    id: '/p/$projectId/notes/$noteId',
-    path: '/p/$projectId/notes/$noteId',
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute =
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteImport.update({
+    id: '/o/$organizationId/p/$projectId/r/$repoId',
+    path: '/o/$organizationId/p/$projectId/r/$repoId',
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
-const DashboardLayoutPProjectIdMermaidDiagIdRoute =
-  DashboardLayoutPProjectIdMermaidDiagIdRouteImport.update({
-    id: '/p/$projectId/mermaid/$diagId',
-    path: '/p/$projectId/mermaid/$diagId',
+const DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute =
+  DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRouteImport.update({
+    id: '/o/$organizationId/p/$projectId/notes/$noteId',
+    path: '/o/$organizationId/p/$projectId/notes/$noteId',
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
-const DashboardLayoutPProjectIdRRepoIdIndexRoute =
-  DashboardLayoutPProjectIdRRepoIdIndexRouteImport.update({
+const DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute =
+  DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRouteImport.update({
+    id: '/o/$organizationId/p/$projectId/mermaid/$diagId',
+    path: '/o/$organizationId/p/$projectId/mermaid/$diagId',
+    getParentRoute: () => DashboardLayoutRoute,
+  } as any)
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute =
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRouteImport.update({
     id: '/',
     path: '/',
-    getParentRoute: () => DashboardLayoutPProjectIdRRepoIdRoute,
+    getParentRoute: () => DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute,
   } as any)
-const DashboardLayoutPProjectIdRRepoIdCCtxIdRoute =
-  DashboardLayoutPProjectIdRRepoIdCCtxIdRouteImport.update({
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute =
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteImport.update({
     id: '/c/$ctxId',
     path: '/c/$ctxId',
-    getParentRoute: () => DashboardLayoutPProjectIdRRepoIdRoute,
+    getParentRoute: () => DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute,
   } as any)
-const DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute =
-  DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRouteImport.update({
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute =
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRouteImport.update({
     id: '/',
     path: '/',
-    getParentRoute: () => DashboardLayoutPProjectIdRRepoIdCCtxIdRoute,
+    getParentRoute: () =>
+      DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute,
   } as any)
-const DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute =
-  DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRouteImport.update({
-    id: '/f/$fileId',
-    path: '/f/$fileId',
-    getParentRoute: () => DashboardLayoutPProjectIdRRepoIdCCtxIdRoute,
-  } as any)
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRoute =
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRouteImport.update(
+    {
+      id: '/f/$fileId',
+      path: '/f/$fileId',
+      getParentRoute: () =>
+        DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute,
+    } as any,
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -117,15 +128,16 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardLayoutRouteWithChildren
   '/invites/$token': typeof InvitesTokenRoute
   '/dashboard/': typeof DashboardLayoutIndexRoute
-  '/dashboard/p/$projectId/mindmap': typeof DashboardLayoutPProjectIdMindmapRoute
-  '/dashboard/p/$projectId/': typeof DashboardLayoutPProjectIdIndexRoute
-  '/dashboard/p/$projectId/mermaid/$diagId': typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
-  '/dashboard/p/$projectId/notes/$noteId': typeof DashboardLayoutPProjectIdNotesNoteIdRoute
-  '/dashboard/p/$projectId/r/$repoId': typeof DashboardLayoutPProjectIdRRepoIdRouteWithChildren
-  '/dashboard/p/$projectId/r/$repoId/': typeof DashboardLayoutPProjectIdRRepoIdIndexRoute
-  '/dashboard/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren
-  '/dashboard/p/$projectId/r/$repoId/c/$ctxId/': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute
-  '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute
+  '/dashboard/o/$organizationId/': typeof DashboardLayoutOOrganizationIdIndexRoute
+  '/dashboard/o/$organizationId/p/$projectId/mindmap': typeof DashboardLayoutOOrganizationIdPProjectIdMindmapRoute
+  '/dashboard/o/$organizationId/p/$projectId/': typeof DashboardLayoutOOrganizationIdPProjectIdIndexRoute
+  '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId': typeof DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute
+  '/dashboard/o/$organizationId/p/$projectId/notes/$noteId': typeof DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteWithChildren
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId/': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteWithChildren
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -133,13 +145,14 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/invites/$token': typeof InvitesTokenRoute
   '/dashboard': typeof DashboardLayoutIndexRoute
-  '/dashboard/p/$projectId/mindmap': typeof DashboardLayoutPProjectIdMindmapRoute
-  '/dashboard/p/$projectId': typeof DashboardLayoutPProjectIdIndexRoute
-  '/dashboard/p/$projectId/mermaid/$diagId': typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
-  '/dashboard/p/$projectId/notes/$noteId': typeof DashboardLayoutPProjectIdNotesNoteIdRoute
-  '/dashboard/p/$projectId/r/$repoId': typeof DashboardLayoutPProjectIdRRepoIdIndexRoute
-  '/dashboard/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute
-  '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute
+  '/dashboard/o/$organizationId': typeof DashboardLayoutOOrganizationIdIndexRoute
+  '/dashboard/o/$organizationId/p/$projectId/mindmap': typeof DashboardLayoutOOrganizationIdPProjectIdMindmapRoute
+  '/dashboard/o/$organizationId/p/$projectId': typeof DashboardLayoutOOrganizationIdPProjectIdIndexRoute
+  '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId': typeof DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute
+  '/dashboard/o/$organizationId/p/$projectId/notes/$noteId': typeof DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -149,15 +162,16 @@ export interface FileRoutesById {
   '/dashboard/_layout': typeof DashboardLayoutRouteWithChildren
   '/invites/$token': typeof InvitesTokenRoute
   '/dashboard/_layout/': typeof DashboardLayoutIndexRoute
-  '/dashboard/_layout/p/$projectId/mindmap': typeof DashboardLayoutPProjectIdMindmapRoute
-  '/dashboard/_layout/p/$projectId/': typeof DashboardLayoutPProjectIdIndexRoute
-  '/dashboard/_layout/p/$projectId/mermaid/$diagId': typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
-  '/dashboard/_layout/p/$projectId/notes/$noteId': typeof DashboardLayoutPProjectIdNotesNoteIdRoute
-  '/dashboard/_layout/p/$projectId/r/$repoId': typeof DashboardLayoutPProjectIdRRepoIdRouteWithChildren
-  '/dashboard/_layout/p/$projectId/r/$repoId/': typeof DashboardLayoutPProjectIdRRepoIdIndexRoute
-  '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren
-  '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute
-  '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute
+  '/dashboard/_layout/o/$organizationId/': typeof DashboardLayoutOOrganizationIdIndexRoute
+  '/dashboard/_layout/o/$organizationId/p/$projectId/mindmap': typeof DashboardLayoutOOrganizationIdPProjectIdMindmapRoute
+  '/dashboard/_layout/o/$organizationId/p/$projectId/': typeof DashboardLayoutOOrganizationIdPProjectIdIndexRoute
+  '/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId': typeof DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute
+  '/dashboard/_layout/o/$organizationId/p/$projectId/notes/$noteId': typeof DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute
+  '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteWithChildren
+  '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute
+  '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteWithChildren
+  '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute
+  '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -168,15 +182,16 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/invites/$token'
     | '/dashboard/'
-    | '/dashboard/p/$projectId/mindmap'
-    | '/dashboard/p/$projectId/'
-    | '/dashboard/p/$projectId/mermaid/$diagId'
-    | '/dashboard/p/$projectId/notes/$noteId'
-    | '/dashboard/p/$projectId/r/$repoId'
-    | '/dashboard/p/$projectId/r/$repoId/'
-    | '/dashboard/p/$projectId/r/$repoId/c/$ctxId'
-    | '/dashboard/p/$projectId/r/$repoId/c/$ctxId/'
-    | '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
+    | '/dashboard/o/$organizationId/'
+    | '/dashboard/o/$organizationId/p/$projectId/mindmap'
+    | '/dashboard/o/$organizationId/p/$projectId/'
+    | '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId'
+    | '/dashboard/o/$organizationId/p/$projectId/notes/$noteId'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -184,13 +199,14 @@ export interface FileRouteTypes {
     | '/register'
     | '/invites/$token'
     | '/dashboard'
-    | '/dashboard/p/$projectId/mindmap'
-    | '/dashboard/p/$projectId'
-    | '/dashboard/p/$projectId/mermaid/$diagId'
-    | '/dashboard/p/$projectId/notes/$noteId'
-    | '/dashboard/p/$projectId/r/$repoId'
-    | '/dashboard/p/$projectId/r/$repoId/c/$ctxId'
-    | '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
+    | '/dashboard/o/$organizationId'
+    | '/dashboard/o/$organizationId/p/$projectId/mindmap'
+    | '/dashboard/o/$organizationId/p/$projectId'
+    | '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId'
+    | '/dashboard/o/$organizationId/p/$projectId/notes/$noteId'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
   id:
     | '__root__'
     | '/'
@@ -199,15 +215,16 @@ export interface FileRouteTypes {
     | '/dashboard/_layout'
     | '/invites/$token'
     | '/dashboard/_layout/'
-    | '/dashboard/_layout/p/$projectId/mindmap'
-    | '/dashboard/_layout/p/$projectId/'
-    | '/dashboard/_layout/p/$projectId/mermaid/$diagId'
-    | '/dashboard/_layout/p/$projectId/notes/$noteId'
-    | '/dashboard/_layout/p/$projectId/r/$repoId'
-    | '/dashboard/_layout/p/$projectId/r/$repoId/'
-    | '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId'
-    | '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/'
-    | '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
+    | '/dashboard/_layout/o/$organizationId/'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/mindmap'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/notes/$noteId'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -262,127 +279,139 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLayoutIndexRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
-    '/dashboard/_layout/p/$projectId/': {
-      id: '/dashboard/_layout/p/$projectId/'
-      path: '/p/$projectId'
-      fullPath: '/dashboard/p/$projectId/'
-      preLoaderRoute: typeof DashboardLayoutPProjectIdIndexRouteImport
+    '/dashboard/_layout/o/$organizationId/': {
+      id: '/dashboard/_layout/o/$organizationId/'
+      path: '/o/$organizationId'
+      fullPath: '/dashboard/o/$organizationId/'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdIndexRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
-    '/dashboard/_layout/p/$projectId/mindmap': {
-      id: '/dashboard/_layout/p/$projectId/mindmap'
-      path: '/p/$projectId/mindmap'
-      fullPath: '/dashboard/p/$projectId/mindmap'
-      preLoaderRoute: typeof DashboardLayoutPProjectIdMindmapRouteImport
+    '/dashboard/_layout/o/$organizationId/p/$projectId/': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/'
+      path: '/o/$organizationId/p/$projectId'
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdIndexRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
-    '/dashboard/_layout/p/$projectId/r/$repoId': {
-      id: '/dashboard/_layout/p/$projectId/r/$repoId'
-      path: '/p/$projectId/r/$repoId'
-      fullPath: '/dashboard/p/$projectId/r/$repoId'
-      preLoaderRoute: typeof DashboardLayoutPProjectIdRRepoIdRouteImport
+    '/dashboard/_layout/o/$organizationId/p/$projectId/mindmap': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/mindmap'
+      path: '/o/$organizationId/p/$projectId/mindmap'
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/mindmap'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdMindmapRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
-    '/dashboard/_layout/p/$projectId/notes/$noteId': {
-      id: '/dashboard/_layout/p/$projectId/notes/$noteId'
-      path: '/p/$projectId/notes/$noteId'
-      fullPath: '/dashboard/p/$projectId/notes/$noteId'
-      preLoaderRoute: typeof DashboardLayoutPProjectIdNotesNoteIdRouteImport
+    '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId'
+      path: '/o/$organizationId/p/$projectId/r/$repoId'
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/r/$repoId'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
-    '/dashboard/_layout/p/$projectId/mermaid/$diagId': {
-      id: '/dashboard/_layout/p/$projectId/mermaid/$diagId'
-      path: '/p/$projectId/mermaid/$diagId'
-      fullPath: '/dashboard/p/$projectId/mermaid/$diagId'
-      preLoaderRoute: typeof DashboardLayoutPProjectIdMermaidDiagIdRouteImport
+    '/dashboard/_layout/o/$organizationId/p/$projectId/notes/$noteId': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/notes/$noteId'
+      path: '/o/$organizationId/p/$projectId/notes/$noteId'
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/notes/$noteId'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
-    '/dashboard/_layout/p/$projectId/r/$repoId/': {
-      id: '/dashboard/_layout/p/$projectId/r/$repoId/'
+    '/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId'
+      path: '/o/$organizationId/p/$projectId/mermaid/$diagId'
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRouteImport
+      parentRoute: typeof DashboardLayoutRoute
+    }
+    '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/'
       path: '/'
-      fullPath: '/dashboard/p/$projectId/r/$repoId/'
-      preLoaderRoute: typeof DashboardLayoutPProjectIdRRepoIdIndexRouteImport
-      parentRoute: typeof DashboardLayoutPProjectIdRRepoIdRoute
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRouteImport
+      parentRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute
     }
-    '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId': {
-      id: '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId'
+    '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
       path: '/c/$ctxId'
-      fullPath: '/dashboard/p/$projectId/r/$repoId/c/$ctxId'
-      preLoaderRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRouteImport
-      parentRoute: typeof DashboardLayoutPProjectIdRRepoIdRoute
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteImport
+      parentRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute
     }
-    '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/': {
-      id: '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/'
+    '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/'
       path: '/'
-      fullPath: '/dashboard/p/$projectId/r/$repoId/c/$ctxId/'
-      preLoaderRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRouteImport
-      parentRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRoute
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRouteImport
+      parentRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute
     }
-    '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': {
-      id: '/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
+    '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
       path: '/f/$fileId'
-      fullPath: '/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
-      preLoaderRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRouteImport
-      parentRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRoute
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRouteImport
+      parentRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute
     }
   }
 }
 
-interface DashboardLayoutPProjectIdRRepoIdCCtxIdRouteChildren {
-  DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute
-  DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute
+interface DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteChildren {
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRoute
 }
 
-const DashboardLayoutPProjectIdRRepoIdCCtxIdRouteChildren: DashboardLayoutPProjectIdRRepoIdCCtxIdRouteChildren =
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteChildren: DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteChildren =
   {
-    DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute:
-      DashboardLayoutPProjectIdRRepoIdCCtxIdIndexRoute,
-    DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute:
-      DashboardLayoutPProjectIdRRepoIdCCtxIdFFileIdRoute,
+    DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute:
+      DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute,
+    DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRoute:
+      DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRoute,
   }
 
-const DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren =
-  DashboardLayoutPProjectIdRRepoIdCCtxIdRoute._addFileChildren(
-    DashboardLayoutPProjectIdRRepoIdCCtxIdRouteChildren,
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteWithChildren =
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute._addFileChildren(
+    DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteChildren,
   )
 
-interface DashboardLayoutPProjectIdRRepoIdRouteChildren {
-  DashboardLayoutPProjectIdRRepoIdIndexRoute: typeof DashboardLayoutPProjectIdRRepoIdIndexRoute
-  DashboardLayoutPProjectIdRRepoIdCCtxIdRoute: typeof DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren
+interface DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteChildren {
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteWithChildren
 }
 
-const DashboardLayoutPProjectIdRRepoIdRouteChildren: DashboardLayoutPProjectIdRRepoIdRouteChildren =
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteChildren: DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteChildren =
   {
-    DashboardLayoutPProjectIdRRepoIdIndexRoute:
-      DashboardLayoutPProjectIdRRepoIdIndexRoute,
-    DashboardLayoutPProjectIdRRepoIdCCtxIdRoute:
-      DashboardLayoutPProjectIdRRepoIdCCtxIdRouteWithChildren,
+    DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute:
+      DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute,
+    DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute:
+      DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteWithChildren,
   }
 
-const DashboardLayoutPProjectIdRRepoIdRouteWithChildren =
-  DashboardLayoutPProjectIdRRepoIdRoute._addFileChildren(
-    DashboardLayoutPProjectIdRRepoIdRouteChildren,
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteWithChildren =
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute._addFileChildren(
+    DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteChildren,
   )
 
 interface DashboardLayoutRouteChildren {
   DashboardLayoutIndexRoute: typeof DashboardLayoutIndexRoute
-  DashboardLayoutPProjectIdMindmapRoute: typeof DashboardLayoutPProjectIdMindmapRoute
-  DashboardLayoutPProjectIdIndexRoute: typeof DashboardLayoutPProjectIdIndexRoute
-  DashboardLayoutPProjectIdMermaidDiagIdRoute: typeof DashboardLayoutPProjectIdMermaidDiagIdRoute
-  DashboardLayoutPProjectIdNotesNoteIdRoute: typeof DashboardLayoutPProjectIdNotesNoteIdRoute
-  DashboardLayoutPProjectIdRRepoIdRoute: typeof DashboardLayoutPProjectIdRRepoIdRouteWithChildren
+  DashboardLayoutOOrganizationIdIndexRoute: typeof DashboardLayoutOOrganizationIdIndexRoute
+  DashboardLayoutOOrganizationIdPProjectIdMindmapRoute: typeof DashboardLayoutOOrganizationIdPProjectIdMindmapRoute
+  DashboardLayoutOOrganizationIdPProjectIdIndexRoute: typeof DashboardLayoutOOrganizationIdPProjectIdIndexRoute
+  DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute: typeof DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute
+  DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute: typeof DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteWithChildren
 }
 
 const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
   DashboardLayoutIndexRoute: DashboardLayoutIndexRoute,
-  DashboardLayoutPProjectIdMindmapRoute: DashboardLayoutPProjectIdMindmapRoute,
-  DashboardLayoutPProjectIdIndexRoute: DashboardLayoutPProjectIdIndexRoute,
-  DashboardLayoutPProjectIdMermaidDiagIdRoute:
-    DashboardLayoutPProjectIdMermaidDiagIdRoute,
-  DashboardLayoutPProjectIdNotesNoteIdRoute:
-    DashboardLayoutPProjectIdNotesNoteIdRoute,
-  DashboardLayoutPProjectIdRRepoIdRoute:
-    DashboardLayoutPProjectIdRRepoIdRouteWithChildren,
+  DashboardLayoutOOrganizationIdIndexRoute:
+    DashboardLayoutOOrganizationIdIndexRoute,
+  DashboardLayoutOOrganizationIdPProjectIdMindmapRoute:
+    DashboardLayoutOOrganizationIdPProjectIdMindmapRoute,
+  DashboardLayoutOOrganizationIdPProjectIdIndexRoute:
+    DashboardLayoutOOrganizationIdPProjectIdIndexRoute,
+  DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute:
+    DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute,
+  DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute:
+    DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute,
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute:
+    DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteWithChildren,
 }
 
 const DashboardLayoutRouteWithChildren = DashboardLayoutRoute._addFileChildren(

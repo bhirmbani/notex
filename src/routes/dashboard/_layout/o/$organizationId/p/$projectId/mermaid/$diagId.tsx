@@ -10,13 +10,13 @@ import { Breadcrumb } from '@/components/Breadcrumb'
 
 mermaid.initialize({ startOnLoad: false, theme: 'default' })
 
-export const Route = createFileRoute('/dashboard/_layout/p/$projectId/mermaid/$diagId')({
+export const Route = createFileRoute('/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId')({
   component: MermaidPage,
 })
 
 function MermaidPage() {
-  const { projectId, diagId } = Route.useParams()
-  const { data: project } = useProject(projectId)
+  const { organizationId, projectId, diagId } = Route.useParams()
+  const { data: project } = useProject(organizationId, projectId)
   const { data: diagram, isLoading } = useMermaidDiagram(diagId)
   const updateDiagram = useUpdateMermaid(diagId, projectId)
 
@@ -92,8 +92,16 @@ function MermaidPage() {
       <div className="px-4 pt-3">
         <Breadcrumb
           items={[
-            { label: "Projects", to: "/dashboard" },
-            { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
+            {
+              label: "Projects",
+              to: "/dashboard/o/$organizationId",
+              params: { organizationId },
+            },
+            {
+              label: project?.name ?? "…",
+              to: "/dashboard/o/$organizationId/p/$projectId",
+              params: { organizationId, projectId },
+            },
             { label: "Mermaid" },
             { label: diagram.name || "Untitled" },
           ]}

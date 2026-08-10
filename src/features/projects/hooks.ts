@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Project, CreateProjectInput, UpdateProjectInput } from './types'
 
-const BASE = '/api/v1/projects'
+function orgBase(organizationId: string) {
+  return `/api/v1/organizations/${organizationId}/projects`
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
@@ -11,58 +13,61 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const projectKeys = {
   all: ['projects'] as const,
-  lists: () => [...projectKeys.all, 'list'] as const,
-  detail: (id: string) => [...projectKeys.all, 'detail', id] as const,
+  lists: (organizationId: string) => [...projectKeys.all, 'list', organizationId] as const,
+  detail: (organizationId: string, id: string) =>
+    [...projectKeys.all, 'detail', organizationId, id] as const,
 }
 
-export function useProjects() {
+export function useProjects(organizationId: string) {
   return useQuery({
-    queryKey: projectKeys.lists(),
-    queryFn: () => fetchJson<Project[]>(BASE),
+    queryKey: projectKeys.lists(organizationId),
+    queryFn: () => fetchJson<Project[]>(orgBase(organizationId)),
+    enabled: !!organizationId,
   })
 }
 
-export function useProject(id: string) {
+export function useProject(organizationId: string, id: string) {
   return useQuery({
-    queryKey: projectKeys.detail(id),
-    queryFn: () => fetchJson<Project>(`${BASE}/${id}`),
+    queryKey: projectKeys.detail(organizationId, id),
+    queryFn: () => fetchJson<Project>(`${orgBase(organizationId)}/${id}`),
+    enabled: !!organizationId && !!id,
   })
 }
 
-export function useCreateProject() {
+export function useCreateProject(organizationId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateProjectInput) =>
-      fetchJson<Project>(BASE, {
+      fetchJson<Project>(orgBase(organizationId), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.lists() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.lists(organizationId) }),
   })
 }
 
-export function useUpdateProject(id: string) {
+export function useUpdateProject(organizationId: string, id: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: UpdateProjectInput) =>
-      fetchJson<Project>(`${BASE}/${id}`, {
+      fetchJson<Project>(`${orgBase(organizationId)}/${id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: projectKeys.lists() })
-      qc.invalidateQueries({ queryKey: projectKeys.detail(id) })
+      qc.invalidateQueries({ queryKey: projectKeys.lists(organizationId) })
+      qc.invalidateQueries({ queryKey: projectKeys.detail(organizationId, id) })
     },
   })
 }
 
-export function useDeleteProject() {
+export function useDeleteProject(organizationId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) =>
-      fetchJson<{ success: boolean }>(`${BASE}/${id}`, { method: 'DELETE' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.lists() }),
+      fetchJson<{ success: boolean }>(`${orgBase(organizationId)}/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.lists(organizationId) }),
   })
 }

@@ -8,13 +8,13 @@ import { useProject } from '@/features/projects/hooks'
 import { LinkModal } from '@/components/LinkModal'
 import { Breadcrumb } from '@/components/Breadcrumb'
 
-export const Route = createFileRoute('/dashboard/_layout/p/$projectId/notes/$noteId')({
+export const Route = createFileRoute('/dashboard/_layout/o/$organizationId/p/$projectId/notes/$noteId')({
   component: NotePage,
 })
 
 function NotePage() {
-  const { projectId, noteId } = Route.useParams()
-  const { data: project } = useProject(projectId)
+  const { organizationId, projectId, noteId } = Route.useParams()
+  const { data: project } = useProject(organizationId, projectId)
   const { data: note, isLoading } = useNote(noteId)
   const updateNote = useUpdateNote(noteId, projectId)
 
@@ -68,8 +68,16 @@ function NotePage() {
     <div className="flex h-full flex-col gap-3">
       <Breadcrumb
         items={[
-          { label: "Projects", to: "/dashboard" },
-          { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
+          {
+            label: "Projects",
+            to: "/dashboard/o/$organizationId",
+            params: { organizationId },
+          },
+          {
+            label: project?.name ?? "…",
+            to: "/dashboard/o/$organizationId/p/$projectId",
+            params: { organizationId, projectId },
+          },
           { label: "Notes" },
           { label: note.title || "Untitled" },
         ]}
