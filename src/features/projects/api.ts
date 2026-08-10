@@ -5,6 +5,7 @@ import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
 import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
+import { checkProjectOwnership } from '@/api/ownership'
 
 export const projectsApi = new Hono<ApiAuthEnv>()
 
@@ -47,15 +48,11 @@ projectsApi.get('/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, id))
+  const ownership = await checkProjectOwnership(db, { projectId: id }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
-  if (!project) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (project.userId !== auth.user.id) return forbiddenResponse()
-
-  return c.json(project)
+  return c.json(ownership.project)
 })
 
 projectsApi.patch('/:id', async (c) => {
@@ -70,20 +67,16 @@ projectsApi.patch('/:id', async (c) => {
     body.name = name
   }
 
-  const [existing] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, id))
-
-  if (!existing) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (existing.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId: id }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   await db
     .update(schema.projects)
     .set({ ...(body.name !== undefined && { name: body.name }), ...(body.description !== undefined && { description: body.description }) })
     .where(eq(schema.projects.id, id))
 
-  return c.json({ ...existing, ...body })
+  return c.json({ ...ownership.project, ...body })
 })
 
 projectsApi.delete('/:id', async (c) => {
@@ -91,13 +84,9 @@ projectsApi.delete('/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
 
-  const [existing] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, id))
-
-  if (!existing) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (existing.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId: id }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   await db.delete(schema.projects).where(eq(schema.projects.id, id))
 

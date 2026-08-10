@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { checkProjectOwnership } from '@/api/ownership'
 
 export const mermaidApi = new Hono<ApiAuthEnv>()
 
@@ -13,13 +14,9 @@ mermaidApi.get('/projects/:projectId/mermaid', async (c) => {
   const db = getDb(c.env.DB)
   const { projectId } = c.req.param()
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-
-  if (!project) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const rows = await db
     .select()
@@ -37,13 +34,9 @@ mermaidApi.post('/projects/:projectId/mermaid', async (c) => {
   const { projectId } = c.req.param()
   const body = await c.req.json<{ name: string }>()
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-
-  if (!project) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const diagram = {
     id: crypto.randomUUID(),
@@ -64,16 +57,20 @@ mermaidApi.get('/mermaid/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
 
-  const [row] = await db
-    .select({ diagram: schema.mermaidDiagrams, project: schema.projects })
+  const [diagram] = await db
+    .select()
     .from(schema.mermaidDiagrams)
-    .innerJoin(schema.projects, eq(schema.mermaidDiagrams.projectId, schema.projects.id))
     .where(eq(schema.mermaidDiagrams.id, id))
 
-  if (!row) return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
-  if (row.project.userId !== auth.user.id) return forbiddenResponse()
+  if (!diagram) return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
 
-  return c.json(row.diagram)
+  // A missing project here mirrors the pre-refactor inner-join lookup, which
+  // returned no row (404) rather than a permission error in that case.
+  const ownership = await checkProjectOwnership(db, { projectId: diagram.projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
+
+  return c.json(diagram)
 })
 
 // PATCH /mermaid/:id
@@ -83,14 +80,18 @@ mermaidApi.patch('/mermaid/:id', async (c) => {
   const id = c.req.param('id')
   const body = await c.req.json<{ name?: string; content?: string }>()
 
-  const [row] = await db
-    .select({ diagram: schema.mermaidDiagrams, project: schema.projects })
+  const [diagram] = await db
+    .select()
     .from(schema.mermaidDiagrams)
-    .innerJoin(schema.projects, eq(schema.mermaidDiagrams.projectId, schema.projects.id))
     .where(eq(schema.mermaidDiagrams.id, id))
 
-  if (!row) return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
-  if (row.project.userId !== auth.user.id) return forbiddenResponse()
+  if (!diagram) return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
+
+  // A missing project here mirrors the pre-refactor inner-join lookup, which
+  // returned no row (404) rather than a permission error in that case.
+  const ownership = await checkProjectOwnership(db, { projectId: diagram.projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   await db
     .update(schema.mermaidDiagrams)
@@ -100,7 +101,7 @@ mermaidApi.patch('/mermaid/:id', async (c) => {
     })
     .where(eq(schema.mermaidDiagrams.id, id))
 
-  return c.json({ ...row.diagram, ...body })
+  return c.json({ ...diagram, ...body })
 })
 
 // DELETE /mermaid/:id
@@ -109,14 +110,18 @@ mermaidApi.delete('/mermaid/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
 
-  const [row] = await db
-    .select({ diagram: schema.mermaidDiagrams, project: schema.projects })
+  const [diagram] = await db
+    .select()
     .from(schema.mermaidDiagrams)
-    .innerJoin(schema.projects, eq(schema.mermaidDiagrams.projectId, schema.projects.id))
     .where(eq(schema.mermaidDiagrams.id, id))
 
-  if (!row) return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
-  if (row.project.userId !== auth.user.id) return forbiddenResponse()
+  if (!diagram) return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
+
+  // A missing project here mirrors the pre-refactor inner-join lookup, which
+  // returned no row (404) rather than a permission error in that case.
+  const ownership = await checkProjectOwnership(db, { projectId: diagram.projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   await db.delete(schema.mermaidDiagrams).where(eq(schema.mermaidDiagrams.id, id))
 

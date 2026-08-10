@@ -5,40 +5,18 @@ import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
 import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
+import { checkProjectOwnership } from '@/api/ownership'
 
 export const filesApi = new Hono<ApiAuthEnv>()
-
-async function getContextOwner(db: ReturnType<typeof getDb>, contextId: string) {
-  const [ctx] = await db
-    .select()
-    .from(schema.contexts)
-    .where(eq(schema.contexts.id, contextId))
-
-  if (!ctx) return null
-
-  const [repo] = await db
-    .select()
-    .from(schema.repositories)
-    .where(eq(schema.repositories.id, ctx.repositoryId))
-
-  if (!repo) return null
-
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, repo.projectId))
-
-  return project ? { ctx, repo, project } : null
-}
 
 filesApi.get('/contexts/:contextId/files', async (c) => {
   const auth = c.get('auth')
   const db = getDb(c.env.DB)
   const { contextId } = c.req.param()
 
-  const found = await getContextOwner(db, contextId)
-  if (!found) return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
-  if (found.project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { contextId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const rows = await db
     .select()
@@ -55,9 +33,9 @@ filesApi.post('/contexts/:contextId/files', async (c) => {
   const { contextId } = c.req.param()
   const body = await c.req.json<{ name: string; contentType: 'text' | 'upload'; content: string }>()
 
-  const found = await getContextOwner(db, contextId)
-  if (!found) return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
-  if (found.project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { contextId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const file = {
     id: crypto.randomUUID(),
@@ -85,8 +63,10 @@ filesApi.get('/files/:id', async (c) => {
 
   if (!file) return c.json({ error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
 
-  const found = await getContextOwner(db, file.contextId)
-  if (!found || found.project.userId !== auth.user.id) return forbiddenResponse()
+  // Not-found and not-owner both surface as 403 here, matching the
+  // pre-refactor behavior where a missing parent chain was already forbidden.
+  const ownership = await checkProjectOwnership(db, { contextId: file.contextId }, auth.user.id)
+  if (ownership.status !== 'owner') return forbiddenResponse()
 
   return c.json(file)
 })
@@ -118,8 +98,8 @@ filesApi.patch('/files/:id', async (c) => {
 
   if (!file) return c.json({ error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
 
-  const found = await getContextOwner(db, file.contextId)
-  if (!found || found.project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { contextId: file.contextId }, auth.user.id)
+  if (ownership.status !== 'owner') return forbiddenResponse()
 
   await db
     .update(schema.files)
@@ -144,8 +124,8 @@ filesApi.delete('/files/:id', async (c) => {
 
   if (!file) return c.json({ error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
 
-  const found = await getContextOwner(db, file.contextId)
-  if (!found || found.project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { contextId: file.contextId }, auth.user.id)
+  if (ownership.status !== 'owner') return forbiddenResponse()
 
   await db.delete(schema.files).where(eq(schema.files.id, id))
 
