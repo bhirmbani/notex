@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 
 import { requireAuth, type ApiAuthEnv } from './middleware/auth'
+import { organizationsApi } from '@/features/organizations/api'
 import { projectsApi } from '@/features/projects/api'
 import { repositoriesApi } from '@/features/repositories/api'
 import { contextsApi } from '@/features/contexts/api'
@@ -27,6 +28,7 @@ api.get('/me', (c) => {
   })
 })
 
+api.route('/organizations', organizationsApi)
 api.route('/projects', projectsApi)
 api.route('/', repositoriesApi)
 api.route('/', contextsApi)
