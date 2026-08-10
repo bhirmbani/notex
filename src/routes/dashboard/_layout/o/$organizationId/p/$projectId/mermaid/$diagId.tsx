@@ -17,8 +17,8 @@ export const Route = createFileRoute('/dashboard/_layout/o/$organizationId/p/$pr
 function MermaidPage() {
   const { organizationId, projectId, diagId } = Route.useParams()
   const { data: project } = useProject(organizationId, projectId)
-  const { data: diagram, isLoading } = useMermaidDiagram(diagId)
-  const updateDiagram = useUpdateMermaid(diagId, projectId)
+  const { data: diagram, isLoading } = useMermaidDiagram(organizationId, diagId)
+  const updateDiagram = useUpdateMermaid(organizationId, diagId, projectId)
 
   const [name, setName] = useState('')
   const [content, setContent] = useState('')
@@ -131,6 +131,7 @@ function MermaidPage() {
 
       {showLink && (
         <LinkModal
+          organizationId={organizationId}
           projectId={projectId}
           entityType="mermaid"
           entityId={diagId}

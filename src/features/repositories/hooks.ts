@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Repository, CreateRepositoryInput, UpdateRepositoryInput } from './types'
 
+function orgBase(organizationId: string) {
+  return `/api/v1/organizations/${organizationId}`
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -13,26 +17,26 @@ export const repositoryKeys = {
   detail: (id: string) => [...repositoryKeys.all, 'detail', id] as const,
 }
 
-export function useRepositories(projectId: string) {
+export function useRepositories(organizationId: string, projectId: string) {
   return useQuery({
     queryKey: repositoryKeys.lists(projectId),
     queryFn: () =>
-      fetchJson<Repository[]>(`/api/v1/projects/${projectId}/repositories`),
+      fetchJson<Repository[]>(`${orgBase(organizationId)}/projects/${projectId}/repositories`),
   })
 }
 
-export function useRepository(id: string) {
+export function useRepository(organizationId: string, id: string) {
   return useQuery({
     queryKey: repositoryKeys.detail(id),
-    queryFn: () => fetchJson<Repository>(`/api/v1/repositories/${id}`),
+    queryFn: () => fetchJson<Repository>(`${orgBase(organizationId)}/repositories/${id}`),
   })
 }
 
-export function useCreateRepository(projectId: string) {
+export function useCreateRepository(organizationId: string, projectId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateRepositoryInput) =>
-      fetchJson<Repository>(`/api/v1/projects/${projectId}/repositories`, {
+      fetchJson<Repository>(`${orgBase(organizationId)}/projects/${projectId}/repositories`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -42,11 +46,11 @@ export function useCreateRepository(projectId: string) {
   })
 }
 
-export function useUpdateRepository(id: string, projectId: string) {
+export function useUpdateRepository(organizationId: string, id: string, projectId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: UpdateRepositoryInput) =>
-      fetchJson<Repository>(`/api/v1/repositories/${id}`, {
+      fetchJson<Repository>(`${orgBase(organizationId)}/repositories/${id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -58,11 +62,11 @@ export function useUpdateRepository(id: string, projectId: string) {
   })
 }
 
-export function useDeleteRepository(projectId: string) {
+export function useDeleteRepository(organizationId: string, projectId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) =>
-      fetchJson<{ success: boolean }>(`/api/v1/repositories/${id}`, {
+      fetchJson<{ success: boolean }>(`${orgBase(organizationId)}/repositories/${id}`, {
         method: 'DELETE',
       }),
     onSuccess: () =>

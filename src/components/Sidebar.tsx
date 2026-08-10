@@ -42,7 +42,7 @@ function ContextFiles({
   repoId: string
   activeFileId?: string
 }) {
-  const { data: files } = useFiles(ctxId)
+  const { data: files } = useFiles(organizationId, ctxId)
 
   if (!files?.length) return null
 
@@ -133,7 +133,11 @@ function ContextItem({
         </div>
       )}
       {showAdd && (
-        <AddFileModal contextId={ctx.id} onClose={() => setShowAdd(false)} />
+        <AddFileModal
+          organizationId={organizationId}
+          contextId={ctx.id}
+          onClose={() => setShowAdd(false)}
+        />
       )}
     </div>
   )
@@ -153,7 +157,7 @@ function RepoItem({
   activeFileId?: string
 }) {
   const [open, setOpen] = useState(false)
-  const { data: contexts } = useContexts(repo.id)
+  const { data: contexts } = useContexts(organizationId, repo.id)
 
   return (
     <div>
@@ -196,8 +200,8 @@ function NotesSection({
   projectId: string
 }) {
   const [open, setOpen] = useState(true)
-  const { data: notes } = useNotes(projectId)
-  const createNote = useCreateNote(projectId)
+  const { data: notes } = useNotes(organizationId, projectId)
+  const createNote = useCreateNote(organizationId, projectId)
   const navigate = useNavigate()
   const params = useParams({ strict: false })
   const activeNoteId = (params as Record<string, string>).noteId
@@ -265,8 +269,8 @@ function MermaidSection({
   projectId: string
 }) {
   const [open, setOpen] = useState(true)
-  const { data: diagrams } = useMermaidDiagrams(projectId)
-  const createDiagram = useCreateMermaid(projectId)
+  const { data: diagrams } = useMermaidDiagrams(organizationId, projectId)
+  const createDiagram = useCreateMermaid(organizationId, projectId)
   const navigate = useNavigate()
   const params = useParams({ strict: false })
   const activeDiagId = (params as Record<string, string>).diagId
@@ -334,7 +338,7 @@ function ProjectTree({
   projectId: string
 }) {
   const [reposOpen, setReposOpen] = useState(true)
-  const { data: repos } = useRepositories(projectId)
+  const { data: repos } = useRepositories(organizationId, projectId)
   const params = useParams({ strict: false })
   const activeCtxId = (params as Record<string, string>).ctxId
   const activeFileId = (params as Record<string, string>).fileId

@@ -48,7 +48,7 @@ function CreateContextModal({
   onClose: () => void
 }) {
   const [question, setQuestion] = useState('')
-  const create = useCreateContext(repoId)
+  const create = useCreateContext(organizationId, repoId)
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -106,10 +106,10 @@ function CreateContextModal({
 function RepositoryPage() {
   const { organizationId, projectId, repoId } = Route.useParams()
   const { data: project } = useProject(organizationId, projectId)
-  const { data: repo } = useRepository(repoId)
-  const { data: contexts, isLoading } = useContexts(repoId)
-  const updateRepo = useUpdateRepository(repoId, projectId)
-  const deleteCtx = useDeleteContext(repoId)
+  const { data: repo } = useRepository(organizationId, repoId)
+  const { data: contexts, isLoading } = useContexts(organizationId, repoId)
+  const updateRepo = useUpdateRepository(organizationId, repoId, projectId)
+  const deleteCtx = useDeleteContext(organizationId, repoId)
   const [showCreate, setShowCreate] = useState(false)
   const [linkTarget, setLinkTarget] = useState<{ id: string } | null>(null)
   const navigate = useNavigate()
@@ -283,6 +283,7 @@ function RepositoryPage() {
       )}
       {linkTarget && (
         <LinkModal
+          organizationId={organizationId}
           projectId={projectId}
           entityType="context"
           entityId={linkTarget.id}

@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Note, CreateNoteInput, UpdateNoteInput } from './types'
 
+function orgBase(organizationId: string) {
+  return `/api/v1/organizations/${organizationId}`
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -13,25 +17,25 @@ export const noteKeys = {
   detail: (id: string) => [...noteKeys.all, 'detail', id] as const,
 }
 
-export function useNotes(projectId: string) {
+export function useNotes(organizationId: string, projectId: string) {
   return useQuery({
     queryKey: noteKeys.lists(projectId),
-    queryFn: () => fetchJson<Note[]>(`/api/v1/projects/${projectId}/notes`),
+    queryFn: () => fetchJson<Note[]>(`${orgBase(organizationId)}/projects/${projectId}/notes`),
   })
 }
 
-export function useNote(id: string) {
+export function useNote(organizationId: string, id: string) {
   return useQuery({
     queryKey: noteKeys.detail(id),
-    queryFn: () => fetchJson<Note>(`/api/v1/notes/${id}`),
+    queryFn: () => fetchJson<Note>(`${orgBase(organizationId)}/notes/${id}`),
   })
 }
 
-export function useCreateNote(projectId: string) {
+export function useCreateNote(organizationId: string, projectId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateNoteInput) =>
-      fetchJson<Note>(`/api/v1/projects/${projectId}/notes`, {
+      fetchJson<Note>(`${orgBase(organizationId)}/projects/${projectId}/notes`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -40,11 +44,11 @@ export function useCreateNote(projectId: string) {
   })
 }
 
-export function useUpdateNote(id: string, projectId: string) {
+export function useUpdateNote(organizationId: string, id: string, projectId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: UpdateNoteInput) =>
-      fetchJson<Note>(`/api/v1/notes/${id}`, {
+      fetchJson<Note>(`${orgBase(organizationId)}/notes/${id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -56,11 +60,11 @@ export function useUpdateNote(id: string, projectId: string) {
   })
 }
 
-export function useDeleteNote(projectId: string) {
+export function useDeleteNote(organizationId: string, projectId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) =>
-      fetchJson<{ success: boolean }>(`/api/v1/notes/${id}`, { method: 'DELETE' }),
+      fetchJson<{ success: boolean }>(`${orgBase(organizationId)}/notes/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: noteKeys.lists(projectId) }),
   })
 }

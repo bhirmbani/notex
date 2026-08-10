@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { MermaidDiagram, CreateMermaidInput, UpdateMermaidInput } from './types'
 
+function orgBase(organizationId: string) {
+  return `/api/v1/organizations/${organizationId}`
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -13,25 +17,25 @@ export const mermaidKeys = {
   detail: (id: string) => [...mermaidKeys.all, 'detail', id] as const,
 }
 
-export function useMermaidDiagrams(projectId: string) {
+export function useMermaidDiagrams(organizationId: string, projectId: string) {
   return useQuery({
     queryKey: mermaidKeys.lists(projectId),
-    queryFn: () => fetchJson<MermaidDiagram[]>(`/api/v1/projects/${projectId}/mermaid`),
+    queryFn: () => fetchJson<MermaidDiagram[]>(`${orgBase(organizationId)}/projects/${projectId}/mermaid`),
   })
 }
 
-export function useMermaidDiagram(id: string) {
+export function useMermaidDiagram(organizationId: string, id: string) {
   return useQuery({
     queryKey: mermaidKeys.detail(id),
-    queryFn: () => fetchJson<MermaidDiagram>(`/api/v1/mermaid/${id}`),
+    queryFn: () => fetchJson<MermaidDiagram>(`${orgBase(organizationId)}/mermaid/${id}`),
   })
 }
 
-export function useCreateMermaid(projectId: string) {
+export function useCreateMermaid(organizationId: string, projectId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateMermaidInput) =>
-      fetchJson<MermaidDiagram>(`/api/v1/projects/${projectId}/mermaid`, {
+      fetchJson<MermaidDiagram>(`${orgBase(organizationId)}/projects/${projectId}/mermaid`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -40,11 +44,11 @@ export function useCreateMermaid(projectId: string) {
   })
 }
 
-export function useUpdateMermaid(id: string, projectId: string) {
+export function useUpdateMermaid(organizationId: string, id: string, projectId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: UpdateMermaidInput) =>
-      fetchJson<MermaidDiagram>(`/api/v1/mermaid/${id}`, {
+      fetchJson<MermaidDiagram>(`${orgBase(organizationId)}/mermaid/${id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -56,11 +60,11 @@ export function useUpdateMermaid(id: string, projectId: string) {
   })
 }
 
-export function useDeleteMermaid(projectId: string) {
+export function useDeleteMermaid(organizationId: string, projectId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) =>
-      fetchJson<{ success: boolean }>(`/api/v1/mermaid/${id}`, { method: 'DELETE' }),
+      fetchJson<{ success: boolean }>(`${orgBase(organizationId)}/mermaid/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: mermaidKeys.lists(projectId) }),
   })
 }

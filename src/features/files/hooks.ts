@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { File, CreateFileInput, UpdateFileInput } from './types'
 
+function orgBase(organizationId: string) {
+  return `/api/v1/organizations/${organizationId}`
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -13,26 +17,26 @@ export const fileKeys = {
   detail: (id: string) => [...fileKeys.all, 'detail', id] as const,
 }
 
-export function useFiles(contextId: string) {
+export function useFiles(organizationId: string, contextId: string) {
   return useQuery({
     queryKey: fileKeys.lists(contextId),
     queryFn: () =>
-      fetchJson<File[]>(`/api/v1/contexts/${contextId}/files`),
+      fetchJson<File[]>(`${orgBase(organizationId)}/contexts/${contextId}/files`),
   })
 }
 
-export function useFile(id: string) {
+export function useFile(organizationId: string, id: string) {
   return useQuery({
     queryKey: fileKeys.detail(id),
-    queryFn: () => fetchJson<File>(`/api/v1/files/${id}`),
+    queryFn: () => fetchJson<File>(`${orgBase(organizationId)}/files/${id}`),
   })
 }
 
-export function useCreateFile(contextId: string) {
+export function useCreateFile(organizationId: string, contextId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateFileInput) =>
-      fetchJson<File>(`/api/v1/contexts/${contextId}/files`, {
+      fetchJson<File>(`${orgBase(organizationId)}/contexts/${contextId}/files`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -42,11 +46,11 @@ export function useCreateFile(contextId: string) {
   })
 }
 
-export function useUpdateFile(id: string, contextId: string) {
+export function useUpdateFile(organizationId: string, id: string, contextId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: UpdateFileInput) =>
-      fetchJson<File>(`/api/v1/files/${id}`, {
+      fetchJson<File>(`${orgBase(organizationId)}/files/${id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -58,11 +62,11 @@ export function useUpdateFile(id: string, contextId: string) {
   })
 }
 
-export function useDeleteFile(contextId: string) {
+export function useDeleteFile(organizationId: string, contextId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) =>
-      fetchJson<{ success: boolean }>(`/api/v1/files/${id}`, {
+      fetchJson<{ success: boolean }>(`${orgBase(organizationId)}/files/${id}`, {
         method: 'DELETE',
       }),
     onSuccess: () =>

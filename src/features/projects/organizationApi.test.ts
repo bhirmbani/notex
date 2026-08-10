@@ -145,7 +145,7 @@ describe('POST /organizations/:organizationId/projects', () => {
     expect(insertValues).not.toHaveBeenCalled()
   })
 
-  it('creates the project scoped to the organization, dual-writing userId, and auto-grants the creator write access atomically', async () => {
+  it('creates the project scoped to the organization and auto-grants the creator write access atomically', async () => {
     const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'admin' }
     const insertValues = vi.fn()
     const batch = vi.fn().mockResolvedValue(undefined)
@@ -165,16 +165,15 @@ describe('POST /organizations/:organizationId/projects', () => {
     }, {})
 
     expect(res.status).toBe(201)
-    const json = (await res.json()) as { name: string; organizationId: string; userId: string }
+    const json = (await res.json()) as { name: string; organizationId: string }
     expect(json.name).toBe('My Project')
     expect(json.organizationId).toBe('org-1')
-    expect(json.userId).toBe('user-1')
     // Project and Grant are written in a single db.batch() call, not two
     // sequential inserts, so the project can never exist without its Grant.
     expect(batch).toHaveBeenCalledTimes(1)
     expect(insertValues).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ name: 'My Project', organizationId: 'org-1', userId: 'user-1' }),
+      expect.objectContaining({ name: 'My Project', organizationId: 'org-1' }),
     )
     expect(insertValues).toHaveBeenNthCalledWith(
       2,
