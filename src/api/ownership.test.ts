@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { checkProjectOwnership } from './ownership'
+import {
+  checkOrganizationMembership,
+  checkProjectOrganizationAccess,
+  checkProjectOwnership,
+} from './ownership'
 import type { getDb } from '@/db'
 
 type Db = ReturnType<typeof getDb>
 
-function makeDb(results: unknown[][]) {
+function makeDb(results: Array<Array<unknown>>) {
   let call = 0
   return {
     select: () => ({
@@ -78,5 +82,73 @@ describe('checkProjectOwnership', () => {
     const result = await checkProjectOwnership(db, { contextId: 'missing' }, 'user-1')
 
     expect(result).toEqual({ status: 'not-found' })
+  })
+})
+
+describe('checkProjectOrganizationAccess', () => {
+  it('reports member when the project belongs to the org and the caller has a membership', async () => {
+    const project = { id: 'project-1', organizationId: 'org-1' }
+    const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'admin' }
+    const db = makeDb([[project], [membership]])
+
+    const result = await checkProjectOrganizationAccess(db, { projectId: 'project-1' }, 'org-1', 'user-1')
+
+    expect(result).toEqual({ status: 'member', project, role: 'admin' })
+  })
+
+  it('reports not-member when the caller has no membership in the project org', async () => {
+    const project = { id: 'project-1', organizationId: 'org-1' }
+    const db = makeDb([[project], []])
+
+    const result = await checkProjectOrganizationAccess(db, { projectId: 'project-1' }, 'org-1', 'user-1')
+
+    expect(result).toEqual({ status: 'not-member', project })
+  })
+
+  it('reports not-found when the project does not exist', async () => {
+    const db = makeDb([[]])
+
+    const result = await checkProjectOrganizationAccess(db, { projectId: 'missing' }, 'org-1', 'user-1')
+
+    expect(result).toEqual({ status: 'not-found' })
+  })
+
+  it('reports not-found when the project belongs to a different organization', async () => {
+    const project = { id: 'project-1', organizationId: 'org-2' }
+    const db = makeDb([[project]])
+
+    const result = await checkProjectOrganizationAccess(db, { projectId: 'project-1' }, 'org-1', 'user-1')
+
+    expect(result).toEqual({ status: 'not-found' })
+  })
+
+  it('walks repository -> project when given a repositoryId', async () => {
+    const repo = { id: 'repo-1', projectId: 'project-1' }
+    const project = { id: 'project-1', organizationId: 'org-1' }
+    const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
+    const db = makeDb([[repo], [project], [membership]])
+
+    const result = await checkProjectOrganizationAccess(db, { repositoryId: 'repo-1' }, 'org-1', 'user-1')
+
+    expect(result).toEqual({ status: 'member', project, role: 'member' })
+  })
+})
+
+describe('checkOrganizationMembership', () => {
+  it('returns the role when a membership exists', async () => {
+    const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'admin' }
+    const db = makeDb([[membership]])
+
+    const result = await checkOrganizationMembership(db, 'org-1', 'user-1')
+
+    expect(result).toEqual({ role: 'admin' })
+  })
+
+  it('returns null when no membership exists', async () => {
+    const db = makeDb([[]])
+
+    const result = await checkOrganizationMembership(db, 'org-1', 'user-1')
+
+    expect(result).toBeNull()
   })
 })
