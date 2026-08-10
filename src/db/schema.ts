@@ -88,6 +88,36 @@ export const verification = sqliteTable(
 
 // ── Domain Tables ────────────────────────────────────────────────────
 
+export const organizations = sqliteTable('organizations', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export const memberships = sqliteTable(
+  'memberships',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    role: text('role', { enum: ['admin', 'member'] }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => ({
+    userOrganizationUnique: uniqueIndex('memberships_user_organization_unique').on(
+      table.userId,
+      table.organizationId,
+    ),
+    organizationIdIdx: index('memberships_organization_id_idx').on(
+      table.organizationId,
+    ),
+  }),
+)
+
 export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
   userId: text('user_id')
@@ -171,6 +201,8 @@ export const schema = {
   session,
   account,
   verification,
+  organizations,
+  memberships,
   projects,
   repositories,
   contexts,
