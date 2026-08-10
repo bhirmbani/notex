@@ -130,7 +130,7 @@ contextsApi.get('/organizations/:organizationId/repositories/:repoId/contexts', 
 
   const access = await checkProjectOrganizationAccess(db, { repositoryId: repoId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Repository not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   const rows = await db
     .select()
@@ -152,7 +152,7 @@ contextsApi.post('/organizations/:organizationId/repositories/:repoId/contexts',
 
   const access = await checkProjectOrganizationAccess(db, { repositoryId: repoId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Repository not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   const ctx = {
     id: crypto.randomUUID(),
@@ -181,7 +181,7 @@ contextsApi.get('/organizations/:organizationId/contexts/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { repositoryId: ctx.repositoryId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   return c.json(ctx)
 })
@@ -207,7 +207,7 @@ contextsApi.patch('/organizations/:organizationId/contexts/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { repositoryId: ctx.repositoryId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db
     .update(schema.contexts)
@@ -231,7 +231,7 @@ contextsApi.delete('/organizations/:organizationId/contexts/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { repositoryId: ctx.repositoryId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db.delete(schema.contexts).where(eq(schema.contexts.id, id))
 

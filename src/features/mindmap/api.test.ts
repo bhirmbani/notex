@@ -39,11 +39,12 @@ describe('POST /organizations/:organizationId/projects/:projectId/links', () => 
     expect(res.status).toBe(403)
   })
 
-  it('creates the link for a member of the project org', async () => {
+  it('creates the link for a member with a write Grant on the project', async () => {
     const project = { id: 'project-1', organizationId: 'org-1' }
     const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
+    const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'write' }
     let call = 0
-    const results = [[project], [membership]]
+    const results = [[project], [membership], [grant]]
     const insertValues = vi.fn().mockResolvedValue(undefined)
     vi.mocked(getDb).mockReturnValue({
       select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
@@ -59,6 +60,29 @@ describe('POST /organizations/:organizationId/projects/:projectId/links', () => 
 
     expect(res.status).toBe(201)
     expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1' }))
+  })
+
+  it('rejects a member with only a read Grant on the project', async () => {
+    const project = { id: 'project-1', organizationId: 'org-1' }
+    const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
+    const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'read' }
+    let call = 0
+    const results = [[project], [membership], [grant]]
+    const insertValues = vi.fn()
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
+      insert: () => ({ values: insertValues }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request('/organizations/org-1/projects/project-1/links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sourceType: 'repository', sourceId: 'repo-1', targetType: 'note', targetId: 'note-1' }),
+    }, {})
+
+    expect(res.status).toBe(403)
+    expect(insertValues).not.toHaveBeenCalled()
   })
 })
 

@@ -136,7 +136,7 @@ notesApi.get('/organizations/:organizationId/projects/:projectId/notes', async (
 
   const access = await checkProjectOrganizationAccess(db, { projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   const rows = await db
     .select()
@@ -155,7 +155,7 @@ notesApi.post('/organizations/:organizationId/projects/:projectId/notes', async 
 
   const access = await checkProjectOrganizationAccess(db, { projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   const note = {
     id: crypto.randomUUID(),
@@ -185,7 +185,7 @@ notesApi.get('/organizations/:organizationId/notes/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { projectId: note.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   return c.json(note)
 })
@@ -205,7 +205,7 @@ notesApi.patch('/organizations/:organizationId/notes/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { projectId: note.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db
     .update(schema.notes)
@@ -232,7 +232,7 @@ notesApi.delete('/organizations/:organizationId/notes/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { projectId: note.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db.delete(schema.notes).where(eq(schema.notes.id, id))
 

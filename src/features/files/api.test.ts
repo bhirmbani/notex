@@ -41,13 +41,14 @@ describe('POST /organizations/:organizationId/contexts/:contextId/files', () => 
     expect(res.status).toBe(403)
   })
 
-  it('creates the file for a member of the project org', async () => {
+  it('creates the file for a member with a write Grant on the project', async () => {
     const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
     const repo = { id: 'repo-1', projectId: 'project-1' }
     const project = { id: 'project-1', organizationId: 'org-1' }
     const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
+    const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'write' }
     let call = 0
-    const results = [[ctx], [repo], [project], [membership]]
+    const results = [[ctx], [repo], [project], [membership], [grant]]
     const insertValues = vi.fn().mockResolvedValue(undefined)
     vi.mocked(getDb).mockReturnValue({
       select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
@@ -63,6 +64,31 @@ describe('POST /organizations/:organizationId/contexts/:contextId/files', () => 
 
     expect(res.status).toBe(201)
     expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({ name: 'Answer', contextId: 'ctx-1' }))
+  })
+
+  it('rejects a member with only a read Grant on the project', async () => {
+    const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
+    const repo = { id: 'repo-1', projectId: 'project-1' }
+    const project = { id: 'project-1', organizationId: 'org-1' }
+    const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
+    const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'read' }
+    let call = 0
+    const results = [[ctx], [repo], [project], [membership], [grant]]
+    const insertValues = vi.fn()
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
+      insert: () => ({ values: insertValues }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request('/organizations/org-1/contexts/ctx-1/files', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Answer', contentType: 'text', content: 'hi' }),
+    }, {})
+
+    expect(res.status).toBe(403)
+    expect(insertValues).not.toHaveBeenCalled()
   })
 })
 

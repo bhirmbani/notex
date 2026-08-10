@@ -61,18 +61,29 @@ export async function checkProjectOwnership(
   return { status: 'owner', project }
 }
 
+export type ProjectAccessLevel = 'read' | 'write'
+
 export type ProjectOrganizationAccess =
   | { status: 'not-found' }
-  | { status: 'not-member'; project: Project }
-  | { status: 'member'; project: Project; role: 'admin' | 'member' }
+  | { status: 'no-access'; project: Project }
+  | {
+      status: 'granted'
+      project: Project
+      role: 'admin' | 'member'
+      level: ProjectAccessLevel
+    }
 
 /**
  * Organization-scoped counterpart to checkProjectOwnership: resolves the
  * same owning Project via the shared parent-chain walk, but authorizes via
- * Organization Membership instead of `projects.userId` equality. A Project
- * that hasn't been dual-written with an organizationId, or that belongs to
- * a different Organization than `organizationId`, is treated as not-found
- * to avoid leaking cross-org project existence.
+ * Organization Membership and per-Project Grant instead of `projects.userId`
+ * equality. A Project that hasn't been dual-written with an organizationId,
+ * or that belongs to a different Organization than `organizationId`, is
+ * treated as not-found to avoid leaking cross-org project existence.
+ *
+ * Admin Memberships bypass Grants entirely (implicit write access to every
+ * Project). Member Memberships need an explicit Grant on the Project — no
+ * Grant means no access, not read-only-by-default.
  */
 export async function checkProjectOrganizationAccess(
   db: Db,
@@ -95,8 +106,23 @@ export async function checkProjectOrganizationAccess(
       ),
     )
 
-  if (!membership) return { status: 'not-member', project }
-  return { status: 'member', project, role: membership.role }
+  if (!membership) return { status: 'no-access', project }
+  if (membership.role === 'admin') {
+    return { status: 'granted', project, role: 'admin', level: 'write' }
+  }
+
+  const [grant] = await db
+    .select()
+    .from(schema.grants)
+    .where(
+      and(
+        eq(schema.grants.membershipId, membership.id),
+        eq(schema.grants.projectId, project.id),
+      ),
+    )
+
+  if (!grant) return { status: 'no-access', project }
+  return { status: 'granted', project, role: 'member', level: grant.level }
 }
 
 /**
@@ -108,7 +134,7 @@ export async function checkOrganizationMembership(
   db: Db,
   organizationId: string,
   userId: string,
-): Promise<{ role: 'admin' | 'member' } | null> {
+): Promise<{ id: string; role: 'admin' | 'member' } | null> {
   const [membership] = await db
     .select()
     .from(schema.memberships)
@@ -119,5 +145,5 @@ export async function checkOrganizationMembership(
       ),
     )
 
-  return membership ? { role: membership.role } : null
+  return membership ? { id: membership.id, role: membership.role } : null
 }

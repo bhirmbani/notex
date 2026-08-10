@@ -36,6 +36,13 @@
       "when": 1786333329499,
       "tag": "0004_ordinary_luminals",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1786365624653,
+      "tag": "0005_add_grants_table",
+      "breakpoints": true
     }
   ]
 }
