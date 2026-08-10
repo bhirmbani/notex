@@ -23,7 +23,7 @@ import { Breadcrumb } from '@/components/Breadcrumb'
 import { InlineEditField } from '@/components/InlineEditField'
 
 export const Route = createFileRoute(
-  '/dashboard/_layout/p/$projectId/r/$repoId/',
+  '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/',
 )({
   component: RepositoryPage,
 })
@@ -37,10 +37,12 @@ function formatDate(ts: number) {
 }
 
 function CreateContextModal({
+  organizationId,
   repoId,
   projectId,
   onClose,
 }: {
+  organizationId: string
   repoId: string
   projectId: string
   onClose: () => void
@@ -55,8 +57,8 @@ function CreateContextModal({
     const ctx = await create.mutateAsync({ question: question.trim() })
     onClose()
     navigate({
-      to: '/dashboard/p/$projectId/r/$repoId/c/$ctxId',
-      params: { projectId, repoId, ctxId: ctx.id },
+      to: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId',
+      params: { organizationId, projectId, repoId, ctxId: ctx.id },
     })
   }
 
@@ -102,8 +104,8 @@ function CreateContextModal({
 }
 
 function RepositoryPage() {
-  const { projectId, repoId } = Route.useParams()
-  const { data: project } = useProject(projectId)
+  const { organizationId, projectId, repoId } = Route.useParams()
+  const { data: project } = useProject(organizationId, projectId)
   const { data: repo } = useRepository(repoId)
   const { data: contexts, isLoading } = useContexts(repoId)
   const updateRepo = useUpdateRepository(repoId, projectId)
@@ -116,8 +118,16 @@ function RepositoryPage() {
     <div className="mx-auto max-w-3xl">
       <Breadcrumb
         items={[
-          { label: "Projects", to: "/dashboard" },
-          { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
+          {
+            label: "Projects",
+            to: "/dashboard/o/$organizationId",
+            params: { organizationId },
+          },
+          {
+            label: project?.name ?? "…",
+            to: "/dashboard/o/$organizationId/p/$projectId",
+            params: { organizationId, projectId },
+          },
           { label: repo?.name ?? "…" },
         ]}
       />
@@ -211,8 +221,8 @@ function RepositoryPage() {
                 className="group relative flex cursor-pointer items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/30 first:rounded-t-xl last:rounded-b-xl"
                 onClick={() =>
                   navigate({
-                    to: '/dashboard/p/$projectId/r/$repoId/c/$ctxId',
-                    params: { projectId, repoId, ctxId: ctx.id },
+                    to: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId',
+                    params: { organizationId, projectId, repoId, ctxId: ctx.id },
                   })
                 }
               >
@@ -265,6 +275,7 @@ function RepositoryPage() {
 
       {showCreate && (
         <CreateContextModal
+          organizationId={organizationId}
           repoId={repoId}
           projectId={projectId}
           onClose={() => setShowCreate(false)}

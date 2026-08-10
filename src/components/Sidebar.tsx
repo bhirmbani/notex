@@ -24,16 +24,19 @@ import { useMermaidDiagrams, useCreateMermaid } from '@/features/mermaid/hooks'
 import { cn } from '@/lib/utils'
 
 type SidebarProps = {
+  organizationId: string
   projectId?: string
 }
 
 function ContextFiles({
   ctxId,
+  organizationId,
   projectId,
   repoId,
   activeFileId,
 }: {
   ctxId: string
+  organizationId: string
   projectId: string
   repoId: string
   activeFileId?: string
@@ -47,8 +50,8 @@ function ContextFiles({
       {files.map((file) => (
         <Link
           key={file.id}
-          to="/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
-          params={{ projectId, repoId, ctxId, fileId: file.id }}
+          to="/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
+          params={{ organizationId, projectId, repoId, ctxId, fileId: file.id }}
           className={cn(
             'flex items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-accent',
             activeFileId === file.id && 'bg-accent font-medium',
@@ -68,12 +71,14 @@ function ContextFiles({
 
 function ContextItem({
   ctx,
+  organizationId,
   projectId,
   repoId,
   activeContextId,
   activeFileId,
 }: {
   ctx: { id: string; question: string }
+  organizationId: string
   projectId: string
   repoId: string
   activeContextId?: string
@@ -97,8 +102,8 @@ function ContextItem({
           )}
         </button>
         <Link
-          to="/dashboard/p/$projectId/r/$repoId/c/$ctxId"
-          params={{ projectId, repoId, ctxId: ctx.id }}
+          to="/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId"
+          params={{ organizationId, projectId, repoId, ctxId: ctx.id }}
           className={cn(
             'flex flex-1 items-center gap-1 rounded px-1 py-1 text-xs hover:bg-accent min-w-0',
             isActive && !activeFileId && 'bg-accent font-medium',
@@ -112,6 +117,7 @@ function ContextItem({
         <div className="ml-5 border-l pl-2">
           <ContextFiles
             ctxId={ctx.id}
+            organizationId={organizationId}
             projectId={projectId}
             repoId={repoId}
             activeFileId={activeFileId}
@@ -134,11 +140,13 @@ function ContextItem({
 
 function RepoItem({
   repo,
+  organizationId,
   projectId,
   activeContextId,
   activeFileId,
 }: {
   repo: { id: string; name: string }
+  organizationId: string
   projectId: string
   activeContextId?: string
   activeFileId?: string
@@ -166,6 +174,7 @@ function RepoItem({
             <ContextItem
               key={ctx.id}
               ctx={ctx}
+              organizationId={organizationId}
               projectId={projectId}
               repoId={repo.id}
               activeContextId={activeContextId}
@@ -178,7 +187,13 @@ function RepoItem({
   )
 }
 
-function NotesSection({ projectId }: { projectId: string }) {
+function NotesSection({
+  organizationId,
+  projectId,
+}: {
+  organizationId: string
+  projectId: string
+}) {
   const [open, setOpen] = useState(true)
   const { data: notes } = useNotes(projectId)
   const createNote = useCreateNote(projectId)
@@ -190,8 +205,8 @@ function NotesSection({ projectId }: { projectId: string }) {
     try {
       const note = await createNote.mutateAsync({ title: 'Untitled' })
       navigate({
-        to: '/dashboard/p/$projectId/notes/$noteId',
-        params: { projectId, noteId: note.id },
+        to: '/dashboard/o/$organizationId/p/$projectId/notes/$noteId',
+        params: { organizationId, projectId, noteId: note.id },
       })
     } catch {
       // silently ignore — React Query will log the error
@@ -216,8 +231,8 @@ function NotesSection({ projectId }: { projectId: string }) {
           {notes?.map((note) => (
             <Link
               key={note.id}
-              to="/dashboard/p/$projectId/notes/$noteId"
-              params={{ projectId, noteId: note.id }}
+              to="/dashboard/o/$organizationId/p/$projectId/notes/$noteId"
+              params={{ organizationId, projectId, noteId: note.id }}
               className={cn(
                 'flex items-center gap-1 rounded px-2 py-1 text-sm hover:bg-accent',
                 activeNoteId === note.id && 'bg-accent font-medium',
@@ -241,7 +256,13 @@ function NotesSection({ projectId }: { projectId: string }) {
   )
 }
 
-function MermaidSection({ projectId }: { projectId: string }) {
+function MermaidSection({
+  organizationId,
+  projectId,
+}: {
+  organizationId: string
+  projectId: string
+}) {
   const [open, setOpen] = useState(true)
   const { data: diagrams } = useMermaidDiagrams(projectId)
   const createDiagram = useCreateMermaid(projectId)
@@ -253,8 +274,8 @@ function MermaidSection({ projectId }: { projectId: string }) {
     try {
       const diagram = await createDiagram.mutateAsync({ name: 'Untitled' })
       navigate({
-        to: '/dashboard/p/$projectId/mermaid/$diagId',
-        params: { projectId, diagId: diagram.id },
+        to: '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId',
+        params: { organizationId, projectId, diagId: diagram.id },
       })
     } catch {
       // silently ignore — React Query will log the error
@@ -279,8 +300,8 @@ function MermaidSection({ projectId }: { projectId: string }) {
           {diagrams?.map((diag) => (
             <Link
               key={diag.id}
-              to="/dashboard/p/$projectId/mermaid/$diagId"
-              params={{ projectId, diagId: diag.id }}
+              to="/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId"
+              params={{ organizationId, projectId, diagId: diag.id }}
               className={cn(
                 'flex items-center gap-1 rounded px-2 py-1 text-sm hover:bg-accent',
                 activeDiagId === diag.id && 'bg-accent font-medium',
@@ -304,7 +325,13 @@ function MermaidSection({ projectId }: { projectId: string }) {
   )
 }
 
-function ProjectTree({ projectId }: { projectId: string }) {
+function ProjectTree({
+  organizationId,
+  projectId,
+}: {
+  organizationId: string
+  projectId: string
+}) {
   const [reposOpen, setReposOpen] = useState(true)
   const { data: repos } = useRepositories(projectId)
   const params = useParams({ strict: false })
@@ -331,14 +358,15 @@ function ProjectTree({ projectId }: { projectId: string }) {
               <RepoItem
                 key={repo.id}
                 repo={repo}
+                organizationId={organizationId}
                 projectId={projectId}
                 activeContextId={activeCtxId}
                 activeFileId={activeFileId}
               />
             ))}
             <Link
-              to="/dashboard/p/$projectId/r/$repoId"
-              params={{ projectId, repoId: 'new' }}
+              to="/dashboard/o/$organizationId/p/$projectId/r/$repoId"
+              params={{ organizationId, projectId, repoId: 'new' }}
               className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
             >
               <RiAddLine className="size-3.5" />
@@ -347,11 +375,11 @@ function ProjectTree({ projectId }: { projectId: string }) {
           </div>
         )}
       </div>
-      <NotesSection projectId={projectId} />
-      <MermaidSection projectId={projectId} />
+      <NotesSection organizationId={organizationId} projectId={projectId} />
+      <MermaidSection organizationId={organizationId} projectId={projectId} />
       <Link
-        to="/dashboard/p/$projectId/mindmap"
-        params={{ projectId }}
+        to="/dashboard/o/$organizationId/p/$projectId/mindmap"
+        params={{ organizationId, projectId }}
         className="flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground [&.active]:text-foreground [&.active]:font-bold"
       >
         <RiNodeTree className="size-3.5" />
@@ -361,8 +389,8 @@ function ProjectTree({ projectId }: { projectId: string }) {
   )
 }
 
-export function Sidebar({ projectId }: SidebarProps) {
-  const { data: projects } = useProjects()
+export function Sidebar({ organizationId, projectId }: SidebarProps) {
+  const { data: projects } = useProjects(organizationId)
   const params = useParams({ strict: false })
   const activeProjectId = projectId ?? (params as Record<string, string>).projectId
 
@@ -377,8 +405,8 @@ export function Sidebar({ projectId }: SidebarProps) {
           {projects?.map((p) => (
             <Link
               key={p.id}
-              to="/dashboard/p/$projectId"
-              params={{ projectId: p.id }}
+              to="/dashboard/o/$organizationId/p/$projectId"
+              params={{ organizationId, projectId: p.id }}
               className={cn(
                 'flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent',
                 activeProjectId === p.id && 'bg-accent font-medium',
@@ -389,7 +417,8 @@ export function Sidebar({ projectId }: SidebarProps) {
             </Link>
           ))}
           <Link
-            to="/dashboard"
+            to="/dashboard/o/$organizationId"
+            params={{ organizationId }}
             className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <RiAddLine className="size-4 shrink-0" />
@@ -400,7 +429,9 @@ export function Sidebar({ projectId }: SidebarProps) {
 
       {/* Project tree */}
       <div className="flex-1 overflow-y-auto p-3">
-        {activeProjectId && <ProjectTree projectId={activeProjectId} />}
+        {activeProjectId && (
+          <ProjectTree organizationId={organizationId} projectId={activeProjectId} />
+        )}
       </div>
     </aside>
   )

@@ -1,6 +1,7 @@
 export type Project = {
   id: string
   userId: string
+  organizationId: string
   name: string
   description: string | null
   createdAt: number

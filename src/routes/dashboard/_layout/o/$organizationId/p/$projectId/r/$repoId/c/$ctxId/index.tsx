@@ -20,7 +20,7 @@ import { Breadcrumb } from "@/components/Breadcrumb"
 import { InlineEditField } from "@/components/InlineEditField"
 
 export const Route = createFileRoute(
-  "/dashboard/_layout/p/$projectId/r/$repoId/c/$ctxId/"
+  "/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/"
 )({
   component: ContextPage,
 })
@@ -28,12 +28,14 @@ export const Route = createFileRoute(
 function AnswerCard({
   file,
   contextId,
+  organizationId,
   projectId,
   repoId,
   ctxId,
 }: {
   file: KbFile
   contextId: string
+  organizationId: string
   projectId: string
   repoId: string
   ctxId: string
@@ -63,8 +65,8 @@ function AnswerCard({
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
             <Link
-              to="/dashboard/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
-              params={{ projectId, repoId, ctxId, fileId: file.id }}
+              to="/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
+              params={{ organizationId, projectId, repoId, ctxId, fileId: file.id }}
               className="font-mono text-[11px] font-medium text-amber-600 hover:underline"
             >
               Open →
@@ -122,8 +124,8 @@ function AnswerCard({
 }
 
 function ContextPage() {
-  const { projectId, repoId, ctxId } = Route.useParams()
-  const { data: project } = useProject(projectId)
+  const { organizationId, projectId, repoId, ctxId } = Route.useParams()
+  const { data: project } = useProject(organizationId, projectId)
   const { data: ctx } = useContext(ctxId)
   const { data: repo } = useRepository(repoId)
   const { data: files, isLoading } = useFiles(ctxId)
@@ -134,9 +136,21 @@ function ContextPage() {
     <div className="mx-auto max-w-3xl">
       <Breadcrumb
         items={[
-          { label: "Projects", to: "/dashboard" },
-          { label: project?.name ?? "…", to: "/dashboard/p/$projectId", params: { projectId } },
-          { label: repo?.name ?? "…", to: "/dashboard/p/$projectId/r/$repoId", params: { projectId, repoId } },
+          {
+            label: "Projects",
+            to: "/dashboard/o/$organizationId",
+            params: { organizationId },
+          },
+          {
+            label: project?.name ?? "…",
+            to: "/dashboard/o/$organizationId/p/$projectId",
+            params: { organizationId, projectId },
+          },
+          {
+            label: repo?.name ?? "…",
+            to: "/dashboard/o/$organizationId/p/$projectId/r/$repoId",
+            params: { organizationId, projectId, repoId },
+          },
           { label: ctx?.question ?? "…" },
         ]}
       />
@@ -205,6 +219,7 @@ function ContextPage() {
               key={file.id}
               file={file}
               contextId={ctxId}
+              organizationId={organizationId}
               projectId={projectId}
               repoId={repoId}
               ctxId={ctxId}
