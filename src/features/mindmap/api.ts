@@ -135,7 +135,7 @@ mindmapApi.get('/organizations/:organizationId/projects/:projectId/links', async
 
   const access = await checkProjectOrganizationAccess(db, { projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   const [repos, notes, diagrams, links] = await Promise.all([
     db.select().from(schema.repositories).where(eq(schema.repositories.projectId, projectId)),
@@ -203,7 +203,7 @@ mindmapApi.post('/organizations/:organizationId/projects/:projectId/links', asyn
 
   const access = await checkProjectOrganizationAccess(db, { projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   const link = {
     id: crypto.randomUUID(),
@@ -235,7 +235,7 @@ mindmapApi.delete('/organizations/:organizationId/links/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { projectId: link.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Link not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db.delete(schema.entityLinks).where(eq(schema.entityLinks.id, id))
 

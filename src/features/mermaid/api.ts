@@ -136,7 +136,7 @@ mermaidApi.get('/organizations/:organizationId/projects/:projectId/mermaid', asy
 
   const access = await checkProjectOrganizationAccess(db, { projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   const rows = await db
     .select()
@@ -155,7 +155,7 @@ mermaidApi.post('/organizations/:organizationId/projects/:projectId/mermaid', as
 
   const access = await checkProjectOrganizationAccess(db, { projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   const diagram = {
     id: crypto.randomUUID(),
@@ -185,7 +185,7 @@ mermaidApi.get('/organizations/:organizationId/mermaid/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { projectId: diagram.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   return c.json(diagram)
 })
@@ -205,7 +205,7 @@ mermaidApi.patch('/organizations/:organizationId/mermaid/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { projectId: diagram.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db
     .update(schema.mermaidDiagrams)
@@ -232,7 +232,7 @@ mermaidApi.delete('/organizations/:organizationId/mermaid/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { projectId: diagram.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Diagram not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db.delete(schema.mermaidDiagrams).where(eq(schema.mermaidDiagrams.id, id))
 

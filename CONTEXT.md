@@ -37,4 +37,4 @@ _Planned (TBR-10 map)._ A single-use, expiring, link-based token that creates a 
 _Avoid_: Invitation
 
 **Grant**:
-_Planned (TBR-10 map)._ A per-(Membership, Project) permission record specifying `read` or `write` access. Admin Memberships never need a Grant — their access is implicit via Role.
+A per-(Membership, Project) permission record specifying `read` or `write` access. Admin Memberships never need a Grant — their access is implicit via Role. A Membership with no Grant on a Project has no access to it at all (not read-only-by-default). Project deletion is admin-only regardless of Grant level.

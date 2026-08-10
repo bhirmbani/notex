@@ -133,7 +133,7 @@ repositoriesApi.get('/organizations/:organizationId/projects/:projectId/reposito
 
   const access = await checkProjectOrganizationAccess(db, { projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   const rows = await db
     .select()
@@ -155,7 +155,7 @@ repositoriesApi.post('/organizations/:organizationId/projects/:projectId/reposit
 
   const access = await checkProjectOrganizationAccess(db, { projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   const repo = {
     id: crypto.randomUUID(),
@@ -185,7 +185,7 @@ repositoriesApi.get('/organizations/:organizationId/repositories/:id', async (c)
 
   const access = await checkProjectOrganizationAccess(db, { projectId: repo.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Repository not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   return c.json(repo)
 })
@@ -211,7 +211,7 @@ repositoriesApi.patch('/organizations/:organizationId/repositories/:id', async (
 
   const access = await checkProjectOrganizationAccess(db, { projectId: repo.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Repository not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db
     .update(schema.repositories)
@@ -235,7 +235,7 @@ repositoriesApi.delete('/organizations/:organizationId/repositories/:id', async 
 
   const access = await checkProjectOrganizationAccess(db, { projectId: repo.projectId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Repository not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db.delete(schema.repositories).where(eq(schema.repositories.id, id))
 

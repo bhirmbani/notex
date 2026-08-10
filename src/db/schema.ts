@@ -168,6 +168,28 @@ export const projects = sqliteTable(
   }),
 )
 
+export const grants = sqliteTable(
+  'grants',
+  {
+    id: text('id').primaryKey(),
+    membershipId: text('membership_id')
+      .notNull()
+      .references(() => memberships.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    level: text('level', { enum: ['read', 'write'] }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => ({
+    membershipProjectUnique: uniqueIndex('grants_membership_project_unique').on(
+      table.membershipId,
+      table.projectId,
+    ),
+    projectIdIdx: index('grants_project_id_idx').on(table.projectId),
+  }),
+)
+
 export const repositories = sqliteTable('repositories', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
@@ -245,6 +267,7 @@ export const schema = {
   memberships,
   invites,
   projects,
+  grants,
   repositories,
   contexts,
   files,

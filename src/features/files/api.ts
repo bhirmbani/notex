@@ -140,7 +140,7 @@ filesApi.get('/organizations/:organizationId/contexts/:contextId/files', async (
 
   const access = await checkProjectOrganizationAccess(db, { contextId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   const rows = await db
     .select()
@@ -159,7 +159,7 @@ filesApi.post('/organizations/:organizationId/contexts/:contextId/files', async 
 
   const access = await checkProjectOrganizationAccess(db, { contextId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   const file = {
     id: crypto.randomUUID(),
@@ -190,7 +190,7 @@ filesApi.get('/organizations/:organizationId/files/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { contextId: file.contextId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access') return forbiddenResponse()
 
   return c.json(file)
 })
@@ -222,7 +222,7 @@ filesApi.patch('/organizations/:organizationId/files/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { contextId: file.contextId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db
     .update(schema.files)
@@ -249,7 +249,7 @@ filesApi.delete('/organizations/:organizationId/files/:id', async (c) => {
 
   const access = await checkProjectOrganizationAccess(db, { contextId: file.contextId }, organizationId, auth.user.id)
   if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'File not found' } }, 404)
-  if (access.status === 'not-member') return forbiddenResponse()
+  if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
   await db.delete(schema.files).where(eq(schema.files.id, id))
 
