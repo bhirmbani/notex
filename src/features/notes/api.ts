@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { checkProjectOwnership } from '@/api/ownership'
 
 export const notesApi = new Hono<ApiAuthEnv>()
 
@@ -13,13 +14,9 @@ notesApi.get('/projects/:projectId/notes', async (c) => {
   const db = getDb(c.env.DB)
   const { projectId } = c.req.param()
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-
-  if (!project) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const rows = await db
     .select()
@@ -37,13 +34,9 @@ notesApi.post('/projects/:projectId/notes', async (c) => {
   const { projectId } = c.req.param()
   const body = await c.req.json<{ title: string }>()
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-
-  if (!project) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const note = {
     id: crypto.randomUUID(),
@@ -64,16 +57,20 @@ notesApi.get('/notes/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
 
-  const [row] = await db
-    .select({ note: schema.notes, project: schema.projects })
+  const [note] = await db
+    .select()
     .from(schema.notes)
-    .innerJoin(schema.projects, eq(schema.notes.projectId, schema.projects.id))
     .where(eq(schema.notes.id, id))
 
-  if (!row) return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
-  if (row.project.userId !== auth.user.id) return forbiddenResponse()
+  if (!note) return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
 
-  return c.json(row.note)
+  // A missing project here mirrors the pre-refactor inner-join lookup, which
+  // returned no row (404) rather than a permission error in that case.
+  const ownership = await checkProjectOwnership(db, { projectId: note.projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
+
+  return c.json(note)
 })
 
 // PATCH /notes/:id
@@ -83,14 +80,18 @@ notesApi.patch('/notes/:id', async (c) => {
   const id = c.req.param('id')
   const body = await c.req.json<{ title?: string; content?: string }>()
 
-  const [row] = await db
-    .select({ note: schema.notes, project: schema.projects })
+  const [note] = await db
+    .select()
     .from(schema.notes)
-    .innerJoin(schema.projects, eq(schema.notes.projectId, schema.projects.id))
     .where(eq(schema.notes.id, id))
 
-  if (!row) return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
-  if (row.project.userId !== auth.user.id) return forbiddenResponse()
+  if (!note) return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
+
+  // A missing project here mirrors the pre-refactor inner-join lookup, which
+  // returned no row (404) rather than a permission error in that case.
+  const ownership = await checkProjectOwnership(db, { projectId: note.projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   await db
     .update(schema.notes)
@@ -100,7 +101,7 @@ notesApi.patch('/notes/:id', async (c) => {
     })
     .where(eq(schema.notes.id, id))
 
-  return c.json({ ...row.note, ...body })
+  return c.json({ ...note, ...body })
 })
 
 // DELETE /notes/:id
@@ -109,14 +110,18 @@ notesApi.delete('/notes/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
 
-  const [row] = await db
-    .select({ note: schema.notes, project: schema.projects })
+  const [note] = await db
+    .select()
     .from(schema.notes)
-    .innerJoin(schema.projects, eq(schema.notes.projectId, schema.projects.id))
     .where(eq(schema.notes.id, id))
 
-  if (!row) return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
-  if (row.project.userId !== auth.user.id) return forbiddenResponse()
+  if (!note) return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
+
+  // A missing project here mirrors the pre-refactor inner-join lookup, which
+  // returned no row (404) rather than a permission error in that case.
+  const ownership = await checkProjectOwnership(db, { projectId: note.projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Note not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   await db.delete(schema.notes).where(eq(schema.notes.id, id))
 

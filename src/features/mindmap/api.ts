@@ -4,6 +4,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { checkProjectOwnership } from '@/api/ownership'
 import type { EntityNode, EntityType } from './types'
 
 export const mindmapApi = new Hono<ApiAuthEnv>()
@@ -14,13 +15,9 @@ mindmapApi.get('/projects/:projectId/links', async (c) => {
   const db = getDb(c.env.DB)
   const { projectId } = c.req.param()
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-
-  if (!project) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const [repos, notes, diagrams, links] = await Promise.all([
     db.select().from(schema.repositories).where(eq(schema.repositories.projectId, projectId)),
@@ -87,13 +84,9 @@ mindmapApi.post('/projects/:projectId/links', async (c) => {
     targetId: string
   }>()
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-
-  if (!project) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const link = {
     id: crypto.randomUUID(),
@@ -116,14 +109,18 @@ mindmapApi.delete('/links/:id', async (c) => {
   const db = getDb(c.env.DB)
   const id = c.req.param('id')
 
-  const [row] = await db
-    .select({ link: schema.entityLinks, project: schema.projects })
+  const [link] = await db
+    .select()
     .from(schema.entityLinks)
-    .innerJoin(schema.projects, eq(schema.entityLinks.projectId, schema.projects.id))
     .where(eq(schema.entityLinks.id, id))
 
-  if (!row) return c.json({ error: { code: 'NOT_FOUND', message: 'Link not found' } }, 404)
-  if (row.project.userId !== auth.user.id) return forbiddenResponse()
+  if (!link) return c.json({ error: { code: 'NOT_FOUND', message: 'Link not found' } }, 404)
+
+  // A missing project here mirrors the pre-refactor inner-join lookup, which
+  // returned no row (404) rather than a permission error in that case.
+  const ownership = await checkProjectOwnership(db, { projectId: link.projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Link not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   await db.delete(schema.entityLinks).where(eq(schema.entityLinks.id, id))
 

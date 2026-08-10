@@ -5,6 +5,7 @@ import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
 import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
+import { checkProjectOwnership } from '@/api/ownership'
 
 export const repositoriesApi = new Hono<ApiAuthEnv>()
 
@@ -14,13 +15,9 @@ repositoriesApi.get('/projects/:projectId/repositories', async (c) => {
   const db = getDb(c.env.DB)
   const { projectId } = c.req.param()
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-
-  if (!project) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const rows = await db
     .select()
@@ -40,13 +37,9 @@ repositoriesApi.post('/projects/:projectId/repositories', async (c) => {
   const name = requireNonEmptyString(body.name)
   if (!name) return badRequestResponse('name must not be empty')
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, projectId))
-
-  if (!project) return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
-  if (project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId }, auth.user.id)
+  if (ownership.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Project not found' } }, 404)
+  if (ownership.status === 'not-owner') return forbiddenResponse()
 
   const repo = {
     id: crypto.randomUUID(),
@@ -74,12 +67,10 @@ repositoriesApi.get('/repositories/:id', async (c) => {
 
   if (!repo) return c.json({ error: { code: 'NOT_FOUND', message: 'Repository not found' } }, 404)
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, repo.projectId))
-
-  if (!project || project.userId !== auth.user.id) return forbiddenResponse()
+  // Not-found and not-owner both surface as 403 here, matching the
+  // pre-refactor behavior where a missing parent chain was already forbidden.
+  const ownership = await checkProjectOwnership(db, { projectId: repo.projectId }, auth.user.id)
+  if (ownership.status !== 'owner') return forbiddenResponse()
 
   return c.json(repo)
 })
@@ -103,12 +94,8 @@ repositoriesApi.patch('/repositories/:id', async (c) => {
 
   if (!repo) return c.json({ error: { code: 'NOT_FOUND', message: 'Repository not found' } }, 404)
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, repo.projectId))
-
-  if (!project || project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId: repo.projectId }, auth.user.id)
+  if (ownership.status !== 'owner') return forbiddenResponse()
 
   await db
     .update(schema.repositories)
@@ -130,12 +117,8 @@ repositoriesApi.delete('/repositories/:id', async (c) => {
 
   if (!repo) return c.json({ error: { code: 'NOT_FOUND', message: 'Repository not found' } }, 404)
 
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, repo.projectId))
-
-  if (!project || project.userId !== auth.user.id) return forbiddenResponse()
+  const ownership = await checkProjectOwnership(db, { projectId: repo.projectId }, auth.user.id)
+  if (ownership.status !== 'owner') return forbiddenResponse()
 
   await db.delete(schema.repositories).where(eq(schema.repositories.id, id))
 
