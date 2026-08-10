@@ -105,3 +105,93 @@ describe('POST /organizations', () => {
     )
   })
 })
+
+describe('PATCH /organizations/:id', () => {
+  it('rejects an empty name without updating the organization', async () => {
+    const updateSet = vi.fn()
+    vi.mocked(getDb).mockReturnValue({
+      update: () => ({ set: updateSet }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request('/org-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '' }),
+    }, {})
+
+    expect(res.status).toBe(400)
+    expect(updateSet).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-admin member with 403 without updating the organization', async () => {
+    const updateSet = vi.fn()
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: vi.fn().mockResolvedValue([{ role: 'member' }]),
+        }),
+      }),
+      update: () => ({ set: updateSet }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request('/org-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'New Name' }),
+    }, {})
+
+    expect(res.status).toBe(403)
+    expect(updateSet).not.toHaveBeenCalled()
+  })
+
+  it('rejects a caller with no membership with 403 without updating the organization', async () => {
+    const updateSet = vi.fn()
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+      update: () => ({ set: updateSet }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request('/org-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'New Name' }),
+    }, {})
+
+    expect(res.status).toBe(403)
+    expect(updateSet).not.toHaveBeenCalled()
+  })
+
+  it('lets an admin Membership rename the organization', async () => {
+    const updateWhere = vi.fn().mockResolvedValue(undefined)
+    const updateSet = vi.fn(() => ({ where: updateWhere }))
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: vi.fn().mockResolvedValue([{ role: 'admin' }]),
+        }),
+      }),
+      update: () => ({ set: updateSet }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request('/org-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '  Acme Renamed  ' }),
+    }, {})
+
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as { name: string }
+    expect(json.name).toBe('Acme Renamed')
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Acme Renamed' }),
+    )
+  })
+})
