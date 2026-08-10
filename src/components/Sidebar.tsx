@@ -12,6 +12,7 @@ import {
   RiNodeTree,
   RiFileLine,
   RiUploadLine,
+  RiUserLine,
 } from '@remixicon/react'
 
 import { useProjects } from '@/features/projects/hooks'
@@ -423,6 +424,14 @@ export function Sidebar({ organizationId, projectId }: SidebarProps) {
           >
             <RiAddLine className="size-4 shrink-0" />
             New project
+          </Link>
+          <Link
+            to="/dashboard/o/$organizationId/members"
+            params={{ organizationId }}
+            className="flex items-center gap-2 rounded px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RiUserLine className="size-4 shrink-0" />
+            Members
           </Link>
         </div>
       </div>
