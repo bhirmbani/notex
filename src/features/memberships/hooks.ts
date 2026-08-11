@@ -51,3 +51,14 @@ export function useRemoveMembership(organizationId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: membershipKeys.list(organizationId) }),
   })
 }
+
+export function useLeaveOrganization(organizationId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      fetchJson<{ success: boolean }>(`/api/v1/organizations/${organizationId}/leave`, {
+        method: 'POST',
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: membershipKeys.list(organizationId) }),
+  })
+}
