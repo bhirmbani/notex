@@ -65,3 +65,20 @@ membershipsApi.delete('/organizations/:organizationId/memberships/:membershipId'
 
   return c.json({ success: true })
 })
+
+membershipsApi.post('/organizations/:organizationId/leave', async (c) => {
+  const auth = c.get('auth')
+  const db = getDb(c.env.DB)
+  const { organizationId } = c.req.param()
+
+  const membership = await checkOrganizationMembership(db, organizationId, auth.user.id)
+  if (!membership) return forbiddenResponse()
+
+  const result = await removeMembership(db, { organizationId, membershipId: membership.id })
+
+  if (result.status === 'last-admin') {
+    return conflictResponse('Organization must retain at least one admin')
+  }
+
+  return c.json({ success: true })
+})

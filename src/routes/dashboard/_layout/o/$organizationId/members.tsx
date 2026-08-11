@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Link, createFileRoute, useRouteContext } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate, useRouteContext } from '@tanstack/react-router'
 import { RiUserLine } from '@remixicon/react'
 
 import {
+  useLeaveOrganization,
   useMemberships,
   useRemoveMembership,
   useUpdateMembershipRole,
@@ -94,6 +95,38 @@ function MemberRow({
   )
 }
 
+function LeaveOrganizationButton({ organizationId }: { organizationId: string }) {
+  const navigate = useNavigate()
+  const leave = useLeaveOrganization(organizationId)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleLeave = async () => {
+    if (!window.confirm('Leave this organization? You will immediately lose access to its projects.')) {
+      return
+    }
+    setError(null)
+    try {
+      await leave.mutateAsync()
+      navigate({ to: '/dashboard' })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not leave organization')
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button size="sm" variant="destructive" disabled={leave.isPending} onClick={handleLeave}>
+        Leave organization
+      </Button>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function MembersPage() {
   const { organizationId } = Route.useParams()
   const { session } = useRouteContext({ from: '/dashboard/_layout' })
@@ -106,6 +139,7 @@ function MembersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Members</h1>
+        {selfMembership && <LeaveOrganizationButton organizationId={organizationId} />}
       </div>
 
       {isError ? (

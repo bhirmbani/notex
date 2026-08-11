@@ -208,3 +208,68 @@ describe('DELETE /organizations/:organizationId/memberships/:membershipId', () =
     expect(deleteWhere).toHaveBeenCalled()
   })
 })
+
+describe('POST /organizations/:organizationId/leave', () => {
+  it('rejects a caller with no membership with 403', async () => {
+    vi.mocked(getDb).mockReturnValue(mockDb({ membershipLookups: [[]] }))
+
+    const app = appWithAuth()
+    const res = await app.request('/organizations/org-1/leave', { method: 'POST' }, {})
+
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 409 when the caller is the only remaining admin', async () => {
+    vi.mocked(getDb).mockReturnValue(
+      mockDb({
+        membershipLookups: [
+          [{ id: 'mem-1', role: 'admin' }], // caller's own membership
+          [{ id: 'mem-1', role: 'admin' }], // findMembership inside removeMembership
+        ],
+        deleteWhere: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
+      }),
+    )
+
+    const app = appWithAuth()
+    const res = await app.request('/organizations/org-1/leave', { method: 'POST' }, {})
+
+    expect(res.status).toBe(409)
+  })
+
+  it('lets a member leave the organization', async () => {
+    const deleteWhere = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(getDb).mockReturnValue(
+      mockDb({
+        membershipLookups: [
+          [{ id: 'mem-1', role: 'member' }],
+          [{ id: 'mem-1', role: 'member' }],
+        ],
+        deleteWhere,
+      }),
+    )
+
+    const app = appWithAuth()
+    const res = await app.request('/organizations/org-1/leave', { method: 'POST' }, {})
+
+    expect(res.status).toBe(200)
+    expect(deleteWhere).toHaveBeenCalled()
+  })
+
+  it('lets an admin leave when another admin remains', async () => {
+    const deleteWhere = vi.fn().mockResolvedValue({ meta: { changes: 1 } })
+    vi.mocked(getDb).mockReturnValue(
+      mockDb({
+        membershipLookups: [
+          [{ id: 'mem-1', role: 'admin' }],
+          [{ id: 'mem-1', role: 'admin' }],
+        ],
+        deleteWhere,
+      }),
+    )
+
+    const app = appWithAuth()
+    const res = await app.request('/organizations/org-1/leave', { method: 'POST' }, {})
+
+    expect(res.status).toBe(200)
+  })
+})
