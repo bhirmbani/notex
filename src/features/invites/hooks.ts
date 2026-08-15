@@ -46,3 +46,22 @@ export function useRedeemInvite() {
     mutationFn: redeemInviteRequest,
   })
 }
+
+export type CreatedInvite = {
+  id: string
+  token: string
+  organizationId: string
+  expiresAt: string
+}
+
+async function createInviteRequest(organizationId: string): Promise<CreatedInvite> {
+  const res = await fetch(`/api/v1/organizations/${organizationId}/invites`, { method: 'POST' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<CreatedInvite>
+}
+
+export function useCreateInvite(organizationId: string) {
+  return useMutation({
+    mutationFn: () => createInviteRequest(organizationId),
+  })
+}
