@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { Link, createFileRoute, useNavigate, useRouteContext } from '@tanstack/react-router'
 import { RiUserLine } from '@remixicon/react'
 
+import type { Membership } from '@/features/memberships/types'
 import {
   useLeaveOrganization,
   useMemberships,
   useRemoveMembership,
   useUpdateMembershipRole,
 } from '@/features/memberships/hooks'
-import type { Membership } from '@/features/memberships/types'
+import { InviteModal } from '@/features/invites/InviteModal'
 import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/dashboard/_layout/o/$organizationId/members')({
@@ -131,6 +132,7 @@ function MembersPage() {
   const { organizationId } = Route.useParams()
   const { session } = useRouteContext({ from: '/dashboard/_layout' })
   const { data: memberships, isLoading, isError } = useMemberships(organizationId)
+  const [inviteOpen, setInviteOpen] = useState(false)
 
   const selfMembership = memberships?.find((m) => m.userId === session.user.id)
   const isAdmin = selfMembership?.role === 'admin'
@@ -139,8 +141,15 @@ function MembersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Members</h1>
-        {selfMembership && <LeaveOrganizationButton organizationId={organizationId} />}
+        <div className="flex items-center gap-2">
+          {isAdmin && <Button onClick={() => setInviteOpen(true)}>Invite people</Button>}
+          {selfMembership && <LeaveOrganizationButton organizationId={organizationId} />}
+        </div>
       </div>
+
+      {inviteOpen && (
+        <InviteModal organizationId={organizationId} onClose={() => setInviteOpen(false)} />
+      )}
 
       {isError ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
