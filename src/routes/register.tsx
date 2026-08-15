@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { sessionKeys } from '@/features/auth/hooks'
 import { signUpWithEmail } from '@/features/auth/lib/client'
 
 type RegisterSearch = {
@@ -19,6 +21,7 @@ export const Route = createFileRoute('/register')({
 
 function RegisterPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { redirect } = Route.useSearch()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -46,6 +49,7 @@ function RegisterPage() {
       return
     }
 
+    await queryClient.invalidateQueries({ queryKey: sessionKeys.active })
     await navigate({ to: redirect ?? '/dashboard' })
   }
 

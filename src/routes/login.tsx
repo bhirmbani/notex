@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { sessionKeys } from '@/features/auth/hooks'
 import { signInWithEmail } from '@/features/auth/lib/client'
 
 type LoginSearch = {
@@ -19,6 +21,7 @@ export const Route = createFileRoute('/login')({
 
 function LoginPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { redirect } = Route.useSearch()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -38,6 +41,7 @@ function LoginPage() {
       return
     }
 
+    await queryClient.invalidateQueries({ queryKey: sessionKeys.active })
     await navigate({ to: redirect ?? '/dashboard' })
   }
 
