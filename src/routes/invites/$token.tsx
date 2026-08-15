@@ -1,10 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { RiCheckLine, RiMailLine, RiTimeLine } from '@remixicon/react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { getActiveSession } from '@/features/auth/lib/client'
+import { useActiveSession } from '@/features/auth/hooks'
 import { useInvite, useRedeemInvite } from '@/features/invites/hooks'
 
 export const Route = createFileRoute('/invites/$token')({
@@ -15,7 +14,7 @@ function InviteAcceptPage() {
   const { token } = Route.useParams()
   const navigate = useNavigate()
   const invite = useInvite(token)
-  const session = useQuery({ queryKey: ['active-session'], queryFn: getActiveSession })
+  const session = useActiveSession()
   const redeem = useRedeemInvite()
 
   const redirectHref = `/invites/${token}`
