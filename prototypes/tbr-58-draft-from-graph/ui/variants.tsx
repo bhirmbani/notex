@@ -1,47 +1,49 @@
 // PROTOTYPE — THROWAWAY. TBR-58.
-// Four radically different renderings of the SAME deterministic subgraph.
-// The question each is trying to settle: what does this need to look like for a
-// human to trust it enough to keep as an Answer?
+// All four renderings ship (decided 2026-08-15). Each renders INNER content only —
+// the panel chrome, the variant switcher and the agent handoff live in App.tsx,
+// because they are shared across variants.
+//
+// Source paths are clickable into the IDE in A, B and D. NOT in C: C is a plain-text
+// draft in a textarea, and the text is what gets saved as the Answer — a link inside it
+// would either not render or would smuggle markup into Answer content.
 
 import { useMemo, useState } from "react"
 import { ReactFlow, Background, Controls, type Edge, type Node } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import { RiFileCopyLine, RiCheckLine, RiArrowRightSLine } from "@remixicon/react"
+import { RiArrowRightSLine, RiExternalLinkLine } from "@remixicon/react"
 
-import type { GraphEdge, GraphNode, QueryResult, VariantProps } from "./types"
+import type { GraphNode, QueryResult, VariantProps } from "./types"
+import { ideHref } from "./ide"
 
-export type VariantId = "evidence" | "canvas" | "draft" | "files"
+export type VariantId = "evidence" | "files" | "draft" | "canvas"
 
 // ------------------------------------------------------------------ shared
 
-/** The agent handoff, per TBR-56 §4.7: copy the evidence-only block. Nothing else. */
-function HandoffBar({ result }: { result: QueryResult }) {
-  const [copied, setCopied] = useState(false)
-  if (!result.context) return null
+/** A source pointer that opens the user's editor. A/B/D only. */
+function SourceLink({
+  result,
+  ide,
+  sourceFile,
+  sourceLocation,
+  className = "",
+  children,
+}: {
+  result: QueryResult
+  ide: VariantProps["ide"]
+  sourceFile: string
+  sourceLocation: string
+  className?: string
+  children?: React.ReactNode
+}) {
   return (
-    <div className="mt-4 flex items-center gap-3 border border-dashed px-3 py-2.5">
-      <button
-        onClick={() => {
-          navigator.clipboard.writeText(result.context!.markdown)
-          setCopied(true)
-          setTimeout(() => setCopied(false), 1600)
-        }}
-        className="flex items-center gap-1.5 border px-2.5 py-1 font-mono text-[11px] transition-colors hover:border-amber-500/60"
-      >
-        {copied ? (
-          <RiCheckLine className="size-3.5 text-amber-600" />
-        ) : (
-          <RiFileCopyLine className="size-3.5" />
-        )}
-        {copied ? "Copied" : "Copy for your agent"}
-      </button>
-      <p className="font-mono text-[10px] leading-relaxed text-muted-foreground">
-        Evidence only — no prompt, no instructions.{" "}
-        {(result.context.markdown.length / 1024).toFixed(1)} KB ·{" "}
-        {result.context.sources.length} sources. Paste into Claude Code, or skip this
-        entirely if you use the MCP server.
-      </p>
-    </div>
+    <a
+      href={ideHref(ide, result.graph.checkoutPath, sourceFile, sourceLocation)}
+      title={`Open ${sourceFile}:${sourceLocation} in your editor`}
+      className={`group/link inline-flex items-center gap-1 hover:text-amber-600 hover:underline ${className}`}
+    >
+      {children ?? `${sourceFile}:${sourceLocation}`}
+      <RiExternalLinkLine className="size-2.5 opacity-0 transition-opacity group-hover/link:opacity-100" />
+    </a>
   )
 }
 
@@ -66,9 +68,23 @@ function groupByCommunity(nodes: GraphNode[]) {
   })
 }
 
+export function NoMatch({ result }: { result: QueryResult }) {
+  return (
+    <div className="p-8 text-center">
+      <p className="font-mono text-sm font-medium text-foreground">Nothing matched</p>
+      <p className="mx-auto mt-2 max-w-md font-mono text-[11px] leading-relaxed text-muted-foreground">
+        The graph was searched for{" "}
+        <span className="text-amber-700">{result.matchedTerms.join(", ") || "(no terms)"}</span>{" "}
+        and found no nodes. Literal matching only — a term the code does not spell the same
+        way will miss.
+      </p>
+    </div>
+  )
+}
+
 // ------------------------------------------------------- A · evidence ledger
 
-function EvidenceLedger({ result }: VariantProps) {
+function EvidenceLedger({ result, ide }: VariantProps) {
   const [showRelations, setShowRelations] = useState(false)
   const groups = useMemo(() => groupByCommunity(result.subgraph.nodes), [result])
   const labels = useMemo(
@@ -79,25 +95,16 @@ function EvidenceLedger({ result }: VariantProps) {
   if (result.subgraph.nodes.length === 0) return <NoMatch result={result} />
 
   return (
-    <div className="border bg-card">
-      <div className="border-b px-3 py-2 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-        Evidence from the code graph
-      </div>
-
+    <div>
       {groups.map(([name, nodes]) => (
-        <div key={name} className="border-b last:border-b-0">
+        <div key={name} className="border-b">
           <div className="flex items-baseline justify-between bg-muted/30 px-3 py-1.5">
             <span className="font-mono text-[11px] font-medium text-foreground">{name}</span>
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {nodes.length}
-            </span>
+            <span className="font-mono text-[10px] text-muted-foreground">{nodes.length}</span>
           </div>
           <ul>
             {nodes.map((n) => (
-              <li
-                key={n.id}
-                className="flex items-baseline gap-2 px-3 py-1 hover:bg-muted/20"
-              >
+              <li key={n.id} className="flex items-baseline gap-2 px-3 py-1 hover:bg-muted/20">
                 <span
                   className={`w-1 shrink-0 self-stretch ${n.seed ? "bg-amber-500" : "bg-transparent"}`}
                 />
@@ -106,13 +113,13 @@ function EvidenceLedger({ result }: VariantProps) {
                 >
                   {n.label}
                 </span>
-                <a
-                  href={`vscode://file${result.graph.checkoutPath}/${n.sourceFile}:${n.sourceLocation.replace("L", "")}`}
-                  className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground hover:text-amber-600 hover:underline"
-                  title="Open in VS Code"
-                >
-                  {n.sourceFile}:{n.sourceLocation}
-                </a>
+                <SourceLink
+                  result={result}
+                  ide={ide}
+                  sourceFile={n.sourceFile}
+                  sourceLocation={n.sourceLocation}
+                  className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground"
+                />
               </li>
             ))}
           </ul>
@@ -121,7 +128,7 @@ function EvidenceLedger({ result }: VariantProps) {
 
       <button
         onClick={() => setShowRelations((s) => !s)}
-        className="flex w-full items-center gap-1.5 border-t px-3 py-2 font-mono text-[10px] text-muted-foreground hover:text-foreground"
+        className="flex w-full items-center gap-1.5 px-3 py-2 font-mono text-[10px] text-muted-foreground hover:text-foreground"
       >
         <RiArrowRightSLine
           className={`size-3.5 transition-transform ${showRelations ? "rotate-90" : ""}`}
@@ -135,8 +142,15 @@ function EvidenceLedger({ result }: VariantProps) {
               <span className="text-foreground/70">{labels.get(e.source)}</span>
               <span className="text-amber-600">—{e.relation}→</span>
               <span className="text-foreground/70">{labels.get(e.target)}</span>
+              <SourceLink
+                result={result}
+                ide={ide}
+                sourceFile={e.sourceFile}
+                sourceLocation={e.sourceLocation}
+                className="ml-auto shrink-0 text-muted-foreground"
+              />
               <span
-                className={`ml-auto shrink-0 border px-1 text-[9px] ${confidenceStyle(e.confidence)}`}
+                className={`shrink-0 border px-1 text-[9px] ${confidenceStyle(e.confidence)}`}
               >
                 {e.confidence}
               </span>
@@ -144,22 +158,209 @@ function EvidenceLedger({ result }: VariantProps) {
           ))}
         </ul>
       )}
-
-      <div className="px-3 pb-3">
-        <HandoffBar result={result} />
-      </div>
     </div>
   )
 }
 
-// ------------------------------------------------------------ B · graph canvas
+// -------------------------------------------------------------- B · ranked files
+
+function RankedFiles({ result, ide }: VariantProps) {
+  const [open, setOpen] = useState<string | null>(null)
+
+  const files = useMemo(() => {
+    const map = new Map<
+      string,
+      { file: string; nodes: GraphNode[]; score: number; seeds: number; top: GraphNode }
+    >()
+    for (const n of result.subgraph.nodes) {
+      if (!map.has(n.sourceFile)) {
+        map.set(n.sourceFile, { file: n.sourceFile, nodes: [], score: 0, seeds: 0, top: n })
+      }
+      const f = map.get(n.sourceFile)!
+      f.nodes.push(n)
+      f.score += n.score
+      if (n.seed) f.seeds++
+      if (n.score > f.top.score) f.top = n
+    }
+    return [...map.values()].sort(
+      (a, b) => b.seeds - a.seeds || b.score - a.score || b.nodes.length - a.nodes.length
+    )
+  }, [result])
+
+  if (result.subgraph.nodes.length === 0) return <NoMatch result={result} />
+  const max = files[0]?.score || 1
+
+  return (
+    <div>
+      {files.map((f) => (
+        <div key={f.file} className="border-b">
+          <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/20">
+            <button
+              onClick={() => setOpen(open === f.file ? null : f.file)}
+              className="shrink-0"
+              aria-label="Expand file"
+            >
+              <RiArrowRightSLine
+                className={`size-3.5 text-muted-foreground transition-transform ${open === f.file ? "rotate-90" : ""}`}
+              />
+            </button>
+            <SourceLink
+              result={result}
+              ide={ide}
+              sourceFile={f.file}
+              sourceLocation={f.top.sourceLocation}
+              className={`font-mono text-[11px] ${f.seeds > 0 ? "font-semibold text-foreground" : "text-foreground/60"}`}
+            >
+              {f.file}
+            </SourceLink>
+            {f.seeds > 0 && (
+              <span className="shrink-0 border border-amber-500 px-1 font-mono text-[9px] text-amber-700">
+                {f.seeds} match{f.seeds === 1 ? "" : "es"}
+              </span>
+            )}
+            <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
+              {f.nodes.length}
+            </span>
+            <span className="h-1 w-16 shrink-0 bg-muted">
+              <span
+                className="block h-full bg-amber-500"
+                style={{ width: `${Math.max(2, (f.score / max) * 100)}%` }}
+              />
+            </span>
+          </div>
+          {open === f.file && (
+            <ul className="bg-muted/10 px-3 py-1.5 pl-9">
+              {f.nodes.map((n) => (
+                <li key={n.id} className="flex items-baseline gap-2 py-0.5">
+                  <span
+                    className={`font-mono text-[10px] ${n.seed ? "text-foreground" : "text-muted-foreground"}`}
+                  >
+                    {n.label}
+                  </span>
+                  <SourceLink
+                    result={result}
+                    ide={ide}
+                    sourceFile={n.sourceFile}
+                    sourceLocation={n.sourceLocation}
+                    className="ml-auto font-mono text-[10px] text-muted-foreground"
+                  >
+                    {n.sourceLocation}
+                  </SourceLink>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------- C · draft answer
+
+/**
+ * The only variant that holds unsaved state, so `content` is owned by App — switching
+ * to A to check evidence and back must not discard the user's edits.
+ * No IDE links here by decision: this text becomes the saved Answer verbatim.
+ */
+function DraftAnswer({ result, content, onContentChange }: VariantProps) {
+  const [showEvidence, setShowEvidence] = useState(false)
+  if (result.subgraph.nodes.length === 0) return <NoMatch result={result} />
+
+  return (
+    <div>
+      <div className="flex items-center justify-between border-b bg-muted/20 px-3 py-1.5">
+        <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+          Unsaved draft
+        </span>
+        <span className="border border-amber-500/50 px-1.5 py-0.5 font-mono text-[9px] text-amber-700">
+          NOT PROSE — deterministic
+        </span>
+      </div>
+
+      <textarea
+        value={content}
+        onChange={(e) => onContentChange(e.target.value)}
+        spellCheck={false}
+        className="h-[380px] w-full resize-none bg-background p-3 font-mono text-[11px] leading-relaxed text-foreground outline-none"
+      />
+
+      <div className="flex items-center gap-2 border-t px-3 py-2">
+        <button className="bg-foreground px-3 py-1.5 font-mono text-[11px] text-background hover:opacity-85">
+          Keep as Answer
+        </button>
+        <button className="border px-3 py-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground">
+          Discard
+        </button>
+        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+          saving is out of TBR-58 scope — these are stubs
+        </span>
+      </div>
+
+      <button
+        onClick={() => setShowEvidence((s) => !s)}
+        className="flex w-full items-center gap-1.5 border-t px-3 py-2 font-mono text-[10px] text-muted-foreground hover:text-foreground"
+      >
+        <RiArrowRightSLine
+          className={`size-3.5 transition-transform ${showEvidence ? "rotate-90" : ""}`}
+        />
+        Evidence · {result.subgraph.nodes.length} nodes, {result.subgraph.edges.length} relations
+      </button>
+      {showEvidence && (
+        <div className="max-h-64 overflow-auto border-t bg-muted/10 p-3">
+          <pre className="font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+            {result.context?.markdown}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Deterministic. No LLM here by charter — so it summarises structure, never meaning. */
+export function composeDraft(result: QueryResult): string {
+  const seeds = result.subgraph.nodes.filter((n) => n.seed)
+  const files = [...new Set(seeds.map((n) => n.sourceFile))]
+  const groups = groupByCommunity(result.subgraph.nodes).slice(0, 3)
+
+  const out: string[] = []
+  out.push(`The code graph matched ${seeds.length} direct hits for this question across`)
+  out.push(`${files.length} file${files.length === 1 ? "" : "s"}. Starting points:`)
+  out.push("")
+  for (const s of seeds) out.push(`  ${s.label} — ${s.sourceFile}:${s.sourceLocation}`)
+  out.push("")
+  out.push(`Related areas pulled in by traversal:`)
+  for (const [name, nodes] of groups) out.push(`  ${name} (${nodes.length} nodes)`)
+  out.push("")
+  out.push(`[Write the explanation here, or paste the evidence block into your agent.]`)
+  out.push("")
+  out.push("---")
+  out.push(`Drafted from the code graph on ${new Date().toISOString().slice(0, 10)}.`)
+  const commit = result.graph.headSha ? ` at commit ${result.graph.headSha.slice(0, 7)}` : ""
+  out.push(`Graph built ${result.graph.builtAt.slice(0, 10)} (${result.graph.graphHash})${commit}.`)
+  if (result.truncated) {
+    out.push(
+      `Retrieval was truncated (${result.truncated.reason}); some related code may be missing.`
+    )
+  }
+  if (result.degraded) {
+    out.push(`Retrieval matched literally; no vocabulary expansion was applied.`)
+  }
+  out.push("Sources:")
+  for (const f of [...new Set(seeds.map((n) => `${n.sourceFile}:${n.sourceLocation}`))].sort()) {
+    out.push(`- ${f}`)
+  }
+  return out.join("\n")
+}
+
+// ------------------------------------------------------------ D · graph canvas
 
 const PALETTE = [
   "#e11d48", "#0891b2", "#65a30d", "#c026d3", "#ea580c",
   "#0284c7", "#7c3aed", "#059669", "#d97706", "#db2777",
 ]
 
-function GraphCanvas({ result, companion }: VariantProps) {
+function GraphCanvas({ result, ide }: VariantProps) {
   const [selected, setSelected] = useState<GraphNode | null>(null)
 
   const { nodes, edges } = useMemo(() => {
@@ -219,7 +420,7 @@ function GraphCanvas({ result, companion }: VariantProps) {
   if (result.subgraph.nodes.length === 0) return <NoMatch result={result} />
 
   return (
-    <div className="border bg-card">
+    <div>
       <div className="h-[440px] w-full">
         <ReactFlow
           nodes={nodes}
@@ -238,16 +439,12 @@ function GraphCanvas({ result, companion }: VariantProps) {
 
       <div className="border-t px-3 py-2">
         {selected ? (
-          <NodeDetail node={selected} result={result} companion={companion} />
+          <NodeDetail node={selected} result={result} ide={ide} />
         ) : (
           <p className="font-mono text-[10px] text-muted-foreground">
             Click a node for its neighbours. Amber ring = seed match · dashed edge = INFERRED.
           </p>
         )}
-      </div>
-
-      <div className="px-3 pb-3">
-        <HandoffBar result={result} />
       </div>
     </div>
   )
@@ -256,10 +453,11 @@ function GraphCanvas({ result, companion }: VariantProps) {
 function NodeDetail({
   node,
   result,
+  ide,
 }: {
   node: GraphNode
   result: QueryResult
-  companion: string
+  ide: VariantProps["ide"]
 }) {
   const touching = result.subgraph.edges.filter(
     (e) => e.source === node.id || e.target === node.id
@@ -269,9 +467,13 @@ function NodeDetail({
     <div className="font-mono text-[10px]">
       <div className="flex items-baseline gap-2">
         <span className="text-[11px] font-semibold text-foreground">{node.label}</span>
-        <span className="text-muted-foreground">
-          {node.sourceFile}:{node.sourceLocation}
-        </span>
+        <SourceLink
+          result={result}
+          ide={ide}
+          sourceFile={node.sourceFile}
+          sourceLocation={node.sourceLocation}
+          className="text-muted-foreground"
+        />
         {node.seed && <span className="border border-amber-500 px-1 text-amber-700">SEED</span>}
       </div>
       <div className="mt-1 max-h-24 overflow-auto">
@@ -286,252 +488,41 @@ function NodeDetail({
   )
 }
 
-// ------------------------------------------------------------- C · draft Answer
-
-/**
- * Frames the result as the Answer you would actually save — deterministic prose,
- * the TBR-57 §5 provenance footer rendered verbatim, evidence collapsed below.
- * This is the variant that tests whether the "facts now, prose maybe later" seam
- * reads as an honest draft or as a broken answer.
- */
-function DraftAnswer({ result, question }: VariantProps) {
-  const body = useMemo(() => composeDraft(result, question), [result, question])
-  const [content, setContent] = useState(body)
-  const [showEvidence, setShowEvidence] = useState(false)
-
-  // Re-seed the editor when a new retrieval lands.
-  useMemo(() => setContent(body), [body])
-
-  if (result.subgraph.nodes.length === 0) return <NoMatch result={result} />
-
-  return (
-    <div className="border bg-card">
-      <div className="flex items-center justify-between border-b px-3 py-2">
-        <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-          Draft answer · unsaved
-        </span>
-        <span className="border border-amber-500/50 px-1.5 py-0.5 font-mono text-[9px] text-amber-700">
-          NOT PROSE — deterministic
-        </span>
-      </div>
-
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        spellCheck={false}
-        className="h-[380px] w-full resize-none bg-background p-3 font-mono text-[11px] leading-relaxed text-foreground outline-none"
-      />
-
-      <div className="flex items-center gap-2 border-t px-3 py-2">
-        <button className="bg-foreground px-3 py-1.5 font-mono text-[11px] text-background hover:opacity-85">
-          Keep as Answer
-        </button>
-        <button className="border px-3 py-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground">
-          Discard
-        </button>
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-          saving is out of TBR-58 scope — these are stubs
-        </span>
-      </div>
-
-      <button
-        onClick={() => setShowEvidence((s) => !s)}
-        className="flex w-full items-center gap-1.5 border-t px-3 py-2 font-mono text-[10px] text-muted-foreground hover:text-foreground"
-      >
-        <RiArrowRightSLine
-          className={`size-3.5 transition-transform ${showEvidence ? "rotate-90" : ""}`}
-        />
-        Evidence · {result.subgraph.nodes.length} nodes, {result.subgraph.edges.length}{" "}
-        relations
-      </button>
-      {showEvidence && (
-        <div className="max-h-64 overflow-auto border-t bg-muted/10 p-3">
-          <pre className="font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
-            {result.context?.markdown}
-          </pre>
-        </div>
-      )}
-
-      <div className="px-3 pb-3">
-        <HandoffBar result={result} />
-      </div>
-    </div>
-  )
-}
-
-/** Deterministic. No LLM here by charter — so it summarises structure, never meaning. */
-function composeDraft(result: QueryResult, question: string): string {
-  const seeds = result.subgraph.nodes.filter((n) => n.seed)
-  const files = [...new Set(seeds.map((n) => n.sourceFile))]
-  const groups = groupByCommunity(result.subgraph.nodes).slice(0, 3)
-
-  const out: string[] = []
-  out.push(`The code graph matched ${seeds.length} direct hits for this question across`)
-  out.push(`${files.length} file${files.length === 1 ? "" : "s"}. Starting points:`)
-  out.push("")
-  for (const s of seeds) out.push(`  ${s.label} — ${s.sourceFile}:${s.sourceLocation}`)
-  out.push("")
-  out.push(`Related areas pulled in by traversal:`)
-  for (const [name, nodes] of groups) out.push(`  ${name} (${nodes.length} nodes)`)
-  out.push("")
-  out.push(`[Write the explanation here, or paste the evidence block into your agent.]`)
-  out.push("")
-  out.push("---")
-  out.push(`Drafted from the code graph on ${new Date().toISOString().slice(0, 10)}.`)
-  const commit = result.graph.headSha ? ` at commit ${result.graph.headSha.slice(0, 7)}` : ""
-  out.push(
-    `Graph built ${result.graph.builtAt.slice(0, 10)} (${result.graph.graphHash})${commit}.`
-  )
-  if (result.truncated) {
-    out.push(`Retrieval was truncated (${result.truncated.reason}); some related code may be missing.`)
-  }
-  if (result.degraded) {
-    out.push(`Retrieval matched literally; no vocabulary expansion was applied.`)
-  }
-  out.push("Sources:")
-  for (const f of [...new Set(seeds.map((n) => `${n.sourceFile}:${n.sourceLocation}`))].sort()) {
-    out.push(`- ${f}`)
-  }
-  return out.join("\n")
-}
-
-// -------------------------------------------------------------- D · ranked files
-
-/** Collapses the graph away entirely: "where should I look?", ranked. */
-function RankedFiles({ result }: VariantProps) {
-  const [open, setOpen] = useState<string | null>(null)
-
-  const files = useMemo(() => {
-    const map = new Map<
-      string,
-      { file: string; nodes: GraphNode[]; score: number; seeds: number }
-    >()
-    for (const n of result.subgraph.nodes) {
-      if (!map.has(n.sourceFile)) {
-        map.set(n.sourceFile, { file: n.sourceFile, nodes: [], score: 0, seeds: 0 })
-      }
-      const f = map.get(n.sourceFile)!
-      f.nodes.push(n)
-      f.score += n.score
-      if (n.seed) f.seeds++
-    }
-    return [...map.values()].sort(
-      (a, b) => b.seeds - a.seeds || b.score - a.score || b.nodes.length - a.nodes.length
-    )
-  }, [result])
-
-  if (result.subgraph.nodes.length === 0) return <NoMatch result={result} />
-  const max = files[0]?.score || 1
-
-  return (
-    <div className="border bg-card">
-      <div className="border-b px-3 py-2 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-        {files.length} files, ranked by relevance
-      </div>
-      {files.map((f) => (
-        <div key={f.file} className="border-b last:border-b-0">
-          <button
-            onClick={() => setOpen(open === f.file ? null : f.file)}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/20"
-          >
-            <RiArrowRightSLine
-              className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${open === f.file ? "rotate-90" : ""}`}
-            />
-            <span
-              className={`font-mono text-[11px] ${f.seeds > 0 ? "font-semibold text-foreground" : "text-foreground/60"}`}
-            >
-              {f.file}
-            </span>
-            {f.seeds > 0 && (
-              <span className="shrink-0 border border-amber-500 px-1 font-mono text-[9px] text-amber-700">
-                {f.seeds} match{f.seeds === 1 ? "" : "es"}
-              </span>
-            )}
-            <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
-              {f.nodes.length}
-            </span>
-            <span className="h-1 w-16 shrink-0 bg-muted">
-              <span
-                className="block h-full bg-amber-500"
-                style={{ width: `${Math.max(2, (f.score / max) * 100)}%` }}
-              />
-            </span>
-          </button>
-          {open === f.file && (
-            <ul className="bg-muted/10 px-3 py-1.5 pl-9">
-              {f.nodes.map((n) => (
-                <li key={n.id} className="flex items-baseline gap-2 py-0.5">
-                  <span
-                    className={`font-mono text-[10px] ${n.seed ? "text-foreground" : "text-muted-foreground"}`}
-                  >
-                    {n.label}
-                  </span>
-                  <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-                    {n.sourceLocation}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ))}
-      <div className="px-3 pb-3">
-        <HandoffBar result={result} />
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------- empty
-
-function NoMatch({ result }: { result: QueryResult }) {
-  return (
-    <div className="border border-dashed p-6 text-center">
-      <p className="font-mono text-sm font-medium text-foreground">Nothing matched</p>
-      <p className="mx-auto mt-2 max-w-md font-mono text-[11px] leading-relaxed text-muted-foreground">
-        The graph was searched for{" "}
-        <span className="text-amber-700">{result.matchedTerms.join(", ") || "(no terms)"}</span>{" "}
-        and found no nodes. Literal matching only — a term the code does not spell the same
-        way will miss.
-      </p>
-    </div>
-  )
-}
-
 // -------------------------------------------------------------------- registry
 
 export const VARIANTS: Array<{
   id: VariantId
   name: string
+  short: string
   blurb: string
   render: (p: VariantProps) => React.ReactNode
 }> = [
   {
     id: "evidence",
-    name: "A · Evidence ledger",
-    blurb:
-      "Citations, not an answer. Grouped by community, source paths dominant and clickable into VS Code. Tests: is raw evidence useful on its own?",
+    name: "Evidence",
+    short: "A",
+    blurb: "Citations grouped by community. Source paths open your editor.",
     render: EvidenceLedger,
   },
   {
     id: "files",
-    name: "B · Ranked files",
-    blurb:
-      "Throws the graph structure away and answers 'where do I look?' — files ranked by match strength. Tests: is the graph the useful unit, or just the ranking?",
+    name: "Files",
+    short: "B",
+    blurb: "Where to look, ranked by match strength. File names open your editor.",
     render: RankedFiles,
   },
   {
     id: "draft",
-    name: "C · Draft answer",
-    blurb:
-      "Framed as the Answer you'd save, editable, with the real provenance footer and evidence collapsed. Tests: does the facts-now/prose-later seam read as honest or broken?",
+    name: "Draft",
+    short: "C",
+    blurb: "The Answer you'd save — editable, with the provenance footer. No IDE links: this text is saved verbatim.",
     render: DraftAnswer,
   },
   {
     id: "canvas",
-    name: "D · Graph canvas",
-    blurb:
-      "The subgraph as a picture, community-coloured, click for neighbours. Tests: does seeing the shape build trust, or is it decoration?",
+    name: "Canvas",
+    short: "D",
+    blurb: "The subgraph as a picture. Click a node for neighbours and an editor link.",
     render: GraphCanvas,
   },
 ]

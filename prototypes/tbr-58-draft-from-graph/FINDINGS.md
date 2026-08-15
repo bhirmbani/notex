@@ -85,3 +85,44 @@ These are feel questions and the prototype exists to be driven, not read:
 4. What does the result need to look like for a human to trust it enough to keep as an Answer?
 
 <!-- fill in after driving it, then mirror onto TBR-58 and TBR-53's Decisions list -->
+
+---
+
+## Decisions taken during the session (2026-08-15)
+
+**All four variants ship**, with a variant switcher as product UI — a segmented control in
+the result panel header, not a debug affordance. Source paths open the user's editor in
+A, B and D; **not in C**, because C's text is saved verbatim as the Answer and a link
+inside it would smuggle markup into Answer content.
+
+Two consequences that fell out of that decision:
+
+1. **Variant C is an edit state, not a view.** A/B/D are read-only renderings of one
+   payload; C holds unsaved text. Draft content therefore has to be owned above the
+   variant, or switching to A to check evidence and back silently discards the user's
+   edits. Any implementation that mounts variants independently will get this wrong.
+2. **The IDE scheme is a per-user setting, not a constant.** VS Code, Cursor and Zed take
+   `<scheme>://file<abs>:<line>`; JetBrains needs its built-in web server on port 63342.
+   A picker is in the prototype knobs. TBR-59 needs to decide where this setting lives.
+
+## ⚠ Spec bug found: source paths are NOT repo-relative
+
+`graphify-out/.graphify_root` here is `<checkout>/src`, and every node's `source_file` is
+relative to **that**, not to the repo root — the graph says `api/middleware/auth.ts` for a
+file that lives at `src/api/middleware/auth.ts`.
+
+Consequences:
+
+- IDE links built from `checkoutPath + sourceFile` resolve to nothing.
+- **`docs/specs/notex-mcp-server.md` §5 is wrong as written.** It mandates "repo-relative
+  POSIX paths in `path:Lnn` form" in the provenance footer. Taken literally against
+  `source_file`, every citation in every graph-drafted Answer would point at a path that
+  does not exist — defeating the footer's entire purpose, which is verifiability.
+
+Fix applied in the prototype, and needed in the spec: the companion reads
+`.graphify_root`, adds `graphRoot` and `rootPrefix` to `GraphStamp`, and resolves
+`sourceFile` to genuinely repo-relative before projecting. Verified: 20/20 returned paths
+now exist on disk.
+
+Note this is invisible in any repo where graphify is run from the repo root — it only
+bites on the `src/`-rooted layout Notex actually uses.

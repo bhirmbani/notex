@@ -44,5 +44,8 @@ export type QueryResult = {
 export type VariantProps = {
   result: QueryResult
   question: string
-  companion: string
+  ide: import("./ide").IdeId
+  /** Variant C only — owned by App so edits survive a variant switch. */
+  content: string
+  onContentChange: (v: string) => void
 }

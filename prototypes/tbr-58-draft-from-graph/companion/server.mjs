@@ -21,6 +21,25 @@ const API_VERSION = "0.1.0-prototype"
 const raw = readFileSync(GRAPH_PATH, "utf8")
 const doc = JSON.parse(raw)
 
+// FINDING (TBR-58): node `source_file` values are relative to graphify's OWN root, which
+// is not necessarily the repo root — here it is `<checkout>/src`. Anything that renders a
+// path must resolve through this, including TBR-57 §5's "repo-relative" footer, which
+// would otherwise cite `api/middleware/auth.ts` for a file at `src/api/middleware/auth.ts`.
+const GRAPH_ROOT = (() => {
+  try {
+    return readFileSync(resolve(CHECKOUT, "graphify-out/.graphify_root"), "utf8").trim()
+  } catch {
+    return CHECKOUT
+  }
+})()
+
+/** GRAPH_ROOT expressed relative to the checkout, e.g. "src". "" when they are the same. */
+const ROOT_PREFIX = GRAPH_ROOT.startsWith(CHECKOUT)
+  ? GRAPH_ROOT.slice(CHECKOUT.length).replace(/^\//, "")
+  : ""
+
+const repoRelative = (sourceFile) => (ROOT_PREFIX ? `${ROOT_PREFIX}/${sourceFile}` : sourceFile)
+
 const STAMP = {
   builtAt: statSync(GRAPH_PATH).mtime.toISOString(),
   graphHash: createHash("sha256").update(raw).digest("hex").slice(0, 16),
@@ -36,13 +55,15 @@ const STAMP = {
     }
   })(),
   builtAtCommit: doc.built_at_commit ?? null,
+  graphRoot: GRAPH_ROOT,
+  rootPrefix: ROOT_PREFIX,
 }
 
 /** Project to the shapes we own (spec §2.2) — drop _origin, norm_label, confidence_score. */
 const project = (n) => ({
   id: n.id,
   label: n.label,
-  sourceFile: n.source_file,
+  sourceFile: repoRelative(n.source_file),
   sourceLocation: n.source_location,
   fileType: n.file_type,
   community:
@@ -55,7 +76,7 @@ const projectEdge = (e) => ({
   relation: e.relation,
   weight: e.weight,
   confidence: e.confidence,
-  sourceFile: e.source_file,
+  sourceFile: repoRelative(e.source_file),
   sourceLocation: e.source_location,
 })
 
