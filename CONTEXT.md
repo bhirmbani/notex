@@ -38,3 +38,30 @@ _Avoid_: Invitation
 
 **Grant**:
 A per-(Membership, Project) permission record specifying `read` or `write` access. Admin Memberships never need a Grant — their access is implicit via Role. A Membership with no Grant on a Project has no access to it at all (not read-only-by-default). Project deletion is admin-only regardless of Grant level.
+
+**Companion**:
+_Planned (TBR-53 map)._ The per-checkout Node process (`notex-companion`) that reads a local `graphify-out/graph.json` and serves deterministic retrieval over it to the Notex browser page and to an MCP host. It holds no LLM, never builds a graph, and never talks to D1.
+_Avoid_: server, agent, daemon (the multi-repo daemon is a specific deferred variant, not a synonym)
+
+**Checkout**:
+_Planned (TBR-53 map)._ The user's local working copy of a version-control repository, which a Companion serves. Distinct from a **Repository**, which is a Notex grouping with no git semantics — a Checkout is *bound* to a Repository by human confirmation, and the two are never the same thing.
+
+**Graph stamp**:
+_Planned (TBR-53 map)._ The identity and age of the graph a result came from — build time, hash, counts, checkout path, git HEAD, and the graphify root. Echoed on every Companion response, not just `status`, so a drafted Answer's provenance records the graph *that draft* came from.
+
+**Pairing**:
+_Planned (TBR-53 map)._ The per-device act of giving a browser or MCP host the Companion's bearer token, by pasting a line the Companion prints. The token never reaches the Worker or D1.
+_Avoid_: pairing as a synonym for **binding** — pairing is about the token, binding is about which Repository a Checkout belongs to
+
+**Checkout-relative**:
+_Planned (TBR-53 map)._ The path convention for everything leaving the Companion: POSIX paths relative to the **Checkout root**, resolved from graphify's own root during projection.
+_Avoid_: repo-relative (ambiguous between the Checkout root and graphify's root — that ambiguity produced citations pointing at files that do not exist)
+
+**Degraded retrieval**:
+_Planned (TBR-53 map)._ A result produced without agent-side vocabulary expansion, matched literally. It fails by returning plausible **wrong** seeds rather than nothing, so it must always be declared alongside truncation and the seed-score floor.
+
+**Seed-score floor**:
+_Planned (TBR-53 map)._ The threshold below which the UI says "nothing convincing matched" instead of rendering a subgraph, because no seed cleared an exact token match.
+
+**Provenance footer**:
+_Planned (TBR-53 map)._ The plain-text block appended to a graph-drafted Answer's content: draft date, graph build date and hash, a truncation notice when it applies, and the checkout-relative source paths. It is content, not schema, and every write path renders it from one shared function.
