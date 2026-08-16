@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
+import { APIError } from 'better-auth'
 import { useState } from 'react'
 
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -31,9 +32,22 @@ const getDashboardSession = createServerFn({ method: 'GET' }).handler(async () =
 
   const request = getRequest()
   const auth = createAuth(env as AuthBindings)
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  })
+
+  // The apiKey plugin throws (rather than returning null) when a request
+  // carries an invalid/expired/revoked/rate-limited `x-api-key` header —
+  // unlike a missing or malformed session cookie, which getSession resolves
+  // to null. Treat it the same as "no session" here.
+  let session: Awaited<ReturnType<typeof auth.api.getSession>>
+  try {
+    session = await auth.api.getSession({
+      headers: request.headers,
+    })
+  } catch (error) {
+    if (!(error instanceof APIError)) {
+      throw error
+    }
+    return null
+  }
 
   if (!isDashboardSession(session)) {
     return null
