@@ -1,9 +1,19 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { tanstackStartCookies } from 'better-auth/tanstack-start'
+import { apiKey } from '@better-auth/api-key'
 
 import { getDb } from '@/db'
 import { createOrganizationWithAdmin } from '@/features/organizations/service'
+
+// The apiKey plugin's default is 10 requests / 24h — unusable for an agent
+// session and indistinguishable from a random failure. 120/60s bounds a
+// runaway agent loop without a normal session ever noticing.
+export const API_KEY_RATE_LIMIT = {
+  enabled: true,
+  timeWindow: 60_000,
+  maxRequests: 120,
+} as const
 
 type D1Database = Parameters<typeof getDb>[0]
 
@@ -36,7 +46,14 @@ export const createAuth = (env: AuthBindings) => {
     basePath: '/api/auth',
     baseURL: resolveBaseUrl(env),
     secret: resolveSecret(env),
-    plugins: [tanstackStartCookies()],
+    plugins: [
+      apiKey({
+        enableSessionForAPIKeys: true,
+        rateLimit: API_KEY_RATE_LIMIT,
+        deferUpdates: true,
+      }),
+      tanstackStartCookies(),
+    ],
     databaseHooks: {
       user: {
         create: {
