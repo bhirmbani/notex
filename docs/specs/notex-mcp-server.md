@@ -232,14 +232,29 @@ Rules:
 - Line 3 — present **only** when the retrieval was `truncated` or `degraded`; omitted otherwise,
   never rendered as "none". TBR-56 trap 2 applies: a silently truncated subgraph becomes a
   confidently wrong Answer, and the transient API response is not where that fact needs to survive.
-- `Sources:` — repo-relative POSIX paths in `path:Lnn` form, deduped, sorted.
+- `Sources:` — **checkout-relative** POSIX paths in `path:Lnn` form, deduped, sorted.
 
 **No community ids** — they are non-deterministic across rebuilds (TBR-48) and nothing may cite
 them. **No node ids** — durable, but not verifiable by a human reading the Answer. The paths are
 the part that makes the Answer checkable, which is the footer's whole purpose.
 
-Paths are **repo-relative, always**. An absolute path leaks the drafting user's home directory into
-content their teammates read.
+Paths are **checkout-relative, always**. An absolute path leaks the drafting user's home directory
+into content their teammates read.
+
+> **⚠ Corrected by TBR-60, on TBR-58's evidence.** This section previously said *repo-relative*
+> and left the resolution unowned. graphify's node `source_file` values are relative to
+> **graphify's own root** (`.graphify_root`), which in this repo is `<checkout>/src` — so as
+> originally written, **every citation in every graph-drafted Answer would have pointed at a path
+> that does not exist**, defeating the footer's entire purpose. The fix lives in the companion,
+> not here: it stamps `graphRoot` / `rootPrefix` and resolves `sourceFile` at the projection
+> boundary (`companion-api.md` §2.1–2.2), so paths arrive here already correct. This server must
+> **not** re-resolve or re-prefix them.
+>
+> Also per TBR-60: the footer is **built by the shared op module**, not by this server —
+> `buildFooter(stamp, sources, opts)` (`companion-api.md` §4.8). This server's job is to narrow
+> *which* sources go in (§5.1), not to format the string. The browser's save path renders the same
+> footer from the same function, so a UI-drafted Answer and an MCP-written one are byte-identical
+> in provenance.
 
 ### 5.1 Sources are server-resolved
 

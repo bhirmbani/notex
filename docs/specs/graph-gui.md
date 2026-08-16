@@ -266,6 +266,12 @@ LNA and Safari will eventually flip from `unsupported` to `needs-permission`.
 - The graph page carries a staleness line comparing `headSha` to current git HEAD.
 - **No persistent staleness badge on Questions.** Anyone on an active branch is stale within
   minutes; a permanent badge is noise that trains users to ignore it.
+- **The graph page's staleness line names the next step** (added by TBR-60): *"This graph was
+  built N days ago, at commit `abc1234`. Re-run `graphify` in your checkout and restart the
+  companion to refresh it."* Rebuilding from the GUI is out of v1 (TBR-53 Q10's read-only
+  companion), so the only thing standing between a stale graph and a fresh one is a command the
+  user has to know. Reporting staleness without naming the fix is a dead end wearing a warning
+  label.
 
 ### 6.2 The companion stops mid-session
 
@@ -315,8 +321,13 @@ at a path that does not exist**, defeating the one property that makes such an A
 verifiable. It also breaks §2.6's editor links.
 
 **Fix:** the companion reads `.graphify_root`, adds `graphRoot` and `rootPrefix` to
-`GraphStamp`, and resolves `sourceFile` to genuinely repo-relative before projection.
+`GraphStamp`, and resolves `sourceFile` to genuinely checkout-relative before projection.
 Verified in TBR-58: 20/20 returned paths then existed on disk.
+
+> **✅ Applied by TBR-60.** `companion-api.md` §2.1 (stamp fields), §2.2 (resolution at the
+> projection boundary) and `notex-mcp-server.md` §5 (wording corrected to *checkout-relative*,
+> resolution explicitly delegated to the companion) now carry the fix. The glossary settles on
+> **checkout-relative** as the term — "repo-relative" was the ambiguity that caused this.
 
 This is invisible in any repo where graphify runs from the repo root — it only bites on the
 `src/`-rooted layout Notex uses.

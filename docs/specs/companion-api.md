@@ -52,11 +52,20 @@ type GraphStamp = {
   communityCount: number
   checkoutPath: string   // absolute path of the served checkout
   headSha: string | null // git HEAD, null if not a git checkout
+  graphRoot: string      // absolute path of `.graphify_root`
+  rootPrefix: string     // graphRoot relative to checkoutPath, "" when identical
 }
 ```
 
 Stamping every response — not just `status` — is deliberate: a drafted Answer's provenance footer
 must record the age of the graph **that draft** came from, not whatever `status` reports later.
+
+> **`graphRoot` / `rootPrefix` added by TBR-60, on TBR-58's evidence.** graphify's node
+> `source_file` values are relative to **graphify's own root** (`.graphify_root`), not the repo
+> root — in this repo that root is `<checkout>/src`. The companion reads `.graphify_root` at
+> startup and stamps both paths. See §2.2 for what it resolves and `notex-mcp-server.md` §5 for
+> why it matters. Invisible in repos where graphify ran from the checkout root; it only bites on
+> a nested layout, which is the layout Notex itself uses.
 
 ### 2.2 Node and edge projection
 
@@ -67,7 +76,7 @@ there must be a companion-side fix, not a client-side break.
 type GraphNode = {
   id: string             // the ONLY durable key (TBR-48)
   label: string
-  sourceFile: string
+  sourceFile: string     // CHECKOUT-relative POSIX path — see below
   sourceLocation: string // e.g. "L18"
   fileType: string       // "code" | "doc" | ...
   community: { id: number; name: string } | null
@@ -85,6 +94,13 @@ type GraphEdge = {
 ```
 
 Dropped from the on-disk shape: `_origin`, `norm_label`, `confidence_score` (internal to graphify).
+
+> **`sourceFile` is resolved during projection, not passed through (TBR-60).** On disk it is
+> relative to `graphRoot`; the companion prepends `rootPrefix` so every `sourceFile` and every
+> `sources[].file` leaving the companion is **checkout-relative** and resolves against a plain
+> `git clone`. Resolution happens once, at the projection boundary, so no consumer can forget it —
+> the browser's editor links, the `context` block, and the provenance footer all inherit it.
+> Verified against this repo's own graph: 20/20 returned paths existed on disk only after the fix.
 
 > **`community.id` is display grouping only and is NOT durable.** Community numbers and names are
 > non-deterministic across rebuilds (TBR-48). Nothing may key on them; no provenance footer may
@@ -228,17 +244,26 @@ Separate from `query` because the UI needs a cheap typeahead that does not drag 
 {
   question: string
   terms?: string[]                     // pre-expanded vocabulary, optional
-  depth?: number                       // default 2
-  maxNodes?: number                    // default 150, hard ceiling 1000
-  include?: Array<"subgraph" | "context">  // default ["subgraph"]
+  depth?: number                       // default 1, hard ceiling 3
+  maxNodes?: number                    // default 60, hard ceiling 1000
+  seeds?: number                       // default 5
+  include?: Array<"subgraph" | "context" | "footer">  // default ["subgraph"]
 }
 
 // response
 OpResponse<{
   subgraph: { nodes: GraphNode[]; edges: GraphEdge[]; seeds: string[] }
   context?: { markdown: string; sources: Array<{ file: string; location: string }> }
+  footer?: string                      // see §4.8
+  lowConfidence?: { topScore: number } // seed-score floor tripped; see below
 }>
 ```
+
+> **Defaults revised by TBR-59 (`graph-gui.md` §3.1), on TBR-58's evidence.** They were
+> `depth: 2` / `maxNodes: 150`. Against a real 462-node graph, 8 of 9 naturally-phrased questions
+> truncated at those settings — a bound that always bites is not a bound, it is a lie in the
+> response envelope. Depth 2 becomes an explicit user-driven "expand" in the UI rather than the
+> default.
 
 **Vocabulary expansion lives outside the companion.** The browser sends `question` only; the
 companion tokenizes literally and returns `degraded: { expansion: "none" }`, which the UI renders
@@ -250,6 +275,13 @@ companion.
 When a cap bites, the response says so via `truncated` — a silently truncated subgraph becomes a
 confidently wrong drafted Answer. **Induced-edge completion runs after the cap, not before**;
 skipping it silently drops seed↔seed edges (TBR-55).
+
+**The seed-score floor (added by TBR-59, on TBR-58's evidence).** When no seed clears an exact
+token match, the companion still returns its best guesses but sets `lowConfidence: { topScore }`,
+and the UI says *"nothing convincing matched"* instead of rendering a subgraph. This sharpens
+trap 2: literal matching does **not** fail by returning nothing, it fails by returning **plausible
+wrong seeds** — roughly a third of naturally-phrased questions on real data. Silence would be a
+benign failure; confident mismatching is the one that produces a wrong Answer a human signs.
 
 ### 4.5 `path` — `POST /v1/path`
 
@@ -287,6 +319,23 @@ Deterministic markdown, assembled server-side, handed to the user's own agent. C
 already has a system prompt and a task; fragments we inject fight it, and any directive we write
 becomes a thing we own and version forever. Evidence-only also keeps the block verifiable, which
 is what the provenance footer depends on.
+
+### 4.8 The provenance footer (added by TBR-60)
+
+**The companion owns the footer.** Its format is specified once, in `notex-mcp-server.md` §5, and
+built once, by a `buildFooter(stamp, sources, opts)` function in the shared op module. Both write
+paths into Notex consume that one implementation:
+
+- **Browser** — `include: ["footer"]` returns the rendered string in `footer`, covering every
+  source in the result. The Draft variant appends it when the human saves the Answer.
+- **MCP** — the server calls `buildFooter` directly with the narrowed `sourceNodeIds` the model
+  cited, resolved against its retrieval log (`notex-mcp-server.md` §5.1).
+
+Two consumers, one format, one path-resolution implementation. The alternative — each consumer
+composing its own footer from the graph stamp — guarantees the two drift in formatting and
+re-derive the `rootPrefix` resolution of §2.2 independently, which is exactly the bug that took a
+prototype to find. It also means an Answer drafted in the UI is indistinguishable from one typed
+by hand, which would quietly defeat TBR-53 Q12.
 
 ---
 
@@ -369,9 +418,11 @@ primed beats one shot mid-task, and a Block is recoverable only by clearing site
    local network request. No prompt fires, no mixed content applies, and the §6 state machine
    short-circuits to `granted`. The permission path can only be exercised against a deployed
    `https://` origin. TBR-58 must plan for that rather than discover it.
-2. **Silence is the failure mode.** A truncated subgraph and a literal-only match both produce a
-   confidently wrong drafted Answer, which is worse than no Answer. `truncated` and `degraded` are
-   not optional niceties — they are the correctness surface.
+2. **Confident mismatching is the failure mode** — *sharpened by TBR-58; this trap originally read
+   "silence is the failure mode".* A truncated subgraph and a literal-only match both produce a
+   confidently wrong drafted Answer, which is worse than no Answer. Literal matching does not go
+   quiet when it fails; it returns plausible wrong seeds. `truncated`, `degraded` and
+   `lowConfidence` are not optional niceties — they are the correctness surface.
 3. **Errors without CORS headers are invisible.** They arrive as the same opaque `TypeError` as a
    dead server and undo §6 entirely.
 4. **Directed traversal changes the answer.** TBR-55 found graphify's own MCP server diverges from
