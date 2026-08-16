@@ -1,0 +1,125 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "authLogin",
+      "norm_label": "authlogin",
+      "file_type": "code",
+      "source_file": "auth.ts",
+      "source_location": "L10",
+      "_origin": "ast",
+      "id": "auth_login",
+      "community": 1,
+      "community_name": "Auth"
+    },
+    {
+      "label": "authLogout",
+      "norm_label": "authlogout",
+      "file_type": "code",
+      "source_file": "auth.ts",
+      "source_location": "L20",
+      "_origin": "ast",
+      "id": "auth_logout",
+      "community": 1,
+      "community_name": "Auth"
+    },
+    {
+      "label": "createSession",
+      "norm_label": "createsession",
+      "file_type": "code",
+      "source_file": "session.ts",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "session_create",
+      "community": 1,
+      "community_name": "Auth"
+    },
+    {
+      "label": "getUser",
+      "norm_label": "getuser",
+      "file_type": "code",
+      "source_file": "user.ts",
+      "source_location": "L8",
+      "_origin": "ast",
+      "id": "user_get",
+      "community": 2,
+      "community_name": "User"
+    },
+    {
+      "label": "formatDate",
+      "norm_label": "formatdate",
+      "file_type": "code",
+      "source_file": "util/format.ts",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "util_format",
+      "community": 3,
+      "community_name": "Utilities"
+    },
+    {
+      "label": "parseDate",
+      "norm_label": "parsedate",
+      "file_type": "code",
+      "source_file": "util/format.ts",
+      "source_location": "L15",
+      "_origin": "ast",
+      "id": "util_parse",
+      "community": 3,
+      "community_name": "Utilities"
+    }
+  ],
+  "links": [
+    {
+      "source": "auth_login",
+      "target": "session_create",
+      "relation": "calls",
+      "weight": 2,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "auth.ts",
+      "source_location": "L11"
+    },
+    {
+      "source": "auth_login",
+      "target": "auth_logout",
+      "relation": "sibling",
+      "weight": 1,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "auth.ts",
+      "source_location": "L10"
+    },
+    {
+      "source": "session_create",
+      "target": "user_get",
+      "relation": "calls",
+      "weight": 1,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "session.ts",
+      "source_location": "L6"
+    },
+    {
+      "source": "user_get",
+      "target": "util_format",
+      "relation": "calls",
+      "weight": 1,
+      "confidence": "INFERRED",
+      "confidence_score": 0.5,
+      "source_file": "user.ts",
+      "source_location": "L9"
+    },
+    {
+      "source": "util_format",
+      "target": "util_parse",
+      "relation": "sibling",
+      "weight": 1,
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "util/format.ts",
+      "source_location": "L3"
+    }
+  ]
+}
