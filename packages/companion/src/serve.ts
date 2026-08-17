@@ -5,6 +5,7 @@
 import { loadGraph } from "./graph.ts"
 import { createHandler, type GraphState } from "./http.ts"
 import { resolveOrigins } from "./cors.ts"
+import { startServer, type MinimalServer } from "./net.ts"
 import { loadOrCreateToken, pairingLine as buildPairingLine } from "./pairing.ts"
 import { OpError } from "./types.ts"
 
@@ -13,16 +14,23 @@ const DEFAULT_PORT = 7717
 export type ServeOptions = {
   /** Absolute path of the checkout to serve — where graphify-out/graph.json and .notex/ live. */
   checkoutPath: string
-  /** Fixed at 7717 by default (companion-api.md §3.1). Pass 0 in tests for an OS-assigned port. */
+  /**
+   * Fixed at 7717 by default (companion-api.md §3.1). Pass 0 for an OS-assigned port — but
+   * only under Bun (`bun test`, or any consumer running on the Bun runtime): the plain-Node
+   * fallback in net.ts binds synchronously and can't read back an OS-assigned port before
+   * returning, so it throws for `port: 0` rather than silently ignoring it.
+   */
   port?: number
   /** Additional allowed origins beyond the dev default (companion-api.md §5). */
   origins?: string[]
   rotateToken?: boolean
   nodeEnv?: string
+  /** Fires once the graph finishes loading (or fails to) — the CLI uses this for startup output. */
+  onGraphState?: (state: GraphState) => void
 }
 
 export type ServeHandle = {
-  server: ReturnType<typeof Bun.serve>
+  server: MinimalServer
   token: string
   baseUrl: string
   pairingLine: string
@@ -37,7 +45,7 @@ export function serve(opts: ServeOptions): ServeHandle {
   let graphState: GraphState = { kind: "loading" }
   const handler = createHandler({ token, origins, getGraphState: () => graphState })
 
-  const server = Bun.serve({
+  const server = startServer({
     hostname: "127.0.0.1",
     port: opts.port ?? DEFAULT_PORT,
     fetch: handler,
@@ -51,14 +59,9 @@ export function serve(opts: ServeOptions): ServeHandle {
     } catch (err) {
       graphState = { kind: "error", error: err instanceof OpError ? err : new OpError("graph_unreadable", String(err)) }
     }
+    opts.onGraphState?.(graphState)
   })
 
   const baseUrl = `http://127.0.0.1:${server.port}`
   return { server, token, baseUrl, pairingLine: buildPairingLine(baseUrl, token) }
-}
-
-if (import.meta.main) {
-  const handle = serve({ checkoutPath: process.cwd() })
-  console.log(`notex-companion serving ${process.cwd()}`)
-  console.log(handle.pairingLine)
 }
