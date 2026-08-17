@@ -10,16 +10,16 @@ import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { APIError } from 'better-auth'
 import { useState } from 'react'
+import { RiKey2Line } from '@remixicon/react'
 
+import type { AuthBindings } from '@/features/auth/lib/server'
+import type { DashboardSession } from '@/features/auth/lib/validation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Sidebar } from '@/components/Sidebar'
 import { OrgSwitcher } from '@/components/OrgSwitcher'
 import { signOutCurrentSession } from '@/features/auth/lib/client'
-import { createAuth, type AuthBindings } from '@/features/auth/lib/server'
-import {
-  isDashboardSession,
-  type DashboardSession,
-} from '@/features/auth/lib/validation'
+import { createAuth } from '@/features/auth/lib/server'
+import { isDashboardSession } from '@/features/auth/lib/validation'
 
 const getDashboardSession = createServerFn({ method: 'GET' }).handler(async () => {
   const env = (globalThis as Record<string, unknown>).__env__ as
@@ -115,6 +115,14 @@ function DashboardLayout() {
           <span className="text-xs text-muted-foreground">
             {session.user.email}
           </span>
+          <Link
+            to="/dashboard/settings/api-keys"
+            className="text-muted-foreground hover:text-foreground [&.active]:text-foreground"
+            aria-label="API keys"
+            title="API keys"
+          >
+            <RiKey2Line className="size-4" />
+          </Link>
           <ThemeToggle />
           <button
             onClick={handleSignOut}

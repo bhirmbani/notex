@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as InvitesTokenRouteImport } from './routes/invites/$token'
 import { Route as DashboardLayoutRouteImport } from './routes/dashboard/_layout'
 import { Route as DashboardLayoutIndexRouteImport } from './routes/dashboard/_layout/index'
+import { Route as DashboardLayoutSettingsApiKeysRouteImport } from './routes/dashboard/_layout/settings/api-keys'
 import { Route as DashboardLayoutOOrganizationIdIndexRouteImport } from './routes/dashboard/_layout/o/$organizationId/index'
 import { Route as DashboardLayoutOOrganizationIdMembersRouteImport } from './routes/dashboard/_layout/o/$organizationId/members'
 import { Route as DashboardLayoutOOrganizationIdGrantsRouteImport } from './routes/dashboard/_layout/o/$organizationId/grants'
@@ -58,6 +59,12 @@ const DashboardLayoutIndexRoute = DashboardLayoutIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardLayoutRoute,
 } as any)
+const DashboardLayoutSettingsApiKeysRoute =
+  DashboardLayoutSettingsApiKeysRouteImport.update({
+    id: '/settings/api-keys',
+    path: '/settings/api-keys',
+    getParentRoute: () => DashboardLayoutRoute,
+  } as any)
 const DashboardLayoutOOrganizationIdIndexRoute =
   DashboardLayoutOOrganizationIdIndexRouteImport.update({
     id: '/o/$organizationId/',
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardLayoutRouteWithChildren
   '/invites/$token': typeof InvitesTokenRoute
   '/dashboard/': typeof DashboardLayoutIndexRoute
+  '/dashboard/settings/api-keys': typeof DashboardLayoutSettingsApiKeysRoute
   '/dashboard/o/$organizationId/grants': typeof DashboardLayoutOOrganizationIdGrantsRoute
   '/dashboard/o/$organizationId/members': typeof DashboardLayoutOOrganizationIdMembersRoute
   '/dashboard/o/$organizationId/': typeof DashboardLayoutOOrganizationIdIndexRoute
@@ -161,6 +169,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/invites/$token': typeof InvitesTokenRoute
   '/dashboard': typeof DashboardLayoutIndexRoute
+  '/dashboard/settings/api-keys': typeof DashboardLayoutSettingsApiKeysRoute
   '/dashboard/o/$organizationId/grants': typeof DashboardLayoutOOrganizationIdGrantsRoute
   '/dashboard/o/$organizationId/members': typeof DashboardLayoutOOrganizationIdMembersRoute
   '/dashboard/o/$organizationId': typeof DashboardLayoutOOrganizationIdIndexRoute
@@ -180,6 +189,7 @@ export interface FileRoutesById {
   '/dashboard/_layout': typeof DashboardLayoutRouteWithChildren
   '/invites/$token': typeof InvitesTokenRoute
   '/dashboard/_layout/': typeof DashboardLayoutIndexRoute
+  '/dashboard/_layout/settings/api-keys': typeof DashboardLayoutSettingsApiKeysRoute
   '/dashboard/_layout/o/$organizationId/grants': typeof DashboardLayoutOOrganizationIdGrantsRoute
   '/dashboard/_layout/o/$organizationId/members': typeof DashboardLayoutOOrganizationIdMembersRoute
   '/dashboard/_layout/o/$organizationId/': typeof DashboardLayoutOOrganizationIdIndexRoute
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/invites/$token'
     | '/dashboard/'
+    | '/dashboard/settings/api-keys'
     | '/dashboard/o/$organizationId/grants'
     | '/dashboard/o/$organizationId/members'
     | '/dashboard/o/$organizationId/'
@@ -221,6 +232,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/invites/$token'
     | '/dashboard'
+    | '/dashboard/settings/api-keys'
     | '/dashboard/o/$organizationId/grants'
     | '/dashboard/o/$organizationId/members'
     | '/dashboard/o/$organizationId'
@@ -239,6 +251,7 @@ export interface FileRouteTypes {
     | '/dashboard/_layout'
     | '/invites/$token'
     | '/dashboard/_layout/'
+    | '/dashboard/_layout/settings/api-keys'
     | '/dashboard/_layout/o/$organizationId/grants'
     | '/dashboard/_layout/o/$organizationId/members'
     | '/dashboard/_layout/o/$organizationId/'
@@ -303,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/dashboard/'
       preLoaderRoute: typeof DashboardLayoutIndexRouteImport
+      parentRoute: typeof DashboardLayoutRoute
+    }
+    '/dashboard/_layout/settings/api-keys': {
+      id: '/dashboard/_layout/settings/api-keys'
+      path: '/settings/api-keys'
+      fullPath: '/dashboard/settings/api-keys'
+      preLoaderRoute: typeof DashboardLayoutSettingsApiKeysRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
     '/dashboard/_layout/o/$organizationId/': {
@@ -430,6 +450,7 @@ const DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteWithChildren =
 
 interface DashboardLayoutRouteChildren {
   DashboardLayoutIndexRoute: typeof DashboardLayoutIndexRoute
+  DashboardLayoutSettingsApiKeysRoute: typeof DashboardLayoutSettingsApiKeysRoute
   DashboardLayoutOOrganizationIdGrantsRoute: typeof DashboardLayoutOOrganizationIdGrantsRoute
   DashboardLayoutOOrganizationIdMembersRoute: typeof DashboardLayoutOOrganizationIdMembersRoute
   DashboardLayoutOOrganizationIdIndexRoute: typeof DashboardLayoutOOrganizationIdIndexRoute
@@ -442,6 +463,7 @@ interface DashboardLayoutRouteChildren {
 
 const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
   DashboardLayoutIndexRoute: DashboardLayoutIndexRoute,
+  DashboardLayoutSettingsApiKeysRoute: DashboardLayoutSettingsApiKeysRoute,
   DashboardLayoutOOrganizationIdGrantsRoute:
     DashboardLayoutOOrganizationIdGrantsRoute,
   DashboardLayoutOOrganizationIdMembersRoute:
