@@ -35,6 +35,25 @@ outside the companion by charter.
 Version appears in the path (`/v1/`) **and** as `apiVersion` in the `status` response, so a client
 can refuse a too-old companion before it starts guessing at shapes.
 
+### 1.1 `apiVersion` compatibility rule (decided by TBR-66)
+
+`apiVersion` is a plain semver string (`ops.ts`'s `API_VERSION`, currently `0.1.0`) — never a
+bare integer, so the rule below is expressible without a second field.
+
+**While the major version is `0` (pre-1.0, no stability promise under semver): the *minor*
+component is the breaking boundary.** A client built against `0.1.x` treats a companion reporting
+`0.2.0` as `outdated` (companion-api.md §6) — an unannounced `0.x` minor bump may change wire
+shape. Patch bumps (`0.1.0` → `0.1.1`) never do and are always compatible.
+
+**Once `apiVersion` reaches `1.0.0`, the boundary moves to the *major* component**, per ordinary
+semver: a `1.3.0` companion is compatible with a client built against `1.0.0`, because a minor bump
+is additive-only (new optional fields, new capabilities, never a shape change to an existing op) and
+a patch bump changes nothing observable. Only a major bump (`1.x` → `2.0.0`) is allowed to break
+compatibility, and only a major bump should ever trigger `outdated`.
+
+This is the one rule both `ping.apiVersion` consumers — the browser's §6 state machine and (once
+TBR-69 lands) the MCP host — must encode identically; neither may invent its own comparison.
+
 ---
 
 ## 2. Shared types

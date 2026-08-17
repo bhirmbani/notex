@@ -2,7 +2,7 @@
 // `.notex/companion.json` (mode 0600), reused across restarts. `.notex/` is gitignored
 // alongside `graphify-out/` — this file never leaves the machine it was generated on.
 
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { randomBytes } from "node:crypto"
 import { dirname, join } from "node:path"
 
@@ -25,15 +25,37 @@ function readExistingToken(path: string): string | undefined {
   }
 }
 
+function tokenContents(token: string): string {
+  return JSON.stringify({ token } satisfies PairingFile, null, 2)
+}
+
 /**
- * `mode` on writeFileSync only restricts permissions at creation (POSIX open(2) semantics) —
- * a rewrite of a file left in a looser state by something else wouldn't be reined back in.
- * chmod after every write closes that gap regardless of the file's prior state.
+ * Creates the token file, failing with `EEXIST` if it already exists. A brand-new file created
+ * via `O_CREAT | O_EXCL` gets its mode applied atomically at creation (POSIX open(2)) — there is
+ * no pre-existing file whose looser permissions could leak through — so this needs no further
+ * hardening. The `EEXIST` failure is also what makes `loadOrCreateToken`'s race detection work:
+ * a caller racing us to initialize the same checkout hits this same exclusive-create and loses.
  */
-function writeTokenFile(path: string, token: string, flag: "w" | "wx"): void {
+function createTokenFileExclusive(path: string, token: string): void {
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, JSON.stringify({ token } satisfies PairingFile, null, 2), { mode: 0o600, flag })
-  chmodSync(path, 0o600)
+  writeFileSync(path, tokenContents(token), { mode: 0o600, flag: "wx" })
+}
+
+/**
+ * Rewrites the token file (rotate, or corrupted-file recovery) without ever leaving it at a
+ * looser permission than 0600 — even momentarily. `mode` on writeFileSync only restricts
+ * permissions at creation, so overwriting ("w") an existing file that something else already
+ * left in a looser state, then chmod-ing afterward, leaves a window where the *fresh* token
+ * sits at that looser mode until the chmod catches up. Writing to a freshly `wx`-created
+ * (mode 0600) temp file and `rename()`-ing it into place closes that window instead of chasing
+ * it after the fact: rename() replaces the destination atomically, and the result always
+ * carries the temp file's mode, never the old file's, at every point in between.
+ */
+function rewriteTokenFile(path: string, token: string): void {
+  mkdirSync(dirname(path), { recursive: true })
+  const tmpPath = `${path}.${process.pid}.tmp`
+  writeFileSync(tmpPath, tokenContents(token), { mode: 0o600, flag: "wx" })
+  renameSync(tmpPath, path)
 }
 
 /** Loads the persisted token, or generates and persists a new one. `rotate: true` always regenerates. */
@@ -42,7 +64,7 @@ export function loadOrCreateToken(checkoutPath: string, opts: { rotate?: boolean
 
   if (opts.rotate) {
     const token = generateToken()
-    writeTokenFile(path, token, "w")
+    rewriteTokenFile(path, token)
     return token
   }
 
@@ -54,7 +76,7 @@ export function loadOrCreateToken(checkoutPath: string, opts: { rotate?: boolean
   // instead of returning one nobody persisted.
   const token = generateToken()
   try {
-    writeTokenFile(path, token, "wx")
+    createTokenFileExclusive(path, token)
     return token
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err
@@ -62,7 +84,7 @@ export function loadOrCreateToken(checkoutPath: string, opts: { rotate?: boolean
     if (winner !== undefined) return winner
     // The file existed but was unreadable (e.g. corrupted) both before and after the race —
     // recover by overwriting rather than looping forever.
-    writeTokenFile(path, token, "w")
+    rewriteTokenFile(path, token)
     return token
   }
 }
