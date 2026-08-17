@@ -55,4 +55,12 @@ describe("isApiVersionCompatible", () => {
     expect(isApiVersionCompatible("0.1.0-rc.1", "0.1.0")).toBe(true)
     expect(isApiVersionCompatible("0.1.0+build.5", "0.1.0")).toBe(true)
   })
+
+  it("accepts a combined prerelease + build suffix, full semver grammar (0.1.0-alpha+001)", () => {
+    expect(isApiVersionCompatible("0.1.0-alpha+001", "0.1.0")).toBe(true)
+  })
+
+  it("rejects an empty prerelease identifier (0.1.0-)", () => {
+    expect(isApiVersionCompatible("0.1.0-", "0.1.0")).toBe(false)
+  })
 })

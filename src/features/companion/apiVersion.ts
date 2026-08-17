@@ -5,9 +5,11 @@
 type SemVer = { major: number; minor: number; patch: number }
 
 // End-anchored so trailing garbage (e.g. "0.1.0.4", "0.1.0abc") is rejected rather than
-// silently truncated to a well-formed prefix. A real semver prerelease/build suffix
-// ("-rc.1", "+build.5") is still accepted and ignored for compatibility purposes.
-const SEMVER_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z-.]*)?$/
+// silently truncated to a well-formed prefix. Prerelease and build metadata are each
+// optional and independent per semver grammar — "-rc.1", "+build.5", and the combined
+// "-rc.1+build.5" all parse; a bare trailing "-" or "+" with no identifier does not.
+const SEMVER_PATTERN =
+  /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?$/
 
 function parseSemVer(version: string): SemVer | null {
   const match = SEMVER_PATTERN.exec(version)
