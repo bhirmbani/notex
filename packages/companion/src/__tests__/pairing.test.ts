@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { loadOrCreateToken, pairingLine } from "../pairing.ts"
@@ -89,6 +89,14 @@ describe("loadOrCreateToken", () => {
     loadOrCreateToken(checkoutPath, { rotate: true })
 
     expect(statSync(tokenPath).mode & 0o777).toBe(0o600)
+  })
+
+  it("leaves no leftover temp file behind after a rotate", () => {
+    loadOrCreateToken(checkoutPath)
+    loadOrCreateToken(checkoutPath, { rotate: true })
+
+    const dir = join(checkoutPath, ".notex")
+    expect(readdirSync(dir)).toEqual(["companion.json"])
   })
 })
 
