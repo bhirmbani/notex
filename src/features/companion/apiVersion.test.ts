@@ -42,4 +42,17 @@ describe("isApiVersionCompatible", () => {
   it("treats an unparsable companion version as incompatible", () => {
     expect(isApiVersionCompatible("not-a-version", "0.1.0")).toBe(false)
   })
+
+  it("rejects trailing garbage after a well-formed prefix rather than truncating it (0.1.0.4)", () => {
+    expect(isApiVersionCompatible("0.1.0.4", "0.1.0")).toBe(false)
+  })
+
+  it("rejects trailing garbage with no separator (0.1.0abc)", () => {
+    expect(isApiVersionCompatible("0.1.0abc", "0.1.0")).toBe(false)
+  })
+
+  it("accepts a well-formed prerelease/build suffix (real semver grammar)", () => {
+    expect(isApiVersionCompatible("0.1.0-rc.1", "0.1.0")).toBe(true)
+    expect(isApiVersionCompatible("0.1.0+build.5", "0.1.0")).toBe(true)
+  })
 })
