@@ -1,38 +1,42 @@
-import { useState } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useState } from "react"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import {
   RiAddLine,
-  RiDeleteBinLine,
-  RiQuestionLine,
-  RiLinkM,
   RiArrowRightSLine,
-} from '@remixicon/react'
+  RiDeleteBinLine,
+  RiLinkM,
+  RiQuestionLine,
+} from "@remixicon/react"
 
-import { useRepository, useUpdateRepository } from '@/features/repositories/hooks'
-import { useProject } from '@/features/projects/hooks'
+import {
+  useRepository,
+  useUpdateRepository,
+} from "@/features/repositories/hooks"
+import { useProject } from "@/features/projects/hooks"
 import {
   useContexts,
   useCreateContext,
   useDeleteContext,
-} from '@/features/contexts/hooks'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { LinkModal } from '@/components/LinkModal'
-import { Breadcrumb } from '@/components/Breadcrumb'
-import { InlineEditField } from '@/components/InlineEditField'
+} from "@/features/contexts/hooks"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { LinkModal } from "@/components/LinkModal"
+import { Breadcrumb } from "@/components/Breadcrumb"
+import { InlineEditField } from "@/components/InlineEditField"
+import { ConnectionStateChip } from "@/features/companion/ConnectionStateChip"
 
 export const Route = createFileRoute(
-  '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/',
+  "/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/"
 )({
   component: RepositoryPage,
 })
 
 function formatDate(ts: number) {
-  return new Date(ts).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  return new Date(ts).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   })
 }
 
@@ -47,7 +51,7 @@ function CreateContextModal({
   projectId: string
   onClose: () => void
 }) {
-  const [question, setQuestion] = useState('')
+  const [question, setQuestion] = useState("")
   const create = useCreateContext(organizationId, repoId)
   const navigate = useNavigate()
 
@@ -57,7 +61,7 @@ function CreateContextModal({
     const ctx = await create.mutateAsync({ question: question.trim() })
     onClose()
     navigate({
-      to: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId',
+      to: "/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId",
       params: { organizationId, projectId, repoId, ctxId: ctx.id },
     })
   }
@@ -94,7 +98,7 @@ function CreateContextModal({
               size="sm"
               disabled={create.isPending || !question.trim()}
             >
-              {create.isPending ? 'Creating...' : 'Create context'}
+              {create.isPending ? "Creating..." : "Create context"}
             </Button>
           </div>
         </form>
@@ -134,42 +138,51 @@ function RepositoryPage() {
 
       {/* Repository header */}
       <div className="mb-8 border-b pb-6">
-        {repo ? (
-          <>
-            <InlineEditField
-              as="h1"
-              value={repo.name}
-              onSave={async (name) => {
-                await updateRepo.mutateAsync({ name })
-              }}
-              ariaLabel="repository name"
-              className="text-2xl font-semibold tracking-tight"
-            />
-            {repo.description && (
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                {repo.description}
-              </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            {repo ? (
+              <>
+                <InlineEditField
+                  as="h1"
+                  value={repo.name}
+                  onSave={async (name) => {
+                    await updateRepo.mutateAsync({ name })
+                  }}
+                  ariaLabel="repository name"
+                  className="text-2xl font-semibold tracking-tight"
+                />
+                {repo.description && (
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    {repo.description}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="h-8 w-48 animate-pulse rounded bg-muted/50" />
+                <div className="mt-2 h-4 w-72 animate-pulse rounded bg-muted/40" />
+              </>
             )}
-          </>
-        ) : (
-          <>
-            <div className="h-8 w-48 animate-pulse rounded bg-muted/50" />
-            <div className="mt-2 h-4 w-72 animate-pulse rounded bg-muted/40" />
-          </>
-        )}
+          </div>
+          <ConnectionStateChip
+            organizationId={organizationId}
+            projectId={projectId}
+            repoId={repoId}
+          />
+        </div>
         <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
           <RiQuestionLine className="size-3.5 shrink-0" />
-          <span className="font-medium tabular-nums text-foreground">
+          <span className="font-medium text-foreground tabular-nums">
             {contexts?.length ?? 0}
           </span>
-          <span>{contexts?.length === 1 ? 'context' : 'contexts'}</span>
+          <span>{contexts?.length === 1 ? "context" : "contexts"}</span>
         </div>
       </div>
 
       {/* Contexts section */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          <h2 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
             Contexts
           </h2>
           <Button
@@ -218,26 +231,31 @@ function RepositoryPage() {
             {contexts?.map((ctx, i) => (
               <div
                 key={ctx.id}
-                className="group relative flex cursor-pointer items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/30 first:rounded-t-xl last:rounded-b-xl"
+                className="group relative flex cursor-pointer items-start gap-4 px-5 py-4 transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-muted/30"
                 onClick={() =>
                   navigate({
-                    to: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId',
-                    params: { organizationId, projectId, repoId, ctxId: ctx.id },
+                    to: "/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId",
+                    params: {
+                      organizationId,
+                      projectId,
+                      repoId,
+                      ctxId: ctx.id,
+                    },
                   })
                 }
               >
                 {/* Catalog index number */}
-                <span className="mt-0.5 w-5 shrink-0 select-none font-mono text-xs tabular-nums text-muted-foreground/40">
-                  {String(i + 1).padStart(2, '0')}
+                <span className="mt-0.5 w-5 shrink-0 font-mono text-xs text-muted-foreground/40 tabular-nums select-none">
+                  {String(i + 1).padStart(2, "0")}
                 </span>
 
                 {/* Question text */}
-                <p className="min-w-0 flex-1 line-clamp-2 text-sm font-medium">
+                <p className="line-clamp-2 min-w-0 flex-1 text-sm font-medium">
                   {ctx.question}
                 </p>
 
                 {/* Date */}
-                <span className="hidden shrink-0 pt-0.5 font-mono text-xs tabular-nums text-muted-foreground/50 sm:block">
+                <span className="hidden shrink-0 pt-0.5 font-mono text-xs text-muted-foreground/50 tabular-nums sm:block">
                   {formatDate(ctx.createdAt)}
                 </span>
 

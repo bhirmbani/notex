@@ -113,7 +113,10 @@ describe("resolveConnectionState — the eight states in companion-api.md §6 fi
           limits: { maxNodes: 1000, maxDepth: 3 },
         }),
     })
-    expect(result).toEqual({ state: "mismatched" })
+    expect(result).toEqual({
+      state: "mismatched",
+      checkoutPath: "/some/other/checkout",
+    })
   })
 
   it("connected — every check passes, including a matching checkoutId", async () => {
@@ -144,7 +147,7 @@ describe("resolveConnectionState — the eight states in companion-api.md §6 fi
   })
 
   it("never issues a fetch (ping) before the permission query resolves", async () => {
-    const order: string[] = []
+    const order: Array<string> = []
     let resolvePermission!: (value: { state: "granted" }) => void
     const permissionPromise = new Promise<{ state: "granted" }>((resolve) => {
       resolvePermission = resolve

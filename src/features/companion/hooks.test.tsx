@@ -2,10 +2,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { renderHook, waitFor } from "@testing-library/react"
-import type { ReactNode } from "react"
 
-import { useCompanionConnection } from "./hooks"
+import {
+  useCompanionConnection,
+  useCompanionPath,
+  useCompanionSearch,
+} from "./hooks"
 import * as connectionState from "./connectionState"
+import * as client from "./client"
+import type { ReactNode } from "react"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -60,5 +65,65 @@ describe("useCompanionConnection", () => {
 
     await waitFor(() => expect(result.current.data?.state).toBe("connected"))
     expect(resolveSpy).toHaveBeenCalledTimes(2)
+  })
+})
+
+const PAIRING = {
+  baseUrl: "http://127.0.0.1:7717",
+  token: "tok",
+  checkoutId: "c1",
+}
+
+describe("useCompanionSearch", () => {
+  it("calls the search op with the pairing's baseUrl/token, on demand", async () => {
+    const searchSpy = vi
+      .spyOn(client, "search")
+      .mockResolvedValue({ graph: {} as never, results: [] })
+
+    const { result } = renderHook(() => useCompanionSearch(PAIRING), {
+      wrapper,
+    })
+    await result.current.mutateAsync("auth")
+
+    expect(searchSpy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token, {
+      q: "auth",
+    })
+  })
+
+  it("rejects without calling the client when there is no pairing", async () => {
+    const searchSpy = vi.spyOn(client, "search")
+    const { result } = renderHook(() => useCompanionSearch(null), { wrapper })
+
+    await expect(result.current.mutateAsync("auth")).rejects.toThrow()
+    expect(searchSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("useCompanionPath", () => {
+  it("calls the path op with the pairing's baseUrl/token, on demand", async () => {
+    const pathSpy = vi.spyOn(client, "path").mockResolvedValue({
+      graph: {} as never,
+      found: true,
+      nodes: [],
+      edges: [],
+    })
+
+    const { result } = renderHook(() => useCompanionPath(PAIRING), { wrapper })
+    await result.current.mutateAsync({ from: "a", to: "b" })
+
+    expect(pathSpy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token, {
+      from: "a",
+      to: "b",
+    })
+  })
+
+  it("rejects without calling the client when there is no pairing", async () => {
+    const pathSpy = vi.spyOn(client, "path")
+    const { result } = renderHook(() => useCompanionPath(null), { wrapper })
+
+    await expect(
+      result.current.mutateAsync({ from: "a", to: "b" })
+    ).rejects.toThrow()
+    expect(pathSpy).not.toHaveBeenCalled()
   })
 })
