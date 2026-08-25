@@ -7,6 +7,7 @@ import {
   useCompanionConnection,
   useCompanionPath,
   useCompanionSearch,
+  useDebouncedCompanionSearch,
 } from "./hooks"
 import * as connectionState from "./connectionState"
 import * as client from "./client"
@@ -125,5 +126,41 @@ describe("useCompanionPath", () => {
       result.current.mutateAsync({ from: "a", to: "b" })
     ).rejects.toThrow()
     expect(pathSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("useDebouncedCompanionSearch", () => {
+  it("debounces the search op and does not call it before the delay elapses", async () => {
+    const searchSpy = vi
+      .spyOn(client, "search")
+      .mockResolvedValue({ graph: {} as never, results: [] })
+
+    const { result } = renderHook(
+      () => useDebouncedCompanionSearch(PAIRING, 10),
+      { wrapper }
+    )
+
+    result.current.setQuery("auth")
+    expect(searchSpy).not.toHaveBeenCalled()
+
+    await waitFor(() =>
+      expect(searchSpy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token, {
+        q: "auth",
+      })
+    )
+  })
+
+  it("never searches for an empty or whitespace-only query", async () => {
+    const searchSpy = vi.spyOn(client, "search")
+
+    const { result } = renderHook(
+      () => useDebouncedCompanionSearch(PAIRING, 10),
+      { wrapper }
+    )
+
+    result.current.setQuery("   ")
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    expect(searchSpy).not.toHaveBeenCalled()
   })
 })
