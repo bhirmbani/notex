@@ -6,6 +6,7 @@ import type { ApiKeySummary } from '@/features/apikeys/types'
 import { useApiKeys, useRevokeApiKey } from '@/features/apikeys/hooks'
 import { CreateApiKeyModal } from '@/features/apikeys/CreateApiKeyModal'
 import { Button } from '@/components/ui/button'
+import { EditorSchemeSetting } from '@/components/EditorSchemeSetting'
 
 export const Route = createFileRoute('/dashboard/_layout/settings/api-keys')({
   component: ApiKeysPage,
@@ -63,6 +64,10 @@ function ApiKeysPage() {
 
   return (
     <div>
+      <div className="mb-6">
+        <EditorSchemeSetting />
+      </div>
+
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">API keys</h1>
         <Button onClick={() => setCreateOpen(true)}>Create key</Button>

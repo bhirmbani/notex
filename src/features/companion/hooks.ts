@@ -3,6 +3,7 @@
 // — react-query's own retry/refetch machinery is disabled; a caller must invoke `retry`
 // explicitly.
 
+import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { path as pathOp, search as searchOp } from "./client"
@@ -52,6 +53,29 @@ export function useCompanionSearch(pairing: PairingRecord | null) {
       return searchOp(pairing.baseUrl, pairing.token, { q })
     },
   })
+}
+
+/**
+ * Debounced `search`, shared by every graph-page surface that resolves a node by label
+ * (the free search box and each side of the `path` picker — TBR-81). One place owns the
+ * 300ms delay so the two callers can't drift out of sync.
+ */
+export function useDebouncedCompanionSearch(
+  pairing: PairingRecord | null,
+  delayMs = 300
+) {
+  const [query, setQuery] = useState("")
+  const search = useCompanionSearch(pairing)
+  const { mutate: runSearch } = search
+
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (!trimmed) return
+    const timer = setTimeout(() => runSearch(trimmed), delayMs)
+    return () => clearTimeout(timer)
+  }, [query, runSearch, delayMs])
+
+  return { query, setQuery, search }
 }
 
 /** The graph page's `path` picker (companion-api.md §4.5) — graph page only (graph-gui.md §4.2). */

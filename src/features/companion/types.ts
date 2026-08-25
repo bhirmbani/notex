@@ -22,3 +22,9 @@ export type PairingRecord = {
   token: string
   checkoutId: string
 }
+
+/** A node picked from search results, carrying only what the path picker needs (TBR-81). */
+export type ResolvedNode = {
+  id: string
+  label: string
+}

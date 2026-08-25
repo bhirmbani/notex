@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
+import { RiCloseLine, RiExternalLinkLine } from "@remixicon/react"
 
+import type { PairingRecord, ResolvedNode } from "@/features/companion/types"
 import { useProject } from "@/features/projects/hooks"
 import { useRepository } from "@/features/repositories/hooks"
 import { Breadcrumb } from "@/components/Breadcrumb"
@@ -12,11 +14,12 @@ import { ConnectionStateChip } from "@/features/companion/ConnectionStateChip"
 import {
   useCompanionConnection,
   useCompanionPath,
-  useCompanionSearch,
+  useDebouncedCompanionSearch,
 } from "@/features/companion/hooks"
 import { getPairing } from "@/features/companion/pairing"
 import { stalenessMessage } from "@/features/companion/staleness"
 import { stateNotice } from "@/features/companion/stateNotice"
+import { buildEditorLink, getStoredEditorScheme } from "@/lib/editorScheme"
 
 export const Route = createFileRoute(
   "/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/graph"
@@ -210,14 +213,27 @@ function ExploreSection({
   pairing,
   status,
 }: {
-  pairing: { baseUrl: string; token: string; checkoutId: string }
+  pairing: PairingRecord
   status: { graph: { checkoutPath: string } }
 }) {
+  const [from, setFrom] = useState<ResolvedNode | null>(null)
+  const [to, setTo] = useState<ResolvedNode | null>(null)
+
   return (
     <div className="space-y-8">
-      <SearchPanel pairing={pairing} />
-      <PathPanel pairing={pairing} />
-      <p className="sr-only">{status.graph.checkoutPath}</p>
+      <SearchPanel
+        pairing={pairing}
+        checkoutPath={status.graph.checkoutPath}
+        onUseAsFrom={setFrom}
+        onUseAsTo={setTo}
+      />
+      <PathPanel
+        pairing={pairing}
+        from={from}
+        to={to}
+        onChangeFrom={setFrom}
+        onChangeTo={setTo}
+      />
     </div>
   )
 }
@@ -229,21 +245,19 @@ function ExploreSection({
  * ticket's own AC ("search returns typeahead results") without pre-building another
  * ticket's component.
  */
-function SearchPanel({
+export function SearchPanel({
   pairing,
+  checkoutPath,
+  onUseAsFrom,
+  onUseAsTo,
 }: {
-  pairing: { baseUrl: string; token: string; checkoutId: string }
+  pairing: PairingRecord
+  checkoutPath: string
+  onUseAsFrom: (node: ResolvedNode) => void
+  onUseAsTo: (node: ResolvedNode) => void
 }) {
-  const [q, setQ] = useState("")
-  const search = useCompanionSearch(pairing)
-  const { mutate: runSearch } = search
-
-  useEffect(() => {
-    const trimmed = q.trim()
-    if (!trimmed) return
-    const timer = setTimeout(() => runSearch(trimmed), 300)
-    return () => clearTimeout(timer)
-  }, [q, runSearch])
+  const { query, setQuery, search } = useDebouncedCompanionSearch(pairing)
+  const scheme = getStoredEditorScheme()
 
   return (
     <div>
@@ -251,8 +265,8 @@ function SearchPanel({
         Search
       </h2>
       <Input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
         placeholder="Search the graph…"
         className="mb-3 text-sm"
       />
@@ -268,21 +282,134 @@ function SearchPanel({
               No matches
             </p>
           ) : (
-            search.data.results.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{r.label}</p>
-                  <p className="truncate font-mono text-xs text-muted-foreground">
-                    {r.sourceFile}:{r.sourceLocation}
-                  </p>
+            search.data.results.map((r) => {
+              const editorHref = buildEditorLink({
+                scheme,
+                checkoutPath,
+                sourceFile: r.sourceFile,
+                sourceLocation: r.sourceLocation,
+              })
+
+              return (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{r.label}</p>
+                    <p className="flex items-center gap-1 truncate font-mono text-xs text-muted-foreground">
+                      {editorHref ? (
+                        <a
+                          href={editorHref}
+                          className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
+                          aria-label={`Open ${r.sourceFile} in editor`}
+                        >
+                          {r.sourceFile}:{r.sourceLocation}
+                          <RiExternalLinkLine className="size-3 shrink-0" />
+                        </a>
+                      ) : (
+                        <>
+                          {r.sourceFile}:{r.sourceLocation}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {r.score.toFixed(1)}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      onClick={() => onUseAsFrom({ id: r.id, label: r.label })}
+                    >
+                      Use as From
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      onClick={() => onUseAsTo({ id: r.id, label: r.label })}
+                    >
+                      Use as To
+                    </Button>
+                  </div>
                 </div>
-                <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                  {r.score.toFixed(1)}
-                </span>
-              </div>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One side of the `path` picker (graph-gui.md §4.1 item 5). Resolves a node by label via
+ * `search` rather than accepting a raw id — the id the user never has (TBR-81). Once resolved
+ * it renders as a confirmed chip, not an editable text field, so "Find path" can never fire
+ * against a stale or half-typed query.
+ */
+export function NodePicker({
+  pairing,
+  label,
+  value,
+  onChange,
+}: {
+  pairing: PairingRecord
+  label: string
+  value: ResolvedNode | null
+  onChange: (node: ResolvedNode | null) => void
+}) {
+  const { query, setQuery, search } = useDebouncedCompanionSearch(pairing)
+  const { reset } = search
+
+  if (value) {
+    return (
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md border bg-muted/30 px-2.5 py-1.5 text-sm">
+        <span className="truncate font-medium">{value.label}</span>
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          aria-label={`Clear ${label}`}
+          className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+        >
+          <RiCloseLine className="size-3.5" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <Input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={`${label} node…`}
+        className="text-sm"
+        aria-label={label}
+      />
+      {query.trim() && search.data && (
+        <div className="absolute z-10 mt-1 max-h-56 w-full divide-y overflow-auto rounded-md border bg-popover shadow-md">
+          {search.data.results.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+              No matches
+            </p>
+          ) : (
+            search.data.results.map((r) => (
+              <button
+                type="button"
+                key={r.id}
+                onClick={() => {
+                  onChange({ id: r.id, label: r.label })
+                  setQuery("")
+                  reset()
+                }}
+                className="block w-full truncate px-3 py-2 text-left text-xs hover:bg-muted"
+              >
+                {r.label}
+              </button>
             ))
           )}
         </div>
@@ -291,13 +418,19 @@ function SearchPanel({
   )
 }
 
-function PathPanel({
+export function PathPanel({
   pairing,
+  from,
+  to,
+  onChangeFrom,
+  onChangeTo,
 }: {
-  pairing: { baseUrl: string; token: string; checkoutId: string }
+  pairing: PairingRecord
+  from: ResolvedNode | null
+  to: ResolvedNode | null
+  onChangeFrom: (node: ResolvedNode | null) => void
+  onChangeTo: (node: ResolvedNode | null) => void
 }) {
-  const [from, setFrom] = useState("")
-  const [to, setTo] = useState("")
   const path = useCompanionPath(pairing)
 
   return (
@@ -309,26 +442,25 @@ function PathPanel({
         className="mb-3 flex items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault()
-          if (from.trim() && to.trim())
-            path.mutate({ from: from.trim(), to: to.trim() })
+          if (from && to) path.mutate({ from: from.id, to: to.id })
         }}
       >
-        <Input
+        <NodePicker
+          pairing={pairing}
+          label="From"
           value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          placeholder="From node id"
-          className="text-sm"
+          onChange={onChangeFrom}
         />
-        <Input
+        <NodePicker
+          pairing={pairing}
+          label="To"
           value={to}
-          onChange={(e) => setTo(e.target.value)}
-          placeholder="To node id"
-          className="text-sm"
+          onChange={onChangeTo}
         />
         <Button
           type="submit"
           size="sm"
-          disabled={!from.trim() || !to.trim() || path.isPending}
+          disabled={!from || !to || path.isPending}
         >
           Find path
         </Button>
@@ -341,7 +473,9 @@ function PathPanel({
       {path.data && (
         <div className="rounded-xl border p-4 text-sm">
           {!path.data.found ? (
-            <p className="text-muted-foreground">No path found.</p>
+            <p className="text-muted-foreground">
+              No path found between these nodes.
+            </p>
           ) : (
             <ol className="space-y-1">
               {path.data.nodes.map((n, i) => (
