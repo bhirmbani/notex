@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import mermaid from 'mermaid'
 import { RiLinkM } from '@remixicon/react'
 
 import { useMermaidDiagram, useUpdateMermaid } from '@/features/mermaid/hooks'
+import { renderMermaid } from '@/features/mermaid/renderer'
 import { useProject } from '@/features/projects/hooks'
 import { LinkModal } from '@/components/LinkModal'
 import { Breadcrumb } from '@/components/Breadcrumb'
-
-mermaid.initialize({ startOnLoad: false, theme: 'default' })
 
 export const Route = createFileRoute('/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId')({
   component: MermaidPage,
@@ -59,16 +57,23 @@ function MermaidPage() {
       setSvg('')
       return
     }
+    // The first render also awaits mermaid's chunk download, so a render can now
+    // outlive the content it was started for — drop its result rather than flashing a
+    // stale diagram in.
+    let cancelled = false
     const timeout = setTimeout(async () => {
       try {
         const id = `mermaid-${diagId}-${++renderCountRef.current}`
-        const { svg: rendered } = await mermaid.render(id, content)
-        setSvg(rendered)
+        const rendered = await renderMermaid(id, content)
+        if (!cancelled) setSvg(rendered)
       } catch {
         // invalid mermaid — keep last valid render
       }
     }, 500)
-    return () => clearTimeout(timeout)
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+    }
   }, [content, diagId])
 
   if (isLoading) {
