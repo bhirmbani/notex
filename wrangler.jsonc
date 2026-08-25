@@ -14,4 +14,28 @@
       "remote": false,
     },
   ],
+  "env": {
+    "dev": {
+      "name": "notex-dev",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "notex-dev",
+          "database_id": "37577637-6061-4d92-8731-8b9d021c0a51",
+          "remote": false,
+        },
+      ],
+    },
+    "production": {
+      "name": "notex",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "notex",
+          "database_id": "85b25fb8-aa70-46ce-9290-ea414288e99b",
+          "remote": false,
+        },
+      ],
+    },
+  },
 }
