@@ -1,6 +1,7 @@
 // The typed Notex-side client for the companion's five ops plus `ping` (companion-api.md
-// §1, §4). Op request/result types are imported from `notex-companion` — never restated
-// (packages/companion is the single shared module both this client and the MCP host bind).
+// §1, §4). Op request/result types are imported from `notex-companion/client` — never
+// restated — and never from the package root, whose barrel pulls in Node-only fs/CLI code
+// that fails to bundle for the browser (TBR-73).
 
 import type {
   ErrorResponse,
@@ -14,7 +15,7 @@ import type {
   SearchRequest,
   SearchResult,
   StatusResult,
-} from "notex-companion"
+} from "notex-companion/client"
 
 export type PingResult = { ok: true; apiVersion: string }
 

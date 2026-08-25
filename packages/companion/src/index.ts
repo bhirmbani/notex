@@ -1,7 +1,9 @@
-// Public library surface. The shared op types/functions ADR-0005 exists to let TBR-68's
-// browser client and TBR-69's MCP server import rather than restate — this barrel is that
-// single import boundary (companion-api.md §1: "each op is defined once as a typed
-// request/response pair in a shared module").
+// Public library surface for Node consumers (the CLI, TBR-69's MCP host). TBR-68's browser
+// client must import from the `notex-companion/client` subpath (client.ts) instead — this
+// barrel additionally exports graph.ts/serve.ts/http.ts, which pull in Node-only fs/net
+// code that fails to bundle for the browser (TBR-73). The shared op types/functions
+// ADR-0005 exists to let both entry points import rather than restate (companion-api.md
+// §1: "each op is defined once as a typed request/response pair in a shared module").
 
 export * from "./types.ts"
 export * from "./ops.ts"
