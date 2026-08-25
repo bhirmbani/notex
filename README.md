@@ -20,6 +20,12 @@ To use the components in your app, import them as follows:
 import { Button } from "@/components/ui/button";
 ```
 
+## Testing
+
+Most of the suite is `bun run test` (Vitest). One flow can't be covered there:
+
+- [Manual test: the connect-companion flow on a deployed origin](docs/testing/companion-connect-flow.md) — the Local Network Access permission prompt never fires from `localhost`, so the companion's grant/deny paths have to be verified by hand against a deployed `https://` origin.
+
 ## Database (D1)
 
 This project uses Cloudflare D1 via Drizzle ORM. Schema lives in `src/db/schema.ts`, migrations in `./migrations`.
