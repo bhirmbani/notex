@@ -1,0 +1,25 @@
+// Standalone dev-environment config, used only via explicit `--config` (dev:cf,
+// db:migrate:dev). Never read by Nitro's build (which only ever discovers
+// `wrangler.jsonc`/`wrangler.json`/`wrangler.toml` by name) — kept as a separate flat
+// file, not a wrangler.jsonc `env` block, because Wrangler rejects `env` blocks in the
+// auto-generated "redirected configuration" `bun run build` produces at
+// `.output/server/wrangler.json` for `deploy`/`deploy:dev` (see vite.config.ts's
+// NOTEX_DEPLOY_ENV-driven override for how those two get their dev-vs-prod split
+// instead).
+{
+  "name": "notex-dev",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2024-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".output/public",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "notex-dev",
+      "database_id": "37577637-6061-4d92-8731-8b9d021c0a51",
+      "remote": false,
+    },
+  ],
+}
