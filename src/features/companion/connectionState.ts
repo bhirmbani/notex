@@ -5,7 +5,6 @@
 // under WebKit's LNA implementation work.
 
 import { API_VERSION } from "notex-companion/client"
-import type { OpResponse, StatusResult } from "notex-companion/client"
 
 import { isApiVersionCompatible } from "./apiVersion"
 import { computeCheckoutId } from "./checkoutId"
@@ -13,15 +12,17 @@ import {
   CompanionRequestError,
   fetchStatus as defaultFetchStatus,
   ping as defaultPing,
-  type PingResult,
 } from "./client"
 import { getPairing as defaultGetPairing } from "./pairing"
+import type { PingResult } from "./client"
+import type { OpResponse, StatusResult } from "notex-companion/client"
 import type { ConnectionState, PairingRecord } from "./types"
 
 type PermissionQueryResult = "granted" | "denied" | "prompt"
 
 export type ConnectionResult =
-  | { state: Exclude<ConnectionState, "connected"> }
+  | { state: Exclude<ConnectionState, "connected" | "mismatched"> }
+  | { state: "mismatched"; checkoutPath: string }
   | {
       state: "connected"
       pairing: PairingRecord
@@ -94,7 +95,8 @@ export async function resolveConnectionState(
 
   // 8. mismatched
   const reportedCheckoutId = computeCheckoutId(status.graph.checkoutPath)
-  if (reportedCheckoutId !== pairing.checkoutId) return { state: "mismatched" }
+  if (reportedCheckoutId !== pairing.checkoutId)
+    return { state: "mismatched", checkoutPath: status.graph.checkoutPath }
 
   return { state: "connected", pairing, status }
 }

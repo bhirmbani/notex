@@ -25,6 +25,7 @@ import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteImport } f
 import { Route as DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/notes/$noteId'
 import { Route as DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId'
 import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/index'
+import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/graph'
 import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
 import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/index'
 import { Route as DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRouteImport } from './routes/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
@@ -119,6 +120,12 @@ const DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute =
     path: '/',
     getParentRoute: () => DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute,
   } as any)
+const DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRoute =
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRouteImport.update({
+    id: '/graph',
+    path: '/graph',
+    getParentRoute: () => DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute,
+  } as any)
 const DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute =
   DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteImport.update({
     id: '/c/$ctxId',
@@ -158,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId': typeof DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute
   '/dashboard/o/$organizationId/p/$projectId/notes/$noteId': typeof DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute
   '/dashboard/o/$organizationId/p/$projectId/r/$repoId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteWithChildren
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId/graph': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRoute
   '/dashboard/o/$organizationId/p/$projectId/r/$repoId/': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute
   '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteWithChildren
   '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute
@@ -177,6 +185,7 @@ export interface FileRoutesByTo {
   '/dashboard/o/$organizationId/p/$projectId': typeof DashboardLayoutOOrganizationIdPProjectIdIndexRoute
   '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId': typeof DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute
   '/dashboard/o/$organizationId/p/$projectId/notes/$noteId': typeof DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute
+  '/dashboard/o/$organizationId/p/$projectId/r/$repoId/graph': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRoute
   '/dashboard/o/$organizationId/p/$projectId/r/$repoId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute
   '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute
   '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdFFileIdRoute
@@ -198,6 +207,7 @@ export interface FileRoutesById {
   '/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId': typeof DashboardLayoutOOrganizationIdPProjectIdMermaidDiagIdRoute
   '/dashboard/_layout/o/$organizationId/p/$projectId/notes/$noteId': typeof DashboardLayoutOOrganizationIdPProjectIdNotesNoteIdRoute
   '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteWithChildren
+  '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/graph': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRoute
   '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute
   '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteWithChildren
   '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/': typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdIndexRoute
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId'
     | '/dashboard/o/$organizationId/p/$projectId/notes/$noteId'
     | '/dashboard/o/$organizationId/p/$projectId/r/$repoId'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/graph'
     | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/'
     | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
     | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/dashboard/o/$organizationId/p/$projectId'
     | '/dashboard/o/$organizationId/p/$projectId/mermaid/$diagId'
     | '/dashboard/o/$organizationId/p/$projectId/notes/$noteId'
+    | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/graph'
     | '/dashboard/o/$organizationId/p/$projectId/r/$repoId'
     | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
     | '/dashboard/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId'
@@ -260,6 +272,7 @@ export interface FileRouteTypes {
     | '/dashboard/_layout/o/$organizationId/p/$projectId/mermaid/$diagId'
     | '/dashboard/_layout/o/$organizationId/p/$projectId/notes/$noteId'
     | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId'
+    | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/graph'
     | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/'
     | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
     | '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/'
@@ -388,6 +401,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRouteImport
       parentRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute
     }
+    '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/graph': {
+      id: '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/graph'
+      path: '/graph'
+      fullPath: '/dashboard/o/$organizationId/p/$projectId/r/$repoId/graph'
+      preLoaderRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRouteImport
+      parentRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdRoute
+    }
     '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId': {
       id: '/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId'
       path: '/c/$ctxId'
@@ -431,12 +451,15 @@ const DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteWithChildren =
   )
 
 interface DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteChildren {
+  DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRoute
   DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute
   DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute: typeof DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRouteWithChildren
 }
 
 const DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteChildren: DashboardLayoutOOrganizationIdPProjectIdRRepoIdRouteChildren =
   {
+    DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRoute:
+      DashboardLayoutOOrganizationIdPProjectIdRRepoIdGraphRoute,
     DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute:
       DashboardLayoutOOrganizationIdPProjectIdRRepoIdIndexRoute,
     DashboardLayoutOOrganizationIdPProjectIdRRepoIdCCtxIdRoute:
