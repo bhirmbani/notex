@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { path as pathOp, search as searchOp } from "./client"
 import { resolveConnectionState } from "./connectionState"
 import type { ResolveConnectionStateDeps } from "./connectionState"
-import type { PathRequest } from "notex-companion"
+import type { PathRequest } from "notex-companion/client"
 import type { PairingRecord } from "./types"
 
 export const companionConnectionKeys = {

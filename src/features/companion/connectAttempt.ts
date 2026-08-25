@@ -6,7 +6,7 @@
 // a dead server, and so the "Confirm this checkout" preview can never be shown for a
 // companion the client already knows it can't speak to.
 
-import { API_VERSION } from "notex-companion"
+import { API_VERSION } from "notex-companion/client"
 
 import { isApiVersionCompatible } from "./apiVersion"
 import {
@@ -15,7 +15,7 @@ import {
   ping as defaultPing,
 } from "./client"
 import { classifyConnectFailure as defaultClassifyConnectFailure } from "./connectFailure"
-import type { OpResponse, StatusResult } from "notex-companion"
+import type { OpResponse, StatusResult } from "notex-companion/client"
 import type { ConnectFailureState } from "./connectFailure"
 
 export type ConnectAttemptFailure =

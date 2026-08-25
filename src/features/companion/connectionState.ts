@@ -4,7 +4,7 @@
 // every connect attempt — never cache the result, since Safari/Brave support is shifting
 // under WebKit's LNA implementation work.
 
-import { API_VERSION } from "notex-companion"
+import { API_VERSION } from "notex-companion/client"
 
 import { isApiVersionCompatible } from "./apiVersion"
 import { computeCheckoutId } from "./checkoutId"
@@ -15,7 +15,7 @@ import {
 } from "./client"
 import { getPairing as defaultGetPairing } from "./pairing"
 import type { PingResult } from "./client"
-import type { OpResponse, StatusResult } from "notex-companion"
+import type { OpResponse, StatusResult } from "notex-companion/client"
 import type { ConnectionState, PairingRecord } from "./types"
 
 type PermissionQueryResult = "granted" | "denied" | "prompt"
