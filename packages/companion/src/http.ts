@@ -4,19 +4,21 @@
 
 import { timingSafeEqual } from "node:crypto"
 import { corsHeaders, preflightHeaders } from "./cors.ts"
-import type { GraphIndex } from "./graph.ts"
 import {
   API_VERSION,
+  
+  
+  
   node,
   path,
   query,
   search,
-  status,
-  type PathRequest,
-  type QueryRequest,
-  type SearchRequest,
+  status
 } from "./ops.ts"
-import { ERROR_CODES, OpError, type ErrorCode, type ErrorResponse } from "./types.ts"
+import { ERROR_CODES,   OpError } from "./types.ts"
+import type { PathRequest, QueryRequest, SearchRequest } from "./ops.ts"
+import type { ErrorCode, ErrorResponse } from "./types.ts"
+import type { GraphIndex } from "./graph.ts"
 
 /**
  * The graph is loaded once into memory (companion-api.md §3); `loading` covers the window
@@ -26,7 +28,7 @@ export type GraphState = { kind: "loading" } | { kind: "ready"; index: GraphInde
 
 export type HandlerOptions = {
   token: string
-  origins: string[]
+  origins: Array<string>
   getGraphState: () => GraphState
 }
 
@@ -142,7 +144,7 @@ function optionalCount(body: Record<string, unknown>, key: string): number | und
   return v
 }
 
-function optionalStringArray(body: Record<string, unknown>, key: string): string[] | undefined {
+function optionalStringArray(body: Record<string, unknown>, key: string): Array<string> | undefined {
   const v = body[key]
   if (v === undefined) return undefined
   if (!Array.isArray(v) || !v.every((x) => typeof x === "string")) {

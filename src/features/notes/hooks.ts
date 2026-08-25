@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Note, CreateNoteInput, UpdateNoteInput } from './types'
+import type { CreateNoteInput, Note, UpdateNoteInput } from './types'
 
 function orgBase(organizationId: string) {
   return `/api/v1/organizations/${organizationId}`
@@ -20,7 +20,7 @@ export const noteKeys = {
 export function useNotes(organizationId: string, projectId: string) {
   return useQuery({
     queryKey: noteKeys.lists(projectId),
-    queryFn: () => fetchJson<Note[]>(`${orgBase(organizationId)}/projects/${projectId}/notes`),
+    queryFn: () => fetchJson<Array<Note>>(`${orgBase(organizationId)}/projects/${projectId}/notes`),
   })
 }
 

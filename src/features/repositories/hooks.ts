@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Repository, CreateRepositoryInput, UpdateRepositoryInput } from './types'
+import type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from './types'
 
 function orgBase(organizationId: string) {
   return `/api/v1/organizations/${organizationId}`
@@ -21,7 +21,7 @@ export function useRepositories(organizationId: string, projectId: string) {
   return useQuery({
     queryKey: repositoryKeys.lists(projectId),
     queryFn: () =>
-      fetchJson<Repository[]>(`${orgBase(organizationId)}/projects/${projectId}/repositories`),
+      fetchJson<Array<Repository>>(`${orgBase(organizationId)}/projects/${projectId}/repositories`),
   })
 }
 

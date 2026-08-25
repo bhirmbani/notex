@@ -9,8 +9,10 @@ import { createHash } from "node:crypto"
 import { execSync } from "node:child_process"
 import { readFileSync, statSync } from "node:fs"
 import { resolve } from "node:path"
-import { shatter, type ScoreIndexEntry } from "./scoring.ts"
-import { OpError, type GraphEdge, type GraphNode, type GraphStamp } from "./types.ts"
+import { shatter } from "./scoring.ts"
+import { OpError } from "./types.ts"
+import type { ScoreIndexEntry } from "./scoring.ts"
+import type { GraphEdge, GraphNode, GraphStamp } from "./types.ts"
 
 type RawNode = {
   id: string
@@ -35,8 +37,8 @@ type RawEdge = {
 
 type RawGraphDoc = {
   directed: boolean
-  nodes: RawNode[]
-  links: RawEdge[]
+  nodes: Array<RawNode>
+  links: Array<RawEdge>
 }
 
 export type AdjacencyEntry = { other: string; edge: RawEdge }
@@ -44,10 +46,10 @@ export type AdjacencyEntry = { other: string; edge: RawEdge }
 export type GraphIndex = {
   stamp: GraphStamp
   nodesById: Map<string, RawNode>
-  edges: RawEdge[]
+  edges: Array<RawEdge>
   /** Undirected — the graph is `"directed": false` (companion-api.md §2.2). */
-  adjacency: Map<string, AdjacencyEntry[]>
-  scoreIndex: ScoreIndexEntry[]
+  adjacency: Map<string, Array<AdjacencyEntry>>
+  scoreIndex: Array<ScoreIndexEntry>
   project: (n: RawNode) => GraphNode
   projectEdge: (e: RawEdge) => GraphEdge
 }
@@ -115,7 +117,7 @@ export function loadGraph(checkoutPath: string): GraphIndex {
 
   const nodesById = new Map(doc.nodes.map((n) => [n.id, n]))
 
-  const adjacency = new Map<string, AdjacencyEntry[]>()
+  const adjacency = new Map<string, Array<AdjacencyEntry>>()
   for (const e of doc.links) {
     if (!adjacency.has(e.source)) adjacency.set(e.source, [])
     if (!adjacency.has(e.target)) adjacency.set(e.target, [])
@@ -123,10 +125,10 @@ export function loadGraph(checkoutPath: string): GraphIndex {
     adjacency.get(e.target)!.push({ other: e.source, edge: e })
   }
 
-  const scoreIndex: ScoreIndexEntry[] = doc.nodes.map((n) => ({
+  const scoreIndex: Array<ScoreIndexEntry> = doc.nodes.map((n) => ({
     id: n.id,
     labelTokens: new Set([...shatter(n.label), ...shatter(n.norm_label ?? "")]),
-    pathTokens: new Set(shatter(n.source_file ?? "")),
+    pathTokens: new Set(shatter(n.source_file)),
     labelLower: String(n.label).toLowerCase(),
   }))
 

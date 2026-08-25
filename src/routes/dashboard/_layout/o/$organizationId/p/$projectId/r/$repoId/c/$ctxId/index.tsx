@@ -1,19 +1,19 @@
 import { useState } from "react"
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import {
   RiAddLine,
   RiDeleteBinLine,
   RiFileLine,
-  RiUploadLine,
   RiLinkM,
+  RiUploadLine,
 } from "@remixicon/react"
 
+import type { File as KbFile } from "@/features/files/types"
 import { useContext, useUpdateContext } from "@/features/contexts/hooks"
 import { useRepository } from "@/features/repositories/hooks"
 import { useProject } from "@/features/projects/hooks"
-import { useFiles, useDeleteFile } from "@/features/files/hooks"
+import { useDeleteFile, useFiles } from "@/features/files/hooks"
 import { AddFileModal } from "@/features/files/AddFileModal"
-import type { File as KbFile } from "@/features/files/types"
 import { Button } from "@/components/ui/button"
 import { LinkModal } from "@/components/LinkModal"
 import { Breadcrumb } from "@/components/Breadcrumb"

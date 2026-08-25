@@ -2,8 +2,9 @@ import {
   createStartHandler,
   defaultStreamHandler,
 } from '@tanstack/react-start/server'
+import type { AuthBindings } from '@/features/auth/lib/server'
 import { api } from '@/api'
-import { createAuth, type AuthBindings } from '@/features/auth/lib/server'
+import { createAuth } from '@/features/auth/lib/server'
 
 export type RouteTarget = 'hono-api' | 'auth' | 'ssr'
 

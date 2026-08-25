@@ -1,12 +1,12 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 
-import { getDb, schema } from '@/db'
+import { createOrganizationWithAdmin } from './service'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
 import { checkOrganizationMembership } from '@/api/ownership'
-import { createOrganizationWithAdmin } from './service'
 
 export const organizationsApi = new Hono<ApiAuthEnv>()
 

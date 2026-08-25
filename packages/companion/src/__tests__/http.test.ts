@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test"
-import { createHandler, type GraphState } from "../http.ts"
+import { createHandler } from "../http.ts"
 import { loadGraph } from "../graph.ts"
 import { API_VERSION } from "../ops.ts"
 import { OpError } from "../types.ts"
 import { FIXTURE_ROOT } from "./fixtures/setup.ts"
+import type { GraphState } from "../http.ts"
 
 const index = loadGraph(FIXTURE_ROOT)
 const TOKEN = "test-token-abc123"

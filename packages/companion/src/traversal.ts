@@ -6,24 +6,24 @@
 import type { Truncated } from "./types.ts"
 
 export type TraversalEdge = { source: string; target: string; weight: number }
-export type AdjacencyMap<E> = Map<string, Array<{ other: string; edge: E }>>
+export type AdjacencyMap<TEdge> = Map<string, Array<{ other: string; edge: TEdge }>>
 
-export type TraversalResult<E> = {
-  nodeIds: string[]
-  edges: E[]
+export type TraversalResult<TEdge> = {
+  nodeIds: Array<string>
+  edges: Array<TEdge>
   truncated: Truncated | null
 }
 
-export function traverse<E extends TraversalEdge>(
-  adjacency: AdjacencyMap<E>,
-  allEdges: E[],
-  seedIds: string[],
+export function traverse<TEdge extends TraversalEdge>(
+  adjacency: AdjacencyMap<TEdge>,
+  allEdges: Array<TEdge>,
+  seedIds: Array<string>,
   depth: number,
   maxNodes: number,
-): TraversalResult<E> {
+): TraversalResult<TEdge> {
   const kept = new Set<string>()
   const overflow = new Set<string>()
-  let frontier: string[] = []
+  let frontier: Array<string> = []
 
   for (const s of seedIds) {
     if (kept.size < maxNodes) {
@@ -40,12 +40,12 @@ export function traverse<E extends TraversalEdge>(
     const candidates: Array<{ other: string; weight: number }> = []
     for (const id of frontier) {
       for (const { other, edge } of adjacency.get(id) ?? []) {
-        if (!kept.has(other)) candidates.push({ other, weight: edge.weight ?? 1 })
+        if (!kept.has(other)) candidates.push({ other, weight: edge.weight })
       }
     }
     candidates.sort((a, b) => b.weight - a.weight)
 
-    const next: string[] = []
+    const next: Array<string> = []
     for (const c of candidates) {
       if (kept.has(c.other)) continue
       if (kept.size >= maxNodes) {

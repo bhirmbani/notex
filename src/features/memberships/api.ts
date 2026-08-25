@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
 
-import { getDb } from '@/db'
+import { listMemberships, removeMembership, updateMembershipRole } from './service'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { getDb } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import { badRequestResponse, conflictResponse, notFoundResponse } from '@/api/validation'
 import { checkOrganizationMembership } from '@/api/ownership'
-import { listMemberships, removeMembership, updateMembershipRole } from './service'
 
 export const membershipsApi = new Hono<ApiAuthEnv>()
 

@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import {
-  RiDeleteBinLine,
-  RiLinkM,
-  RiFileLine,
-  RiUploadLine,
   RiAddLine,
+  RiDeleteBinLine,
+  RiFileLine,
+  RiLinkM,
   RiPencilLine,
+  RiUploadLine,
 } from "@remixicon/react"
 
-import { useFile, useDeleteFile, useUpdateFile } from "@/features/files/hooks"
+import { useDeleteFile, useFile, useUpdateFile } from "@/features/files/hooks"
 import { useContext } from "@/features/contexts/hooks"
 import { useRepository } from "@/features/repositories/hooks"
 import { useProject } from "@/features/projects/hooks"

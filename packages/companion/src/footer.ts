@@ -16,7 +16,7 @@ function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
-export function buildFooter(stamp: GraphStamp, sources: FooterSource[], opts: BuildFooterOptions = {}): string {
+export function buildFooter(stamp: GraphStamp, sources: Array<FooterSource>, opts: BuildFooterOptions = {}): string {
   const draftDate = opts.draftDate ?? isoDate(new Date())
   const builtDate = stamp.builtAt.slice(0, 10)
 
@@ -24,7 +24,7 @@ export function buildFooter(stamp: GraphStamp, sources: FooterSource[], opts: Bu
     ? `Graph built ${builtDate} (${stamp.graphHash}) at commit ${stamp.headSha.slice(0, 7)}.`
     : `Graph built ${builtDate} (${stamp.graphHash}).`
 
-  const noteClauses: string[] = []
+  const noteClauses: Array<string> = []
   if (opts.truncated) {
     noteClauses.push(`Retrieval was truncated (${opts.truncated.reason}); some related code may be missing.`)
   }

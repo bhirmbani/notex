@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { RiAddLine, RiArrowDownSLine, RiCheckLine } from '@remixicon/react'
 
-import { useOrganizations, useCreateOrganization } from '@/features/organizations/hooks'
+import { useCreateOrganization, useOrganizations } from '@/features/organizations/hooks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

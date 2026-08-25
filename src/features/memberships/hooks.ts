@@ -23,7 +23,7 @@ export const membershipKeys = {
 export function useMemberships(organizationId: string) {
   return useQuery({
     queryKey: membershipKeys.list(organizationId),
-    queryFn: () => fetchJson<Membership[]>(orgBase(organizationId)),
+    queryFn: () => fetchJson<Array<Membership>>(orgBase(organizationId)),
     enabled: !!organizationId,
   })
 }

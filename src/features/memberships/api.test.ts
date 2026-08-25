@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Hono } from 'hono'
 
-vi.mock('@/db', async () => {
-  const actual = await vi.importActual<typeof import('@/db')>('@/db')
-  return { ...actual, getDb: vi.fn() }
-})
-
-import { getDb } from '@/db'
 import { membershipsApi } from './api'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import type * as DbModule from '@/db'
+import { getDb } from '@/db'
+
+vi.mock('@/db', async () => {
+  const actual = await vi.importActual<typeof DbModule>('@/db')
+  return { ...actual, getDb: vi.fn() }
+})
 
 function appWithAuth(userId = 'user-1') {
   const app = new Hono<ApiAuthEnv>()
@@ -26,8 +27,8 @@ function mockDb({
   updateSet,
   deleteWhere,
 }: {
-  membershipLookups?: unknown[][]
-  listRows?: unknown[]
+  membershipLookups?: Array<Array<unknown>>
+  listRows?: Array<unknown>
   updateSet?: ReturnType<typeof vi.fn>
   deleteWhere?: ReturnType<typeof vi.fn>
 }) {
@@ -72,7 +73,7 @@ describe('GET /organizations/:organizationId/memberships', () => {
     const res = await app.request('/organizations/org-1/memberships', {}, {})
 
     expect(res.status).toBe(200)
-    const json = (await res.json()) as unknown[]
+    const json = (await res.json()) as Array<unknown>
     expect(json).toHaveLength(1)
   })
 })

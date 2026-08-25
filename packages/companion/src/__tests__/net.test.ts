@@ -3,8 +3,8 @@
 // runtime: "node") even though the suite itself runs under `bun test`, since Bun also
 // implements `node:http` and the whole point is that this path never touches Bun.* APIs.
 
-import { describe, expect, it } from "bun:test"
 import { connect } from "node:net"
+import { describe, expect, it } from "bun:test"
 import { startServer } from "../net.ts"
 
 function echoHandler(): (req: Request) => Promise<Response> {

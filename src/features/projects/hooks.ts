@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Project, CreateProjectInput, UpdateProjectInput } from './types'
+import type { CreateProjectInput, Project, UpdateProjectInput } from './types'
 
 function orgBase(organizationId: string) {
   return `/api/v1/organizations/${organizationId}/projects`
@@ -21,7 +21,7 @@ export const projectKeys = {
 export function useProjects(organizationId: string) {
   return useQuery({
     queryKey: projectKeys.lists(organizationId),
-    queryFn: () => fetchJson<Project[]>(orgBase(organizationId)),
+    queryFn: () => fetchJson<Array<Project>>(orgBase(organizationId)),
     enabled: !!organizationId,
   })
 }

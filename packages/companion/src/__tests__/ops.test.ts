@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs"
-import { describe, expect, it } from "bun:test"
 import { resolve } from "node:path"
+import { describe, expect, it } from "bun:test"
 import { loadGraph } from "../graph.ts"
 import { node, path, query, search, status } from "../ops.ts"
 import { OpError } from "../types.ts"
@@ -22,8 +22,8 @@ describe("status", () => {
 describe("search", () => {
   it("returns scored results", () => {
     const res = search(index, { q: "authLogin" })
-    expect(res.results[0].id).toBe("auth_login")
-    expect(res.results[0].score).toBeGreaterThan(0)
+    expect(res.results[0]!.id).toBe("auth_login")
+    expect(res.results[0]!.score).toBeGreaterThan(0)
   })
 
   it("respects limit and caps it at 100", () => {

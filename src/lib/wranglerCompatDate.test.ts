@@ -16,8 +16,9 @@ const CONFIGS = ['wrangler.jsonc', 'wrangler.dev.jsonc']
 function readCompatibilityDate(file: string): string {
   const source = readFileSync(resolve(process.cwd(), file), 'utf8')
   const match = source.match(/"compatibility_date"\s*:\s*"([^"]+)"/)
-  if (!match) throw new Error(`${file} has no compatibility_date`)
-  return match[1]
+  const date = match?.[1]
+  if (!date) throw new Error(`${file} has no compatibility_date`)
+  return date
 }
 
 describe('wrangler compatibility_date', () => {

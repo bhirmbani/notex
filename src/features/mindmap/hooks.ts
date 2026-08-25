@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { GraphData, EntityLink, CreateLinkInput } from './types'
+import type { CreateLinkInput, EntityLink, GraphData } from './types'
 
 function orgBase(organizationId: string) {
   return `/api/v1/organizations/${organizationId}`

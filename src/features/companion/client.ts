@@ -75,10 +75,12 @@ export async function ping(baseUrl: string): Promise<PingResult> {
 async function authedOp<T>(
   baseUrl: string,
   token: string,
-  path: string,
+  // Named `route` rather than `path`: this module also exports a `path()` op,
+  // and the parameter shadowed it.
+  route: string,
   init?: RequestInit
 ): Promise<OpResponse<T>> {
-  const res = await companionFetch(`${baseUrl}${path}`, token, init)
+  const res = await companionFetch(`${baseUrl}${route}`, token, init)
   if (!res.ok) throw await errorFromResponse(res)
   return res.json() as Promise<OpResponse<T>>
 }

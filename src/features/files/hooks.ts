@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { File, CreateFileInput, UpdateFileInput } from './types'
+import type { CreateFileInput, File, UpdateFileInput } from './types'
 
 function orgBase(organizationId: string) {
   return `/api/v1/organizations/${organizationId}`
@@ -21,7 +21,7 @@ export function useFiles(organizationId: string, contextId: string) {
   return useQuery({
     queryKey: fileKeys.lists(contextId),
     queryFn: () =>
-      fetchJson<File[]>(`${orgBase(organizationId)}/contexts/${contextId}/files`),
+      fetchJson<Array<File>>(`${orgBase(organizationId)}/contexts/${contextId}/files`),
   })
 }
 

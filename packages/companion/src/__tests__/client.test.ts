@@ -39,7 +39,7 @@ function collectValueImportGraph(entry: string): {
 
     const source = readFileSync(file, "utf8")
     for (const match of source.matchAll(FROM_STATEMENT)) {
-      const [, , clause, specifier] = match
+      const [, , clause = "", specifier = ""] = match
       if (isTypeOnly(clause)) continue
 
       if (specifier.startsWith(".")) {

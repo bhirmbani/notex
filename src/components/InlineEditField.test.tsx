@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach } from 'vitest'
 
 import { InlineEditField } from './InlineEditField'
 
@@ -20,7 +19,7 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.change(input, { target: { value: '  New Name  ' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -32,7 +31,7 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.change(input, { target: { value: 'Blurred Name' } })
     fireEvent.blur(input)
 
@@ -44,7 +43,7 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.change(input, { target: { value: 'Discarded Name' } })
     fireEvent.keyDown(input, { key: 'Escape' })
 
@@ -58,7 +57,7 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.change(input, { target: { value: '   ' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -70,7 +69,7 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.keyDown(input, { key: 'Enter' })
 
     expect(onSave).not.toHaveBeenCalled()
@@ -87,7 +86,7 @@ describe('InlineEditField', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
 
     expect(input.className).toContain('text-2xl')
     expect(input.className).toContain('font-semibold')
@@ -98,7 +97,7 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.change(input, { target: { value: 'New Name' } })
     await act(async () => {
       fireEvent.keyDown(input, { key: 'Enter' })
@@ -107,7 +106,7 @@ describe('InlineEditField', () => {
 
     expect(onSave).toHaveBeenCalledWith('New Name')
     expect(screen.getByRole('alert').textContent).toMatch(/could not save/i)
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('New Name')
+    expect(screen.getByRole<HTMLInputElement>('textbox').value).toBe('New Name')
   })
 
   it('clears the error and exits edit mode once a retry succeeds', async () => {
@@ -115,7 +114,7 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.change(input, { target: { value: 'New Name' } })
     await act(async () => {
       fireEvent.keyDown(input, { key: 'Enter' })
@@ -138,7 +137,7 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.change(input, { target: { value: 'New Name' } })
     await act(async () => {
       fireEvent.keyDown(input, { key: 'Enter' })
@@ -163,7 +162,7 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.change(input, { target: { value: 'New Name' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     fireEvent.blur(screen.getByRole('textbox'))
@@ -187,13 +186,13 @@ describe('InlineEditField', () => {
     render(<InlineEditField value="Auth System" onSave={onSave} ariaLabel="project name" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit project name' }))
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole('textbox')
     fireEvent.change(input, { target: { value: 'New Name' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' })
 
     expect(screen.getByRole('textbox')).toBeTruthy()
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('New Name')
+    expect(screen.getByRole<HTMLInputElement>('textbox').value).toBe('New Name')
 
     await act(async () => {
       resolveSave()

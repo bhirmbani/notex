@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { MermaidDiagram, CreateMermaidInput, UpdateMermaidInput } from './types'
+import type { CreateMermaidInput, MermaidDiagram, UpdateMermaidInput } from './types'
 
 function orgBase(organizationId: string) {
   return `/api/v1/organizations/${organizationId}`
@@ -20,7 +20,7 @@ export const mermaidKeys = {
 export function useMermaidDiagrams(organizationId: string, projectId: string) {
   return useQuery({
     queryKey: mermaidKeys.lists(projectId),
-    queryFn: () => fetchJson<MermaidDiagram[]>(`${orgBase(organizationId)}/projects/${projectId}/mermaid`),
+    queryFn: () => fetchJson<Array<MermaidDiagram>>(`${orgBase(organizationId)}/projects/${projectId}/mermaid`),
   })
 }
 

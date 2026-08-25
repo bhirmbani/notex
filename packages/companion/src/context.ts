@@ -12,17 +12,17 @@ export type BuildContextOptions = {
 export function buildContext(
   question: string,
   stamp: GraphStamp,
-  nodes: GraphNode[],
-  edges: GraphEdge[],
+  nodes: Array<GraphNode>,
+  edges: Array<GraphEdge>,
   opts: BuildContextOptions = {},
 ): string {
-  const lines: string[] = []
+  const lines: Array<string> = []
   const builtDate = stamp.builtAt.slice(0, 10)
 
   lines.push(`# ${question}`, "")
   lines.push(`built ${builtDate} · ${nodes.length} nodes`, "")
 
-  const groups = new Map<string, GraphNode[]>()
+  const groups = new Map<string, Array<GraphNode>>()
   for (const n of nodes) {
     const key = n.community?.name ? n.community.name : "Ungrouped"
     if (!groups.has(key)) groups.set(key, [])

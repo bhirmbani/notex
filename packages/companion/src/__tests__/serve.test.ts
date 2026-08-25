@@ -1,13 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { mkdtempSync, rmSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { serve } from "../serve.ts"
 
 const FIXTURE_ROOT = resolve(import.meta.dir, "fixtures/sample-checkout")
 
 let checkoutPath: string
-let handle: ReturnType<typeof serve>
+// `| undefined` because afterEach can run before a test assigns it — which is
+// exactly what the `handle?.` below was already guarding against.
+let handle: ReturnType<typeof serve> | undefined
 
 beforeEach(() => {
   checkoutPath = mkdtempSync(join(tmpdir(), "companion-serve-"))
