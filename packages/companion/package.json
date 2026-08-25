@@ -21,6 +21,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
     "./package.json": "./package.json"
   },
   "files": ["dist", "README.md"],
@@ -32,7 +36,7 @@
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && bun run build:cli && bun run build:lib && bun run build:types && chmod +x dist/cli.js",
     "build:cli": "bun build ./src/bin.ts --target=node --format=esm --outfile=dist/cli.js --banner=\"#!/usr/bin/env node\"",
-    "build:lib": "bun build ./src/index.ts --target=node --format=esm --outfile=dist/index.js",
+    "build:lib": "bun build ./src/index.ts --target=node --format=esm --outfile=dist/index.js && bun build ./src/client.ts --target=browser --format=esm --outfile=dist/client.js",
     "build:types": "tsc -p tsconfig.build.json && node scripts/fix-dts-extensions.mjs",
     "prepublishOnly": "bun run typecheck && bun test && bun run build"
   },
