@@ -1,11 +1,16 @@
-// Standalone dev-environment config, used only via explicit `--config` (dev:cf,
+// Local dev-environment config, used only via explicit `--config` (dev:cf,
 // db:migrate:dev). Never read by Nitro's build (which only ever discovers
-// `wrangler.jsonc`/`wrangler.json`/`wrangler.toml` by name) — kept as a separate flat
-// file, not a wrangler.jsonc `env` block, because Wrangler rejects `env` blocks in the
-// auto-generated "redirected configuration" `bun run build` produces at
-// `.output/server/wrangler.json` for `deploy`/`deploy:dev` (see vite.config.ts's
-// NOTEX_DEPLOY_ENV-driven override for how those two get their dev-vs-prod split
-// instead).
+// `wrangler.jsonc`/`wrangler.json`/`wrangler.toml` by name), and never read by a
+// deploy — `deploy`/`deploy:dev` go through scripts/deploy.mjs, which retargets the
+// redirected configuration Nitro writes to `.output/server/wrangler.json` using the
+// values in scripts/deploy-env.mjs. Config added here has no effect on a deploy.
+//
+// Kept as a separate flat file rather than a `wrangler.jsonc` `env` block because
+// Wrangler rejects `env` blocks in a redirected configuration.
+//
+// No `vars` here on purpose: this file drives a *local* run, where `.dev.vars` supplies
+// the values and overrides config vars anyway. Deployed-origin URLs would be wrong for
+// a local run, and are set by scripts/deploy-env.mjs for the environments that need them.
 {
   "name": "notex-dev",
   "main": ".output/server/index.mjs",
