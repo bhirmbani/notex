@@ -1,7 +1,15 @@
+// `compatibility_date` must stay at or after 2025-09-15: that is when workerd started
+// providing `node:os` natively. Nitro's `cloudflare-module` preset writes
+// `.output/server/wrangler.json` with `no_bundle: true`, so `wrangler deploy` skips the
+// esbuild pass that would otherwise inject unenv's polyfills — every `node:*` specifier
+// in the SSR bundle has to be resolvable by the runtime itself. The bundle imports
+// `node:os` (mermaid → @mermaid-js/parser → langium → vscode-jsonrpc), so an older date
+// makes the deployed Worker throw `No such module "node:os"` on every request. Keep in
+// sync with wrangler.dev.jsonc.
 {
   "name": "notex",
   "main": ".output/server/index.mjs",
-  "compatibility_date": "2024-11-01",
+  "compatibility_date": "2025-09-15",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": ".output/public",
