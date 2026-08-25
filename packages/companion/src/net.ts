@@ -4,14 +4,15 @@
 // a Node-native fallback there and only calls Bun.serve() when Bun is present, which is also
 // what `bun test` runs under, so the two paths never silently diverge in CI.
 
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
+import { createServer } from "node:http"
+import type { IncomingMessage, ServerResponse } from "node:http"
 
 export type FetchHandler = (req: Request) => Promise<Response>
 
 export type MinimalServer = {
   readonly hostname: string
   readonly port: number
-  stop(closeActiveConnections?: boolean): void
+  stop: (closeActiveConnections?: boolean) => void
 }
 
 export type StartServerOptions = {
@@ -22,7 +23,7 @@ export type StartServerOptions = {
 
 export type Runtime = "bun" | "node"
 
-declare const Bun: { serve(opts: StartServerOptions): MinimalServer } | undefined
+declare const Bun: { serve: (opts: StartServerOptions) => MinimalServer } | undefined
 
 export function detectRuntime(): Runtime {
   return typeof Bun !== "undefined" ? "bun" : "node"
@@ -56,6 +57,9 @@ function startNodeServer(opts: StartServerOptions): MinimalServer {
     hostname: opts.hostname,
     port: opts.port,
     stop(closeActiveConnections) {
+      // @types/node declares closeAllConnections as always present, but it only
+      // landed in Node 18.2 and this package supports >=18.0 (see engines).
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (closeActiveConnections) server.closeAllConnections?.()
       server.close()
     },
@@ -89,7 +93,7 @@ async function toWebRequest(req: IncomingMessage): Promise<Request> {
   const hasBody = req.method !== "GET" && req.method !== "HEAD"
   let body: Buffer | undefined
   if (hasBody) {
-    const chunks: Buffer[] = []
+    const chunks: Array<Buffer> = []
     for await (const chunk of req) chunks.push(chunk as Buffer)
     body = Buffer.concat(chunks)
   }

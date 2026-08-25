@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { loadOrCreateToken, pairingLine } from "../pairing.ts"
 
 const PAIRING_MODULE_PATH = resolve(import.meta.dir, "../pairing.ts")

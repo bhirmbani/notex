@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test"
-import { scoreNodes, shatter, terms, type ScoreIndexEntry } from "../scoring.ts"
+import { scoreNodes, shatter, terms } from "../scoring.ts"
+import type { ScoreIndexEntry } from "../scoring.ts"
 
 describe("shatter", () => {
   it("splits camelCase into lowercase tokens", () => {
@@ -26,7 +27,7 @@ describe("terms", () => {
 })
 
 describe("scoreNodes", () => {
-  const index: ScoreIndexEntry[] = [
+  const index: Array<ScoreIndexEntry> = [
     {
       id: "exact_label",
       labelLower: "authlogin",
@@ -55,8 +56,8 @@ describe("scoreNodes", () => {
 
   it("scores an exact whole-label match highest and marks it exact", () => {
     const [top] = scoreNodes(index, ["authlogin"])
-    expect(top.id).toBe("exact_label")
-    expect(top.exact).toBe(true)
+    expect(top!.id).toBe("exact_label")
+    expect(top!.exact).toBe(true)
   })
 
   it("marks an exact token match as exact even without a whole-label match", () => {
@@ -86,7 +87,7 @@ describe("scoreNodes", () => {
   })
 
   it("sorts by score descending, then id ascending on ties", () => {
-    const tiedIndex: ScoreIndexEntry[] = [
+    const tiedIndex: Array<ScoreIndexEntry> = [
       { id: "b", labelLower: "x", labelTokens: new Set(["auth"]), pathTokens: new Set() },
       { id: "a", labelLower: "y", labelTokens: new Set(["auth"]), pathTokens: new Set() },
     ]

@@ -4,10 +4,11 @@
 
 import { buildContext } from "./context.ts"
 import { buildFooter } from "./footer.ts"
-import type { GraphIndex } from "./graph.ts"
 import { scoreNodes, terms } from "./scoring.ts"
 import { traverse } from "./traversal.ts"
-import { OpError, type Degraded, type GraphEdge, type GraphNode, type OpResponse } from "./types.ts"
+import { OpError } from "./types.ts"
+import type { Degraded, GraphEdge, GraphNode, OpResponse } from "./types.ts"
+import type { GraphIndex } from "./graph.ts"
 
 /** Also the version /v1/ping reports (companion-api.md §4.1) — the two must never drift apart. */
 export const API_VERSION = "0.1.0"
@@ -26,7 +27,7 @@ const MAX_SEARCH_LIMIT = 100
 
 export type StatusResult = {
   apiVersion: string
-  capabilities: string[]
+  capabilities: Array<string>
   limits: { maxNodes: number; maxDepth: number }
 }
 
@@ -57,7 +58,7 @@ export function search(index: GraphIndex, req: SearchRequest): OpResponse<Search
 
 export type QueryRequest = {
   question: string
-  terms?: string[]
+  terms?: Array<string>
   depth?: number
   maxNodes?: number
   seeds?: number
@@ -65,7 +66,7 @@ export type QueryRequest = {
 }
 
 export type QueryResult = {
-  subgraph: { nodes: GraphNode[]; edges: GraphEdge[]; seeds: string[] }
+  subgraph: { nodes: Array<GraphNode>; edges: Array<GraphEdge>; seeds: Array<string> }
   context?: { markdown: string; sources: Array<{ file: string; location: string }> }
   /** See companion-api.md §4.8 / notex-mcp-server.md §5 — same buildFooter as the write paths. */
   footer?: string
@@ -134,7 +135,7 @@ export function query(index: GraphIndex, req: QueryRequest): OpResponse<QueryRes
   return response
 }
 
-function sourcesFrom(nodes: GraphNode[]): Array<{ file: string; location: string }> {
+function sourcesFrom(nodes: Array<GraphNode>): Array<{ file: string; location: string }> {
   const keys = [...new Set(nodes.map((n) => `${n.sourceFile}:${n.sourceLocation}`))].sort()
   return keys.map((k) => {
     const i = k.lastIndexOf(":")
@@ -145,7 +146,7 @@ function sourcesFrom(nodes: GraphNode[]): Array<{ file: string; location: string
 // --------------------------------------------------------------------- path
 
 export type PathRequest = { from: string; to: string; maxDepth?: number }
-export type PathResult = { found: boolean; nodes: GraphNode[]; edges: GraphEdge[] }
+export type PathResult = { found: boolean; nodes: Array<GraphNode>; edges: Array<GraphEdge> }
 
 /** Fully deterministic, undirected, no scoring (companion-api.md §4.5) — plain BFS. */
 export function path(index: GraphIndex, req: PathRequest): OpResponse<PathResult> {

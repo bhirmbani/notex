@@ -21,7 +21,7 @@ export function useContexts(organizationId: string, repoId: string) {
   return useQuery({
     queryKey: contextKeys.lists(repoId),
     queryFn: () =>
-      fetchJson<Context[]>(`${orgBase(organizationId)}/repositories/${repoId}/contexts`),
+      fetchJson<Array<Context>>(`${orgBase(organizationId)}/repositories/${repoId}/contexts`),
   })
 }
 

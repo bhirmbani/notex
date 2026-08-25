@@ -1,17 +1,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Background, Controls, ReactFlow } from '@xyflow/react'
+import type { Edge, Node } from '@xyflow/react'
+
+import type { EntityNode, EntityType } from '@/features/mindmap/types'
+import { useGraphData } from '@/features/mindmap/hooks'
 import { useProject } from '@/features/projects/hooks'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  type Node,
-  type Edge,
-} from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-
-import { useGraphData } from '@/features/mindmap/hooks'
-import type { EntityNode, EntityType } from '@/features/mindmap/types'
 
 export const Route = createFileRoute('/dashboard/_layout/o/$organizationId/p/$projectId/mindmap')({
   component: MindMapPage,
@@ -36,12 +31,12 @@ const TYPE_LABEL: Record<EntityType, string> = {
   mermaid: 'Mermaid',
 }
 
-function gridLayout(count: number): Array<{ x: number; y: number }> {
+// Computes one node's slot directly instead of building a parallel array the
+// caller then indexes into — under `noUncheckedIndexedAccess` that lookup is
+// `| undefined`, even though it never is in practice.
+function gridPosition(index: number, count: number): { x: number; y: number } {
   const cols = Math.max(1, Math.ceil(Math.sqrt(count)))
-  return Array.from({ length: count }, (_, i) => ({
-    x: (i % cols) * 240,
-    y: Math.floor(i / cols) * 110,
-  }))
+  return { x: (index % cols) * 240, y: Math.floor(index / cols) * 110 }
 }
 
 function MindMapPage() {
@@ -59,11 +54,10 @@ function MindMapPage() {
   }
 
   const rawNodes = data?.nodes ?? []
-  const positions = gridLayout(rawNodes.length)
 
-  const nodes: Node[] = rawNodes.map((n, i) => ({
+  const nodes: Array<Node> = rawNodes.map((n, i) => ({
     id: n.id,
-    position: positions[i],
+    position: gridPosition(i, rawNodes.length),
     data: { label: n.label, entityType: n.type, meta: n },
     style: {
       ...TYPE_STYLE[n.type],
@@ -76,7 +70,7 @@ function MindMapPage() {
     },
   }))
 
-  const edges: Edge[] = (data?.links ?? []).map((l) => ({
+  const edges: Array<Edge> = (data?.links ?? []).map((l) => ({
     id: l.id,
     source: l.sourceId,
     target: l.targetId,
@@ -149,7 +143,7 @@ function MindMapPage() {
       <div className="flex items-center justify-between border-b px-4 py-2">
         <h1 className="text-xl font-bold">Mind Map</h1>
         <div className="flex flex-wrap gap-2">
-          {(Object.entries(TYPE_STYLE) as [EntityType, (typeof TYPE_STYLE)[EntityType]][]).map(
+          {(Object.entries(TYPE_STYLE) as Array<[EntityType, (typeof TYPE_STYLE)[EntityType]]>).map(
             ([type, style]) => (
               <span
                 key={type}

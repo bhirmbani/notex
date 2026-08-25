@@ -31,10 +31,10 @@ Options for serve:
 /** Thrown by argument parsing on bad input — `main()` turns it into a stderr message + exit 1. */
 export class CliUsageError extends Error {}
 
-export type ServeArgs = { port: number | undefined; origins: string[]; rotateToken: boolean }
+export type ServeArgs = { port: number | undefined; origins: Array<string>; rotateToken: boolean }
 
-export function parseServeArgs(args: string[]): ServeArgs {
-  const origins: string[] = []
+export function parseServeArgs(args: Array<string>): ServeArgs {
+  const origins: Array<string> = []
   let port: number | undefined
   let rotateToken = false
 
@@ -67,7 +67,7 @@ export function parseServeArgs(args: string[]): ServeArgs {
   return { port, origins, rotateToken }
 }
 
-function runServe(args: string[]): void {
+function runServe(args: Array<string>): void {
   const { port, origins, rotateToken } = parseServeArgs(args)
   const checkoutPath = process.cwd()
   const graphPath = resolve(checkoutPath, "graphify-out/graph.json")
@@ -99,7 +99,7 @@ function runServe(args: string[]): void {
   console.log(handle.pairingLine)
 }
 
-export function main(argv: string[] = process.argv.slice(2)): void {
+export function main(argv: Array<string> = process.argv.slice(2)): void {
   const [command, ...rest] = argv
 
   if (command === "-h" || command === "--help") {

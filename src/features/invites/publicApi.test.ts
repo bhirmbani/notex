@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { Hono } from 'hono'
 
 import { publicInvitesApi } from './publicApi'
+import type * as DbModule from '@/db'
 import { getDb } from '@/db'
 
 vi.mock('@/db', async () => {
-  const actual = await vi.importActual<typeof import('@/db')>('@/db')
+  const actual = await vi.importActual<typeof DbModule>('@/db')
   return { ...actual, getDb: vi.fn() }
 })
 

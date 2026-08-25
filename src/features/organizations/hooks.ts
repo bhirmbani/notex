@@ -17,7 +17,7 @@ export const organizationKeys = {
 export function useOrganizations() {
   return useQuery({
     queryKey: organizationKeys.lists(),
-    queryFn: () => fetchJson<OrganizationMembership[]>(BASE),
+    queryFn: () => fetchJson<Array<OrganizationMembership>>(BASE),
   })
 }
 

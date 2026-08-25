@@ -2,14 +2,15 @@ import { APIError } from 'better-auth'
 import { createMiddleware } from 'hono/factory'
 
 import type { AuthBindings } from '@/features/auth/lib/server'
+import type { AuthSession } from '@/features/auth/lib/validation'
 import { isAuthSession } from '@/features/auth/lib/validation'
 
-export type { AuthSession } from '@/features/auth/lib/validation'
+export type { AuthSession }
 
 export type ApiAuthEnv = {
   Bindings: AuthBindings
   Variables: {
-    auth: import('@/features/auth/lib/validation').AuthSession
+    auth: AuthSession
   }
 }
 

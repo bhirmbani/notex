@@ -3,10 +3,11 @@ import { Hono } from 'hono'
 
 import { grantsApi } from './api'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import type * as DbModule from '@/db'
 import { getDb } from '@/db'
 
 vi.mock('@/db', async () => {
-  const actual = await vi.importActual<typeof import('@/db')>('@/db')
+  const actual = await vi.importActual<typeof DbModule>('@/db')
   return { ...actual, getDb: vi.fn() }
 })
 

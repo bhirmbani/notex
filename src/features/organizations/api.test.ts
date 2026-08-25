@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Hono } from 'hono'
 
-vi.mock('@/db', async () => {
-  const actual = await vi.importActual<typeof import('@/db')>('@/db')
-  return { ...actual, getDb: vi.fn() }
-})
-
-import { getDb } from '@/db'
 import { organizationsApi } from './api'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import type * as DbModule from '@/db'
+import { getDb } from '@/db'
+
+vi.mock('@/db', async () => {
+  const actual = await vi.importActual<typeof DbModule>('@/db')
+  return { ...actual, getDb: vi.fn() }
+})
 
 function appWithAuth() {
   const app = new Hono<ApiAuthEnv>()

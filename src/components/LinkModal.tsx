@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { RiLinkM, RiCloseLine } from '@remixicon/react'
+import { RiCloseLine, RiLinkM } from '@remixicon/react'
 
-import { useGraphData, useCreateLink, useDeleteLink } from '@/features/mindmap/hooks'
 import type { EntityType } from '@/features/mindmap/types'
+import { useCreateLink, useDeleteLink, useGraphData } from '@/features/mindmap/hooks'
 import { cn } from '@/lib/utils'
 
 const TYPE_BADGE: Record<EntityType, string> = {

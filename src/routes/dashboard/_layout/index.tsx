@@ -2,8 +2,8 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { eq } from 'drizzle-orm'
 
-import { getDb, schema } from '@/db'
 import type { AuthBindings } from '@/features/auth/lib/server'
+import { getDb, schema } from '@/db'
 
 const getDefaultOrganizationId = createServerFn({ method: 'GET' })
   .inputValidator((userId: string) => userId)

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RiSunLine, RiMoonLine, RiComputerLine } from '@remixicon/react'
+import { RiComputerLine, RiMoonLine, RiSunLine } from '@remixicon/react'
+import type { Theme } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 import {
-  type Theme,
-  resolveTheme,
-  getNextTheme,
   THEME_STORAGE_KEY,
+  
+  getNextTheme,
+  resolveTheme
 } from '@/lib/theme'
 
 function getStoredTheme(): Theme {

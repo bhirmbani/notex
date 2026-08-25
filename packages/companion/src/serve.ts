@@ -3,11 +3,13 @@
 // job; this module is the entry point TBR-66 wires up.
 
 import { loadGraph } from "./graph.ts"
-import { createHandler, type GraphState } from "./http.ts"
+import { createHandler } from "./http.ts"
 import { resolveOrigins } from "./cors.ts"
-import { startServer, type MinimalServer } from "./net.ts"
-import { loadOrCreateToken, pairingLine as buildPairingLine } from "./pairing.ts"
+import { startServer } from "./net.ts"
+import { pairingLine as buildPairingLine, loadOrCreateToken } from "./pairing.ts"
 import { OpError } from "./types.ts"
+import type { MinimalServer } from "./net.ts"
+import type { GraphState } from "./http.ts"
 
 const DEFAULT_PORT = 7717
 
@@ -22,7 +24,7 @@ export type ServeOptions = {
    */
   port?: number
   /** Additional allowed origins beyond the dev default (companion-api.md §5). */
-  origins?: string[]
+  origins?: Array<string>
   rotateToken?: boolean
   nodeEnv?: string
   /** Fires once the graph finishes loading (or fails to) — the CLI uses this for startup output. */

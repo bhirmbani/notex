@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { RiAddLine, RiFolder3Line, RiDeleteBinLine } from '@remixicon/react'
+import { RiAddLine, RiDeleteBinLine, RiFolder3Line } from '@remixicon/react'
 
-import { useProjects, useCreateProject, useDeleteProject } from '@/features/projects/hooks'
+import { useCreateProject, useDeleteProject, useProjects } from '@/features/projects/hooks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

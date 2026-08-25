@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useCreateFile } from './hooks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,7 +28,9 @@ export function AddFileModal({
     onClose()
   }
 
-  const handleUploadSubmit = async (e: React.FormEvent) => {
+  // Not async: the upload is awaited inside the FileReader's onload callback,
+  // so this handler itself has nothing to await.
+  const handleUploadSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const file = fileRef.current?.files?.[0]
     if (!file) return

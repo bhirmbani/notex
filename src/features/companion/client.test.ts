@@ -1,18 +1,30 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest"
-
 import {
   CompanionRequestError,
+  fetchStatus,
   node,
   path,
   ping,
   query,
   search,
-  fetchStatus,
 } from "./client"
+import type { Mock } from "vitest"
+
 
 const BASE_URL = "http://127.0.0.1:7717"
 const TOKEN = "test-token"
+
+type FetchCall = [url: string, init: RequestInit & { targetAddressSpace?: string }]
+
+// `mock.calls[0]` is `| undefined` under noUncheckedIndexedAccess. Throwing here
+// keeps an uncalled spy from surfacing as an `undefined` url compared against a
+// string, which would fail with a far less obvious message.
+function firstCall(spy: Mock): FetchCall {
+  const call = spy.mock.calls[0]
+  if (!call) throw new Error("expected fetch to have been called")
+  return call as FetchCall
+}
 
 function jsonResponse(body: unknown, init?: { status?: number }) {
   return new Response(JSON.stringify(body), {
@@ -36,7 +48,7 @@ describe("ping", () => {
 
     expect(result).toEqual({ ok: true, apiVersion: "0.1.0" })
     expect(fetchSpy).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchSpy.mock.calls[0]!
+    const [url, init] = firstCall(fetchSpy)
     expect(url).toBe(`${BASE_URL}/v1/ping`)
     expect(init.targetAddressSpace).toBe("loopback")
     expect(new Headers(init.headers).has("authorization")).toBe(false)
@@ -65,7 +77,7 @@ describe("fetchStatus", () => {
     const result = await fetchStatus(BASE_URL, TOKEN)
 
     expect(result).toEqual(body)
-    const [url, init] = fetchSpy.mock.calls[0]!
+    const [url, init] = firstCall(fetchSpy)
     expect(url).toBe(`${BASE_URL}/v1/status`)
     expect(init.targetAddressSpace).toBe("loopback")
     expect(new Headers(init.headers).get("authorization")).toBe(
@@ -113,10 +125,10 @@ describe("op fetch targets", () => {
 
     await search(BASE_URL, TOKEN, { q: "auth" })
 
-    const [url, init] = fetchSpy.mock.calls[0]!
+    const [url, init] = firstCall(fetchSpy)
     expect(url).toBe(`${BASE_URL}/v1/search`)
     expect(init.method).toBe("POST")
-    expect(JSON.parse(init.body)).toEqual({ q: "auth" })
+    expect(JSON.parse(String(init.body))).toEqual({ q: "auth" })
     expect(init.targetAddressSpace).toBe("loopback")
   })
 
@@ -131,7 +143,7 @@ describe("op fetch targets", () => {
 
     await query(BASE_URL, TOKEN, { question: "how does auth work" })
 
-    expect(fetchSpy.mock.calls[0]![0]).toBe(`${BASE_URL}/v1/query`)
+    expect(firstCall(fetchSpy)[0]).toBe(`${BASE_URL}/v1/query`)
   })
 
   it("path POSTs to /v1/path", async () => {
@@ -144,7 +156,7 @@ describe("op fetch targets", () => {
 
     await path(BASE_URL, TOKEN, { from: "a", to: "b" })
 
-    expect(fetchSpy.mock.calls[0]![0]).toBe(`${BASE_URL}/v1/path`)
+    expect(firstCall(fetchSpy)[0]).toBe(`${BASE_URL}/v1/path`)
   })
 
   it("node GETs /v1/node/:id with the id URL-encoded", async () => {
@@ -155,7 +167,7 @@ describe("op fetch targets", () => {
 
     await node(BASE_URL, TOKEN, { id: "a/b c" })
 
-    const [url, init] = fetchSpy.mock.calls[0]!
+    const [url, init] = firstCall(fetchSpy)
     expect(url).toBe(`${BASE_URL}/v1/node/a%2Fb%20c`)
     expect(init.method).toBeUndefined()
   })

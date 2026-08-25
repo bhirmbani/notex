@@ -21,8 +21,8 @@ export type EntityNode = {
 }
 
 export type GraphData = {
-  nodes: EntityNode[]
-  links: EntityLink[]
+  nodes: Array<EntityNode>
+  links: Array<EntityLink>
 }
 
 export type CreateLinkInput = {

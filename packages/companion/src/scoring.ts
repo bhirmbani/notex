@@ -12,7 +12,7 @@ const STOPWORDS = new Set(
 )
 
 /** camelCase / snake_case / path segments → discrete lowercase tokens. */
-export function shatter(text: string): string[] {
+export function shatter(text: string): Array<string> {
   return String(text)
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .split(/[^A-Za-z0-9]+/)
@@ -20,7 +20,7 @@ export function shatter(text: string): string[] {
     .filter(Boolean)
 }
 
-export function terms(question: string): string[] {
+export function terms(question: string): Array<string> {
   return [...new Set(shatter(question).filter((t) => t.length >= 3 && !STOPWORDS.has(t)))]
 }
 
@@ -39,8 +39,8 @@ export type ScoredNode = {
 }
 
 /** label tokens weigh full; path tokens weigh less — a path match is weaker evidence. */
-export function scoreNodes(index: ScoreIndexEntry[], queryTerms: string[]): ScoredNode[] {
-  const scored: ScoredNode[] = []
+export function scoreNodes(index: Array<ScoreIndexEntry>, queryTerms: Array<string>): Array<ScoredNode> {
+  const scored: Array<ScoredNode> = []
   for (const entry of index) {
     let score = 0
     let exact = false
