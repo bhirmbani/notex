@@ -6,6 +6,12 @@
 // `node:os` (mermaid → @mermaid-js/parser → langium → vscode-jsonrpc), so an older date
 // makes the deployed Worker throw `No such module "node:os"` on every request. Keep in
 // sync with wrangler.dev.jsonc.
+//
+// Deploys don't run `wrangler deploy` against this file directly: Nitro reads it at
+// build time and emits `.output/server/wrangler.json`, which scripts/deploy.mjs then
+// retargets per environment. `vars` are set there (scripts/deploy-env.mjs), not here —
+// a bare `wrangler deploy` bypasses that and will strip the Worker's vars, so deploy
+// via `bun run deploy` / `bun run deploy:dev`.
 {
   "name": "notex",
   "main": ".output/server/index.mjs",
