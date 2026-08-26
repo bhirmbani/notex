@@ -434,4 +434,148 @@ describe("SearchPanel", () => {
       screen.queryByLabelText("Open api/middleware/auth.ts in editor")
     ).toBeNull()
   })
+
+  it("does not fetch the browse list until the field is clicked", () => {
+    const browseSpy = vi.spyOn(client, "browse")
+
+    render(
+      <SearchPanel
+        pairing={PAIRING}
+        checkoutPath="/Users/dev/notex"
+        onUseAsFrom={vi.fn()}
+        onUseAsTo={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    expect(browseSpy).not.toHaveBeenCalled()
+  })
+
+  it("shows a browsable list grouped by category on click, before any typing (TBR-83)", async () => {
+    vi.spyOn(client, "browse").mockResolvedValue({
+      graph: {} as never,
+      groups: [
+        {
+          fileType: "code",
+          total: 1,
+          nodes: [
+            {
+              id: "node-1",
+              label: "authenticate",
+              sourceFile: "api/middleware/auth.ts",
+              sourceLocation: "L18",
+              fileType: "code",
+              community: null,
+            },
+          ],
+        },
+      ],
+    })
+    const onUseAsFrom = vi.fn()
+
+    render(
+      <SearchPanel
+        pairing={PAIRING}
+        checkoutPath="/Users/dev/notex"
+        onUseAsFrom={onUseAsFrom}
+        onUseAsTo={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    fireEvent.click(screen.getByPlaceholderText("Search the graph…"))
+
+    await waitFor(() => expect(screen.getByText("authenticate")).toBeTruthy())
+    expect(screen.getByText("code · 1")).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "Use as From" }))
+    expect(onUseAsFrom).toHaveBeenCalledWith({
+      id: "node-1",
+      label: "authenticate",
+    })
+  })
+
+  it("hides the browse list once the user starts typing", async () => {
+    vi.spyOn(client, "browse").mockResolvedValue({
+      graph: {} as never,
+      groups: [
+        {
+          fileType: "code",
+          total: 1,
+          nodes: [
+            {
+              id: "node-1",
+              label: "authenticate",
+              sourceFile: "api/middleware/auth.ts",
+              sourceLocation: "L18",
+              fileType: "code",
+              community: null,
+            },
+          ],
+        },
+      ],
+    })
+    vi.spyOn(client, "search").mockResolvedValue({
+      graph: {} as never,
+      results: [],
+    })
+
+    render(
+      <SearchPanel
+        pairing={PAIRING}
+        checkoutPath="/Users/dev/notex"
+        onUseAsFrom={vi.fn()}
+        onUseAsTo={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    fireEvent.click(screen.getByPlaceholderText("Search the graph…"))
+    await waitFor(() => expect(screen.getByText("authenticate")).toBeTruthy())
+
+    fireEvent.change(screen.getByPlaceholderText("Search the graph…"), {
+      target: { value: "auth" },
+    })
+
+    await waitFor(() => expect(screen.queryByText("code · 1")).toBeNull())
+  })
+
+  it("closes the browse list once focus leaves the panel entirely", async () => {
+    vi.spyOn(client, "browse").mockResolvedValue({
+      graph: {} as never,
+      groups: [
+        {
+          fileType: "code",
+          total: 1,
+          nodes: [
+            {
+              id: "node-1",
+              label: "authenticate",
+              sourceFile: "api/middleware/auth.ts",
+              sourceLocation: "L18",
+              fileType: "code",
+              community: null,
+            },
+          ],
+        },
+      ],
+    })
+
+    render(
+      <SearchPanel
+        pairing={PAIRING}
+        checkoutPath="/Users/dev/notex"
+        onUseAsFrom={vi.fn()}
+        onUseAsTo={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    fireEvent.click(screen.getByPlaceholderText("Search the graph…"))
+    await waitFor(() => expect(screen.getByText("authenticate")).toBeTruthy())
+
+    fireEvent.blur(screen.getByPlaceholderText("Search the graph…"))
+
+    expect(screen.queryByText("authenticate")).toBeNull()
+  })
 })
