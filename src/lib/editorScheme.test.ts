@@ -90,4 +90,26 @@ describe("buildEditorLink", () => {
       })
     ).toBe("vscode://file/Users/dev/notex/src/index.ts")
   })
+
+  it("returns null instead of throwing when sourceFile is null (unvalidated companion data)", () => {
+    expect(
+      buildEditorLink({
+        scheme: "vscode",
+        checkoutPath: "/Users/dev/notex",
+        sourceFile: null,
+        sourceLocation: "L1",
+      })
+    ).toBeNull()
+  })
+
+  it("omits the line suffix instead of throwing when sourceLocation is null", () => {
+    expect(
+      buildEditorLink({
+        scheme: "vscode",
+        checkoutPath: "/Users/dev/notex",
+        sourceFile: "src/index.ts",
+        sourceLocation: null,
+      })
+    ).toBe("vscode://file/Users/dev/notex/src/index.ts")
+  })
 })
