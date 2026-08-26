@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   CompanionRequestError,
+  browse,
   fetchStatus,
   node,
   path,
@@ -170,6 +171,31 @@ describe("op fetch targets", () => {
     const [url, init] = firstCall(fetchSpy)
     expect(url).toBe(`${BASE_URL}/v1/node/a%2Fb%20c`)
     expect(init.method).toBeUndefined()
+  })
+
+  it("browse GETs /v1/browse with no query string when no limit is given", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ graph: {}, groups: [] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await browse(BASE_URL, TOKEN)
+
+    const [url, init] = firstCall(fetchSpy)
+    expect(url).toBe(`${BASE_URL}/v1/browse`)
+    expect(init.method).toBeUndefined()
+    expect(init.targetAddressSpace).toBe("loopback")
+  })
+
+  it("browse GETs /v1/browse?limit=N when a limit is given", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ graph: {}, groups: [] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await browse(BASE_URL, TOKEN, { limit: 5 })
+
+    expect(firstCall(fetchSpy)[0]).toBe(`${BASE_URL}/v1/browse?limit=5`)
   })
 
   it("every fetch target is the companion baseUrl, never a Notex-side endpoint (ADR-0003)", async () => {

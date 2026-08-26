@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { RiCloseLine, RiExternalLinkLine } from "@remixicon/react"
+import type { ReactNode } from "react"
 
 import type { PairingRecord, ResolvedNode } from "@/features/companion/types"
 import { useProject } from "@/features/projects/hooks"
@@ -12,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { ConnectFlow } from "@/features/companion/ConnectFlow"
 import { ConnectionStateChip } from "@/features/companion/ConnectionStateChip"
 import {
+  useCompanionBrowse,
   useCompanionConnection,
   useCompanionPath,
   useDebouncedCompanionSearch,
@@ -345,6 +347,15 @@ export function SearchPanel({
   )
 }
 
+/** Shared shell for NodePicker's two dropdowns (search results, browse groups — TBR-82). */
+function PickerPopover({ children }: { children: ReactNode }) {
+  return (
+    <div className="absolute z-10 mt-1 max-h-56 w-full divide-y overflow-auto rounded-md border bg-popover shadow-md">
+      {children}
+    </div>
+  )
+}
+
 /**
  * One side of the `path` picker (graph-gui.md §4.1 item 5). Resolves a node by label via
  * `search` rather than accepting a raw id — the id the user never has (TBR-81). Once resolved
@@ -364,6 +375,9 @@ export function NodePicker({
 }) {
   const { query, setQuery, search } = useDebouncedCompanionSearch(pairing)
   const { reset } = search
+  const [open, setOpen] = useState(false)
+  const trimmed = query.trim()
+  const browse = useCompanionBrowse(pairing, open && trimmed.length === 0)
 
   if (value) {
     return (
@@ -381,17 +395,33 @@ export function NodePicker({
     )
   }
 
+  const selectNode = (node: { id: string; label: string }) => {
+    onChange({ id: node.id, label: node.label })
+    setQuery("")
+    reset()
+    setOpen(false)
+  }
+
   return (
-    <div className="relative min-w-0 flex-1">
+    <div
+      className="relative min-w-0 flex-1"
+      onBlur={(e) => {
+        // Closing on the Input's own blur would drop keyboard (Tab) focus moving into
+        // the dropdown below it — checking the container catches only focus actually
+        // leaving the whole picker, so Tab-ing to a result/browse item keeps it open.
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false)
+      }}
+    >
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => setOpen(true)}
         placeholder={`${label} node…`}
         className="text-sm"
         aria-label={label}
       />
-      {query.trim() && search.data && (
-        <div className="absolute z-10 mt-1 max-h-56 w-full divide-y overflow-auto rounded-md border bg-popover shadow-md">
+      {trimmed && search.data && (
+        <PickerPopover>
           {search.data.results.length === 0 ? (
             <p className="px-3 py-2 text-xs text-muted-foreground">
               No matches
@@ -401,18 +431,41 @@ export function NodePicker({
               <button
                 type="button"
                 key={r.id}
-                onClick={() => {
-                  onChange({ id: r.id, label: r.label })
-                  setQuery("")
-                  reset()
-                }}
+                onClick={() => selectNode(r)}
                 className="block w-full truncate px-3 py-2 text-left text-xs hover:bg-muted"
               >
                 {r.label}
               </button>
             ))
           )}
-        </div>
+        </PickerPopover>
+      )}
+      {open && !trimmed && browse.data && (
+        <PickerPopover>
+          {browse.data.groups.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+              No nodes yet
+            </p>
+          ) : (
+            browse.data.groups.map((group) => (
+              <div key={group.fileType}>
+                <p className="bg-muted/40 px-3 py-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  {group.fileType} · {group.total}
+                </p>
+                {group.nodes.map((n) => (
+                  <button
+                    type="button"
+                    key={n.id}
+                    onClick={() => selectNode(n)}
+                    className="block w-full truncate px-3 py-2 text-left text-xs hover:bg-muted"
+                  >
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            ))
+          )}
+        </PickerPopover>
       )}
     </div>
   )

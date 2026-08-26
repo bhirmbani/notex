@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { path as pathOp, search as searchOp } from "./client"
+import { browse as browseOp, path as pathOp, search as searchOp } from "./client"
 import { resolveConnectionState } from "./connectionState"
 import type { ResolveConnectionStateDeps } from "./connectionState"
 import type { PathRequest } from "notex-companion/client"
@@ -76,6 +76,29 @@ export function useDebouncedCompanionSearch(
   }, [query, runSearch, delayMs])
 
   return { query, setQuery, search }
+}
+
+export const companionBrowseKeys = {
+  all: ["companion", "browse"] as const,
+  detail: (baseUrl: string) => [...companionBrowseKeys.all, baseUrl] as const,
+}
+
+/**
+ * Lets each `NodePicker` field (TBR-82) show what's in the graph before the user types
+ * anything — `search` returns nothing for an empty query. `enabled` is caller-driven (the
+ * picker only wants this once its field is focused with an empty query) rather than always-on,
+ * so two picker fields sharing one pairing share this cache entry instead of double-fetching.
+ */
+export function useCompanionBrowse(pairing: PairingRecord | null, enabled: boolean) {
+  return useQuery({
+    queryKey: companionBrowseKeys.detail(pairing?.baseUrl ?? ""),
+    queryFn: () => {
+      if (!pairing) return Promise.reject(new Error("not connected"))
+      return browseOp(pairing.baseUrl, pairing.token, {})
+    },
+    enabled: enabled && !!pairing,
+    staleTime: 60_000,
+  })
 }
 
 /** The graph page's `path` picker (companion-api.md §4.5) — graph page only (graph-gui.md §4.2). */

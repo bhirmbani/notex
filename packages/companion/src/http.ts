@@ -6,9 +6,7 @@ import { timingSafeEqual } from "node:crypto"
 import { corsHeaders, preflightHeaders } from "./cors.ts"
 import {
   API_VERSION,
-  
-  
-  
+  browse,
   node,
   path,
   query,
@@ -16,7 +14,7 @@ import {
   status
 } from "./ops.ts"
 import { ERROR_CODES,   OpError } from "./types.ts"
-import type { PathRequest, QueryRequest, SearchRequest } from "./ops.ts"
+import type { BrowseRequest, PathRequest, QueryRequest, SearchRequest } from "./ops.ts"
 import type { ErrorCode, ErrorResponse } from "./types.ts"
 import type { GraphIndex } from "./graph.ts"
 
@@ -76,6 +74,7 @@ async function dispatch(req: Request, url: URL, opts: HandlerOptions): Promise<u
   if (method === "GET" && pathname.startsWith("/v1/node/")) {
     return node(index, { id: decodeNodeId(pathname.slice("/v1/node/".length)) })
   }
+  if (method === "GET" && pathname === "/v1/browse") return browse(index, parseBrowseRequest(url.searchParams))
 
   throw new OpError("not_found", `No such route: ${method} ${pathname}`)
 }
@@ -181,6 +180,13 @@ function parseQueryRequest(body: Record<string, unknown>): QueryRequest {
 
 function parsePathRequest(body: Record<string, unknown>): PathRequest {
   return { from: requireString(body, "from"), to: requireString(body, "to"), maxDepth: optionalCount(body, "maxDepth") }
+}
+
+function parseBrowseRequest(searchParams: URLSearchParams): BrowseRequest {
+  const raw = searchParams.get("limit")
+  if (raw === null) return {}
+  if (!/^\d+$/.test(raw)) throw new OpError("invalid_request", `"limit" must be a non-negative integer`)
+  return { limit: Number(raw) }
 }
 
 // --------------------------------------------------------------- responses

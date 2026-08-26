@@ -12,7 +12,7 @@ import type { GraphIndex } from "./graph.ts"
 
 /** Also the version /v1/ping reports (companion-api.md §4.1) — the two must never drift apart. */
 export const API_VERSION = "0.1.0"
-const CAPABILITIES = ["search", "query", "path", "node"] as const
+const CAPABILITIES = ["search", "query", "path", "node", "browse"] as const
 
 /** Revised bounds (TBR-62, over companion-api.md §4.4's original defaults). */
 const MAX_NODES_CEILING = 1000
@@ -22,6 +22,8 @@ const DEFAULT_MAX_NODES = 60
 const DEFAULT_SEED_COUNT = 5
 const DEFAULT_SEARCH_LIMIT = 20
 const MAX_SEARCH_LIMIT = 100
+const DEFAULT_BROWSE_GROUP_LIMIT = 8
+const MAX_BROWSE_GROUP_LIMIT = 50
 
 // ------------------------------------------------------------------- status
 
@@ -52,6 +54,39 @@ export function search(index: GraphIndex, req: SearchRequest): OpResponse<Search
     graph: index.stamp,
     results: scored.map((s) => ({ ...index.project(index.nodesById.get(s.id)!), score: s.score })),
   }
+}
+
+// ------------------------------------------------------------------- browse
+
+export type BrowseRequest = { limit?: number }
+export type BrowseGroup = { fileType: string; total: number; nodes: Array<GraphNode> }
+export type BrowseResult = { groups: Array<BrowseGroup> }
+
+/**
+ * Lets the UI show what's in the graph before the user types anything (TBR-82) — `search`
+ * and `query` both require query terms and return nothing for an empty string. Groups by
+ * `fileType`, never `community`: community ids/names reshuffle across rebuilds (TBR-48),
+ * so graph-gui.md §4.1 rules out a community browser as a navigation structure that would
+ * silently change under the user. `fileType` is stable graphify-derived data instead.
+ */
+export function browse(index: GraphIndex, req: BrowseRequest): OpResponse<BrowseResult> {
+  const limit = Math.max(0, Math.min(req.limit ?? DEFAULT_BROWSE_GROUP_LIMIT, MAX_BROWSE_GROUP_LIMIT))
+
+  const byType = new Map<string, Array<GraphNode>>()
+  for (const raw of index.nodesById.values()) {
+    const projected = index.project(raw)
+    if (!byType.has(projected.fileType)) byType.set(projected.fileType, [])
+    byType.get(projected.fileType)!.push(projected)
+  }
+
+  const groups = [...byType.entries()]
+    .map(([fileType, nodes]) => {
+      const sorted = [...nodes].sort((a, b) => a.label.localeCompare(b.label))
+      return { fileType, total: sorted.length, nodes: sorted.slice(0, limit) }
+    })
+    .sort((a, b) => b.total - a.total || a.fileType.localeCompare(b.fileType))
+
+  return { graph: index.stamp, groups }
 }
 
 // -------------------------------------------------------------------- query

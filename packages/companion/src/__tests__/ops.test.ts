@@ -2,20 +2,103 @@ import { existsSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "bun:test"
 import { loadGraph } from "../graph.ts"
-import { node, path, query, search, status } from "../ops.ts"
+import { browse, node, path, query, search, status } from "../ops.ts"
 import { OpError } from "../types.ts"
 import { FIXTURE_ROOT } from "./fixtures/setup.ts"
+import type { GraphIndex } from "../graph.ts"
+import type { GraphStamp } from "../types.ts"
 
 const REPO_ROOT = resolve(import.meta.dir, "../../../..")
 const index = loadGraph(FIXTURE_ROOT)
+
+/** A tiny synthetic index with two fileTypes — the shared fixture is single-fileType and its
+ * node/edge/community counts are asserted verbatim elsewhere (graph.test.ts), so it can't be
+ * extended without breaking those. */
+function buildMultiTypeIndex(): GraphIndex {
+  const rawNodes = [
+    { id: "n1", label: "Beta", source_file: "a.ts", source_location: "L1", file_type: "code", community: null },
+    { id: "n2", label: "alpha", source_file: "b.ts", source_location: "L2", file_type: "code", community: null },
+    { id: "n3", label: "gamma", source_file: "c.md", source_location: "L1", file_type: "doc", community: null },
+  ]
+  const nodesById = new Map(rawNodes.map((n) => [n.id, n]))
+  const stamp: GraphStamp = {
+    builtAt: "2026-01-01T00:00:00.000Z",
+    graphHash: "deadbeef",
+    nodeCount: rawNodes.length,
+    edgeCount: 0,
+    communityCount: 0,
+    checkoutPath: "/tmp/fixture",
+    headSha: null,
+    graphRoot: "/tmp/fixture",
+    rootPrefix: "",
+  }
+  return {
+    stamp,
+    nodesById,
+    edges: [],
+    adjacency: new Map(),
+    scoreIndex: [],
+    project: (n) => ({
+      id: n.id,
+      label: n.label,
+      sourceFile: n.source_file,
+      sourceLocation: n.source_location,
+      fileType: n.file_type,
+      community: null,
+    }),
+    projectEdge: () => {
+      throw new Error("not used")
+    },
+  }
+}
 
 describe("status", () => {
   it("echoes the graph stamp and reports capabilities/limits", () => {
     const res = status(index)
     expect(res.graph).toBe(index.stamp)
-    expect(res.capabilities).toEqual(["search", "query", "path", "node"])
+    expect(res.capabilities).toEqual(["search", "query", "path", "node", "browse"])
     expect(res.limits).toEqual({ maxNodes: 1000, maxDepth: 3 })
     expect(typeof res.apiVersion).toBe("string")
+  })
+})
+
+describe("browse", () => {
+  const multiType = buildMultiTypeIndex()
+
+  it("groups nodes by fileType, largest group first", () => {
+    const res = browse(multiType, {})
+    expect(res.groups.map((g) => g.fileType)).toEqual(["code", "doc"])
+    expect(res.groups[0]!.total).toBe(2)
+    expect(res.groups[1]!.total).toBe(1)
+  })
+
+  it("sorts nodes within a group by label", () => {
+    const res = browse(multiType, {})
+    expect(res.groups[0]!.nodes.map((n) => n.label)).toEqual(["alpha", "Beta"])
+  })
+
+  it("caps nodes per group at the requested limit while total still reflects the full group size", () => {
+    const res = browse(multiType, { limit: 1 })
+    expect(res.groups[0]!.nodes).toHaveLength(1)
+    expect(res.groups[0]!.total).toBe(2)
+  })
+
+  it("floors a negative limit at 0 instead of slicing all-but-the-last-N nodes", () => {
+    const res = browse(multiType, { limit: -1 })
+    expect(res.groups[0]!.nodes).toEqual([])
+    expect(res.groups[0]!.total).toBe(2)
+  })
+
+  it("echoes the graph stamp", () => {
+    const res = browse(multiType, {})
+    expect(res.graph).toBe(multiType.stamp)
+  })
+
+  it("never groups by community — community ids/names reshuffle across rebuilds (TBR-48, graph-gui.md §4.1)", () => {
+    const res = browse(index, {})
+    for (const g of res.groups) {
+      expect(g).not.toHaveProperty("community")
+    }
   })
 })
 

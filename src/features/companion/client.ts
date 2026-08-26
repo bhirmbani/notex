@@ -4,6 +4,8 @@
 // that fails to bundle for the browser (TBR-73).
 
 import type {
+  BrowseRequest,
+  BrowseResult,
   ErrorResponse,
   NodeRequest,
   NodeResult,
@@ -135,4 +137,14 @@ export function node(
     token,
     `/v1/node/${encodeURIComponent(req.id)}`
   )
+}
+
+export function browse(
+  baseUrl: string,
+  token: string,
+  req: BrowseRequest = {}
+): Promise<OpResponse<BrowseResult>> {
+  const route =
+    req.limit === undefined ? "/v1/browse" : `/v1/browse?limit=${req.limit}`
+  return authedOp<BrowseResult>(baseUrl, token, route)
 }

@@ -100,6 +100,165 @@ describe("NodePicker", () => {
     fireEvent.click(screen.getByLabelText("Clear From"))
     expect(onChange).toHaveBeenCalledWith(null)
   })
+
+  it("shows a browsable list grouped by category on focus, before any typing (TBR-82)", async () => {
+    vi.spyOn(client, "browse").mockResolvedValue({
+      graph: {} as never,
+      groups: [
+        {
+          fileType: "code",
+          total: 5,
+          nodes: [
+            { ...RESULT_NODE, id: "node-1", label: "authenticate" },
+            { ...RESULT_NODE, id: "node-2", label: "logout" },
+          ],
+        },
+        {
+          fileType: "doc",
+          total: 1,
+          nodes: [{ ...RESULT_NODE, id: "node-3", label: "README" }],
+        },
+      ],
+    })
+    const onChange = vi.fn()
+
+    render(
+      <NodePicker
+        pairing={PAIRING}
+        label="From"
+        value={null}
+        onChange={onChange}
+      />,
+      { wrapper }
+    )
+
+    fireEvent.focus(screen.getByLabelText("From"))
+
+    await waitFor(() => expect(screen.getByText("authenticate")).toBeTruthy())
+    expect(screen.getByText("logout")).toBeTruthy()
+    expect(screen.getByText("README")).toBeTruthy()
+    expect(screen.getByText("code · 5")).toBeTruthy()
+    expect(screen.getByText("doc · 1")).toBeTruthy()
+
+    fireEvent.click(screen.getByText("README"))
+    expect(onChange).toHaveBeenCalledWith({ id: "node-3", label: "README" })
+  })
+
+  it("does not fetch the browse list until the field is focused", () => {
+    const browseSpy = vi.spyOn(client, "browse")
+
+    render(
+      <NodePicker
+        pairing={PAIRING}
+        label="From"
+        value={null}
+        onChange={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    expect(browseSpy).not.toHaveBeenCalled()
+  })
+
+  it("hides the browse list once the user starts typing", async () => {
+    vi.spyOn(client, "browse").mockResolvedValue({
+      graph: {} as never,
+      groups: [
+        {
+          fileType: "code",
+          total: 1,
+          nodes: [{ ...RESULT_NODE, id: "node-1", label: "authenticate" }],
+        },
+      ],
+    })
+    vi.spyOn(client, "search").mockResolvedValue({
+      graph: {} as never,
+      results: [],
+    })
+
+    render(
+      <NodePicker
+        pairing={PAIRING}
+        label="From"
+        value={null}
+        onChange={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    fireEvent.focus(screen.getByLabelText("From"))
+    await waitFor(() => expect(screen.getByText("authenticate")).toBeTruthy())
+
+    fireEvent.change(screen.getByLabelText("From"), {
+      target: { value: "auth" },
+    })
+
+    await waitFor(() =>
+      expect(screen.queryByText("authenticate")).toBeNull()
+    )
+  })
+
+  it("keeps the browse list open when focus moves within it, e.g. keyboard Tab to an item", async () => {
+    vi.spyOn(client, "browse").mockResolvedValue({
+      graph: {} as never,
+      groups: [
+        {
+          fileType: "code",
+          total: 1,
+          nodes: [{ ...RESULT_NODE, id: "node-1", label: "authenticate" }],
+        },
+      ],
+    })
+
+    render(
+      <NodePicker
+        pairing={PAIRING}
+        label="From"
+        value={null}
+        onChange={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    fireEvent.focus(screen.getByLabelText("From"))
+    await waitFor(() => expect(screen.getByText("authenticate")).toBeTruthy())
+
+    fireEvent.blur(screen.getByLabelText("From"), {
+      relatedTarget: screen.getByText("authenticate"),
+    })
+
+    expect(screen.getByText("authenticate")).toBeTruthy()
+  })
+
+  it("closes the browse list once focus leaves the picker entirely", async () => {
+    vi.spyOn(client, "browse").mockResolvedValue({
+      graph: {} as never,
+      groups: [
+        {
+          fileType: "code",
+          total: 1,
+          nodes: [{ ...RESULT_NODE, id: "node-1", label: "authenticate" }],
+        },
+      ],
+    })
+
+    render(
+      <NodePicker
+        pairing={PAIRING}
+        label="From"
+        value={null}
+        onChange={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    fireEvent.focus(screen.getByLabelText("From"))
+    await waitFor(() => expect(screen.getByText("authenticate")).toBeTruthy())
+
+    fireEvent.blur(screen.getByLabelText("From"))
+
+    expect(screen.queryByText("authenticate")).toBeNull()
+  })
 })
 
 describe("PathPanel", () => {
