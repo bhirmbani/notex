@@ -13,7 +13,7 @@ are the Notex browser page and (later) a project-scoped MCP server.
 
 ## 1. Operations, not endpoints
 
-Five operations are the contract. REST is **one binding** of them, not the contract itself.
+Six operations are the contract. REST is **one binding** of them, not the contract itself.
 
 | Op | REST binding | Purpose |
 |---|---|---|
@@ -22,6 +22,7 @@ Five operations are the contract. REST is **one binding** of them, not the contr
 | `query` | `POST /v1/query` | Seeded traversal → subgraph |
 | `path` | `POST /v1/path` | Shortest path between two node ids |
 | `node` | `GET /v1/node/:id` | Single node + neighbours (the retrieval half of `explain`) |
+| `browse` | `GET /v1/browse` | All nodes grouped by fileType, no query required (TBR-82) |
 
 Plus one non-op: `GET /v1/ping`, unauthenticated (see §5).
 
@@ -239,7 +240,7 @@ Authenticated. Request: none.
 {
   graph: GraphStamp
   apiVersion: string
-  capabilities: string[]   // e.g. ["search", "query", "path", "node"]
+  capabilities: string[]   // e.g. ["search", "query", "path", "node", "browse"]
   limits: { maxNodes: number; maxDepth: number }
 }
 ```
@@ -355,6 +356,23 @@ composing its own footer from the graph stamp — guarantees the two drift in fo
 re-derive the `rootPrefix` resolution of §2.2 independently, which is exactly the bug that took a
 prototype to find. It also means an Answer drafted in the UI is indistinguishable from one typed
 by hand, which would quietly defeat TBR-53 Q12.
+
+### 4.9 `browse` — `GET /v1/browse` (added by TBR-82)
+
+```ts
+// request (query string)
+{ limit?: number }   // per-group cap, default 8, max 50
+
+// response
+{ graph: GraphStamp; groups: Array<{ fileType: string; total: number; nodes: Array<GraphNode> }> }
+```
+
+Lets the graph picker show what's in the graph before the user types anything — `search` and
+`query` both require query terms and return nothing for an empty string. Groups are keyed by
+`fileType` (stable, graphify-derived), largest group first; each group's `nodes` is capped at
+`limit` but `total` always reflects the full group size. **Never key or group by `community`** —
+§2.2 already establishes that community ids/names reshuffle across rebuilds (TBR-48), so a
+browsable list keyed on them would be a navigation structure that silently changes under the user.
 
 ---
 

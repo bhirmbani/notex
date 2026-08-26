@@ -44,7 +44,7 @@ describe("GET /v1/ping", () => {
 
 describe("bearer auth", () => {
   it("returns 401 without a token on every op except ping", async () => {
-    for (const path of ["/v1/status", "/v1/search", "/v1/query", "/v1/path", "/v1/node/auth_login"]) {
+    for (const path of ["/v1/status", "/v1/search", "/v1/query", "/v1/path", "/v1/node/auth_login", "/v1/browse"]) {
       const res = await handler()(req(path, { token: null }))
       expect([401]).toContain(res.status)
       const body = await json(res)
@@ -127,7 +127,35 @@ describe("GET /v1/status", () => {
     expect(res.status).toBe(200)
     const body = await json(res)
     expect(body.apiVersion).toBe(API_VERSION)
-    expect(body.capabilities).toEqual(["search", "query", "path", "node"])
+    expect(body.capabilities).toEqual(["search", "query", "path", "node", "browse"])
+  })
+})
+
+describe("GET /v1/browse", () => {
+  it("returns nodes grouped by fileType", async () => {
+    const res = await handler()(req("/v1/browse"))
+    expect(res.status).toBe(200)
+    const body = await json(res)
+    expect(body.groups).toEqual([{ fileType: "code", total: 6, nodes: expect.any(Array) }])
+  })
+
+  it("respects a ?limit= query param", async () => {
+    const res = await handler()(req("/v1/browse?limit=2"))
+    const body = await json(res)
+    expect(body.groups[0].nodes).toHaveLength(2)
+    expect(body.groups[0].total).toBe(6)
+  })
+
+  it("returns 422 invalid_request for a non-numeric limit", async () => {
+    const res = await handler()(req("/v1/browse?limit=abc"))
+    expect(res.status).toBe(422)
+    const body = await json(res)
+    expect(body.error.code).toBe("invalid_request")
+  })
+
+  it("returns 422 invalid_request for a negative limit", async () => {
+    const res = await handler()(req("/v1/browse?limit=-1"))
+    expect(res.status).toBe(422)
   })
 })
 

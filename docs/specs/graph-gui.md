@@ -176,6 +176,8 @@ A **setup, status and exploration** page:
 
 **No community browser.** Community ids and names reshuffle across rebuilds (TBR-48), so a
 browsable community list is a navigation structure that silently changes under the user.
+(TBR-82 adds a browse list to the `path` picker's node fields, but groups by the stable
+`fileType` field, not `community` — this decision still stands.)
 
 **No `graph.html`.** The file is 482 KB on the user's disk, so the hosted page cannot read
 it — embedding would mean a new companion endpoint proxying a blob, arriving as graphify's

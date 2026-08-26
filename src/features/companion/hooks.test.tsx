@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { renderHook, waitFor } from "@testing-library/react"
 
 import {
+  useCompanionBrowse,
   useCompanionConnection,
   useCompanionPath,
   useCompanionSearch,
@@ -126,6 +127,34 @@ describe("useCompanionPath", () => {
       result.current.mutateAsync({ from: "a", to: "b" })
     ).rejects.toThrow()
     expect(pathSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("useCompanionBrowse", () => {
+  it("does not call the client when disabled", () => {
+    const browseSpy = vi.spyOn(client, "browse")
+    renderHook(() => useCompanionBrowse(PAIRING, false), { wrapper })
+
+    expect(browseSpy).not.toHaveBeenCalled()
+  })
+
+  it("calls the browse op with the pairing's baseUrl/token once enabled", async () => {
+    const browseSpy = vi
+      .spyOn(client, "browse")
+      .mockResolvedValue({ graph: {} as never, groups: [] })
+
+    renderHook(() => useCompanionBrowse(PAIRING, true), { wrapper })
+
+    await waitFor(() =>
+      expect(browseSpy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token, {})
+    )
+  })
+
+  it("does not call the client when there is no pairing, even if enabled", () => {
+    const browseSpy = vi.spyOn(client, "browse")
+    renderHook(() => useCompanionBrowse(null, true), { wrapper })
+
+    expect(browseSpy).not.toHaveBeenCalled()
   })
 })
 
