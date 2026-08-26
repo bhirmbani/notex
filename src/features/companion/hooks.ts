@@ -80,21 +80,28 @@ export function useDebouncedCompanionSearch(
 
 export const companionBrowseKeys = {
   all: ["companion", "browse"] as const,
-  detail: (baseUrl: string) => [...companionBrowseKeys.all, baseUrl] as const,
+  detail: (baseUrl: string, limit: number | undefined) =>
+    [...companionBrowseKeys.all, baseUrl, limit] as const,
 }
 
 /**
- * Lets each `NodePicker` field (TBR-82) show what's in the graph before the user types
- * anything — `search` returns nothing for an empty query. `enabled` is caller-driven (the
- * picker only wants this once its field is focused with an empty query) rather than always-on,
- * so two picker fields sharing one pairing share this cache entry instead of double-fetching.
+ * Lets each `NodePicker` field (TBR-82) and `SearchPanel` (TBR-83) show what's in the graph
+ * before the user types anything — `search` returns nothing for an empty query. `enabled` is
+ * caller-driven (the field only wants this once open with an empty query) rather than always-on,
+ * so two fields sharing one pairing and limit share this cache entry instead of double-fetching.
+ * `limit` is keyed separately so bumping it (a "Load more" action) fetches fresh rather than
+ * reusing the smaller cached page.
  */
-export function useCompanionBrowse(pairing: PairingRecord | null, enabled: boolean) {
+export function useCompanionBrowse(
+  pairing: PairingRecord | null,
+  enabled: boolean,
+  limit?: number
+) {
   return useQuery({
-    queryKey: companionBrowseKeys.detail(pairing?.baseUrl ?? ""),
+    queryKey: companionBrowseKeys.detail(pairing?.baseUrl ?? "", limit),
     queryFn: () => {
       if (!pairing) return Promise.reject(new Error("not connected"))
-      return browseOp(pairing.baseUrl, pairing.token, {})
+      return browseOp(pairing.baseUrl, pairing.token, { limit })
     },
     enabled: enabled && !!pairing,
     staleTime: 60_000,

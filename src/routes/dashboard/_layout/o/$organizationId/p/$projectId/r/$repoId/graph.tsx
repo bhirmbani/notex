@@ -1,7 +1,12 @@
 import { useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
-import { RiCloseLine, RiExternalLinkLine } from "@remixicon/react"
-import type { ReactNode } from "react"
+import {
+  RiArrowDownSLine,
+  RiCloseLine,
+  RiExternalLinkLine,
+} from "@remixicon/react"
+import { MAX_BROWSE_GROUP_LIMIT } from "notex-companion/client"
+import type { FocusEvent, ReactNode } from "react"
 
 import type { PairingRecord, ResolvedNode } from "@/features/companion/types"
 import { useProject } from "@/features/projects/hooks"
@@ -247,6 +252,84 @@ function ExploreSection({
  * ticket's own AC ("search returns typeahead results") without pre-building another
  * ticket's component.
  */
+/** One row shared by SearchPanel's typed-results list and its click-to-browse list (TBR-83) — the
+ * only difference is a score badge, which browse rows don't have. */
+function NodeRow({
+  node,
+  score,
+  checkoutPath,
+  scheme,
+  onUseAsFrom,
+  onUseAsTo,
+}: {
+  node: { id: string; label: string; sourceFile: string; sourceLocation: string }
+  score?: number
+  checkoutPath: string
+  scheme: ReturnType<typeof getStoredEditorScheme>
+  onUseAsFrom: (node: ResolvedNode) => void
+  onUseAsTo: (node: ResolvedNode) => void
+}) {
+  const editorHref = buildEditorLink({
+    scheme,
+    checkoutPath,
+    sourceFile: node.sourceFile,
+    sourceLocation: node.sourceLocation,
+  })
+
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm">
+      <div className="min-w-0">
+        <p className="truncate font-medium">{node.label}</p>
+        <p className="flex items-center gap-1 truncate font-mono text-xs text-muted-foreground">
+          {editorHref ? (
+            <a
+              href={editorHref}
+              className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
+              aria-label={`Open ${node.sourceFile} in editor`}
+            >
+              {node.sourceFile}:{node.sourceLocation}
+              <RiExternalLinkLine className="size-3 shrink-0" />
+            </a>
+          ) : (
+            <>
+              {node.sourceFile}:{node.sourceLocation}
+            </>
+          )}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {score !== undefined && (
+          <span className="font-mono text-xs text-muted-foreground">
+            {score.toFixed(1)}
+          </span>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          onClick={(e) => {
+            e.stopPropagation()
+            onUseAsFrom({ id: node.id, label: node.label })
+          }}
+        >
+          Use as From
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          onClick={(e) => {
+            e.stopPropagation()
+            onUseAsTo({ id: node.id, label: node.label })
+          }}
+        >
+          Use as To
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function SearchPanel({
   pairing,
   checkoutPath,
@@ -260,91 +343,131 @@ export function SearchPanel({
 }) {
   const { query, setQuery, search } = useDebouncedCompanionSearch(pairing)
   const scheme = getStoredEditorScheme()
+  const trimmed = query.trim()
+  const { open, browse, hasMoreBrowse, loadMoreBrowse, openField, onContainerBlur } =
+    useBrowsableField(pairing, trimmed)
 
   return (
     <div>
       <h2 className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
         Search
       </h2>
-      <Input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search the graph…"
-        className="mb-3 text-sm"
-      />
-      {search.isError && (
-        <p className="mb-3 text-xs text-destructive">
-          Search failed. {search.error.message}
-        </p>
-      )}
-      {search.data && (
-        <div className="divide-y rounded-xl border">
-          {search.data.results.length === 0 ? (
-            <p className="px-4 py-6 text-center text-xs text-muted-foreground">
-              No matches
-            </p>
-          ) : (
-            search.data.results.map((r) => {
-              const editorHref = buildEditorLink({
-                scheme,
-                checkoutPath,
-                sourceFile: r.sourceFile,
-                sourceLocation: r.sourceLocation,
-              })
-
-              return (
-                <div
+      {/* onBlur lives on this outer div, not just the input, so it wraps the results/browse
+       * list below too — otherwise clicking a row blurs the input with a relatedTarget outside
+       * this container, closing the list before the row's own click (e.g. "Use as From") fires. */}
+      <div onBlur={onContainerBlur}>
+        <div className="relative mb-3" onClick={openField}>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={openField}
+            placeholder="Search the graph…"
+            className="pr-8 text-sm"
+          />
+          <RiArrowDownSLine className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+        </div>
+        {search.isError && (
+          <p className="mb-3 text-xs text-destructive">
+            Search failed. {search.error.message}
+          </p>
+        )}
+        {trimmed && search.data && (
+          <div className="max-h-96 divide-y overflow-y-auto rounded-xl border">
+            {search.data.results.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+                No matches
+              </p>
+            ) : (
+              search.data.results.map((r) => (
+                <NodeRow
                   key={r.id}
-                  className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{r.label}</p>
-                    <p className="flex items-center gap-1 truncate font-mono text-xs text-muted-foreground">
-                      {editorHref ? (
-                        <a
-                          href={editorHref}
-                          className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
-                          aria-label={`Open ${r.sourceFile} in editor`}
-                        >
-                          {r.sourceFile}:{r.sourceLocation}
-                          <RiExternalLinkLine className="size-3 shrink-0" />
-                        </a>
-                      ) : (
-                        <>
-                          {r.sourceFile}:{r.sourceLocation}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {r.score.toFixed(1)}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="xs"
-                      onClick={() => onUseAsFrom({ id: r.id, label: r.label })}
-                    >
-                      Use as From
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="xs"
-                      onClick={() => onUseAsTo({ id: r.id, label: r.label })}
-                    >
-                      Use as To
-                    </Button>
+                  node={r}
+                  score={r.score}
+                  checkoutPath={checkoutPath}
+                  scheme={scheme}
+                  onUseAsFrom={onUseAsFrom}
+                  onUseAsTo={onUseAsTo}
+                />
+              ))
+            )}
+          </div>
+        )}
+        {open && !trimmed && browse.data && (
+          <div className="max-h-96 divide-y overflow-y-auto rounded-xl border">
+            {browse.data.groups.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+                No nodes yet
+              </p>
+            ) : (
+              browse.data.groups.map((group) => (
+                <div key={group.fileType}>
+                  <p className="bg-muted/40 px-4 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    {group.fileType} · {group.total}
+                  </p>
+                  <div className="divide-y">
+                    {group.nodes.map((n) => (
+                      <NodeRow
+                        key={n.id}
+                        node={n}
+                        checkoutPath={checkoutPath}
+                        scheme={scheme}
+                        onUseAsFrom={onUseAsFrom}
+                        onUseAsTo={onUseAsTo}
+                      />
+                    ))}
                   </div>
                 </div>
-              )
-            })
-          )}
-        </div>
-      )}
+              ))
+            )}
+            {hasMoreBrowse && (
+              <button
+                type="button"
+                onClick={loadMoreBrowse}
+                className="block w-full px-4 py-2 text-center text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Load more
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
+}
+
+/**
+ * Open/browse-enablement state shared by every combobox-style field on this page — NodePicker's
+ * From/To fields and SearchPanel's main search box (TBR-83) both open on focus, fetch the browse
+ * list only while open and empty, and close on blur leaving the whole field container (not just
+ * the input) so Tab-ing into a result/browse item doesn't close the list under it.
+ */
+function useBrowsableField(pairing: PairingRecord, trimmed: string) {
+  const [open, setOpen] = useState(false)
+  // Undefined until "Load more" is clicked, so the initial fetch uses the server's own
+  // (smaller) default rather than always asking for the ceiling up front.
+  const [browseLimit, setBrowseLimit] = useState<number | undefined>(undefined)
+  const browse = useCompanionBrowse(
+    pairing,
+    open && trimmed.length === 0,
+    browseLimit
+  )
+
+  return {
+    open,
+    browse,
+    // Each group is capped at whatever limit was requested — if any group's returned nodes
+    // fall short of its own `total`, there's more to fetch by asking for MAX_BROWSE_GROUP_LIMIT
+    // outright (the op has no cursor/offset, just a single top-N per group).
+    hasMoreBrowse:
+      browseLimit !== MAX_BROWSE_GROUP_LIMIT &&
+      (browse.data?.groups.some((g) => g.nodes.length < g.total) ?? false),
+    loadMoreBrowse: () => setBrowseLimit(MAX_BROWSE_GROUP_LIMIT),
+    openField: () => setOpen(true),
+    closeField: () => setOpen(false),
+    onContainerBlur: (e: FocusEvent<HTMLDivElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false)
+    },
+  }
 }
 
 /** Shared shell for NodePicker's two dropdowns (search results, browse groups — TBR-82). */
@@ -375,9 +498,16 @@ export function NodePicker({
 }) {
   const { query, setQuery, search } = useDebouncedCompanionSearch(pairing)
   const { reset } = search
-  const [open, setOpen] = useState(false)
   const trimmed = query.trim()
-  const browse = useCompanionBrowse(pairing, open && trimmed.length === 0)
+  const {
+    open,
+    browse,
+    hasMoreBrowse,
+    loadMoreBrowse,
+    openField,
+    closeField,
+    onContainerBlur,
+  } = useBrowsableField(pairing, trimmed)
 
   if (value) {
     return (
@@ -399,23 +529,15 @@ export function NodePicker({
     onChange({ id: node.id, label: node.label })
     setQuery("")
     reset()
-    setOpen(false)
+    closeField()
   }
 
   return (
-    <div
-      className="relative min-w-0 flex-1"
-      onBlur={(e) => {
-        // Closing on the Input's own blur would drop keyboard (Tab) focus moving into
-        // the dropdown below it — checking the container catches only focus actually
-        // leaving the whole picker, so Tab-ing to a result/browse item keeps it open.
-        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false)
-      }}
-    >
+    <div className="relative min-w-0 flex-1" onBlur={onContainerBlur}>
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => setOpen(true)}
+        onFocus={openField}
         placeholder={`${label} node…`}
         className="text-sm"
         aria-label={label}
@@ -464,6 +586,15 @@ export function NodePicker({
                 ))}
               </div>
             ))
+          )}
+          {hasMoreBrowse && (
+            <button
+              type="button"
+              onClick={loadMoreBrowse}
+              className="block w-full px-3 py-2 text-center text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              Load more
+            </button>
           )}
         </PickerPopover>
       )}
