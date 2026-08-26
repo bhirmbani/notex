@@ -38,7 +38,7 @@ can refuse a too-old companion before it starts guessing at shapes.
 
 ### 1.1 `apiVersion` compatibility rule (decided by TBR-66)
 
-`apiVersion` is a plain semver string (`ops.ts`'s `API_VERSION`, currently `0.1.0`) — never a
+`apiVersion` is a plain semver string (`ops.ts`'s `API_VERSION`, currently `0.2.0`) — never a
 bare integer, so the rule below is expressible without a second field.
 
 **While the major version is `0` (pre-1.0, no stability promise under semver): the *minor*
