@@ -495,6 +495,57 @@ describe("SearchPanel", () => {
     })
   })
 
+  it("still fires Use as From when the click blurs the input first, matching real browser event order", async () => {
+    // A real click on a row blurs the previously-focused input BEFORE the click itself fires.
+    // fireEvent.click alone (as in the test above) doesn't simulate that — this reproduces the
+    // actual sequence to catch the case where the blur closes the list first and the click never
+    // reaches the (now-unmounted) button.
+    vi.spyOn(client, "browse").mockResolvedValue({
+      graph: {} as never,
+      groups: [
+        {
+          fileType: "code",
+          total: 1,
+          nodes: [
+            {
+              id: "node-1",
+              label: "authenticate",
+              sourceFile: "api/middleware/auth.ts",
+              sourceLocation: "L18",
+              fileType: "code",
+              community: null,
+            },
+          ],
+        },
+      ],
+    })
+    const onUseAsFrom = vi.fn()
+
+    render(
+      <SearchPanel
+        pairing={PAIRING}
+        checkoutPath="/Users/dev/notex"
+        onUseAsFrom={onUseAsFrom}
+        onUseAsTo={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    fireEvent.click(screen.getByPlaceholderText("Search the graph…"))
+    await waitFor(() => expect(screen.getByText("authenticate")).toBeTruthy())
+
+    const useAsFromButton = screen.getByRole("button", { name: "Use as From" })
+    fireEvent.blur(screen.getByPlaceholderText("Search the graph…"), {
+      relatedTarget: useAsFromButton,
+    })
+    fireEvent.click(useAsFromButton)
+
+    expect(onUseAsFrom).toHaveBeenCalledWith({
+      id: "node-1",
+      label: "authenticate",
+    })
+  })
+
   it("hides the browse list once the user starts typing", async () => {
     vi.spyOn(client, "browse").mockResolvedValue({
       graph: {} as never,

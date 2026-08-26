@@ -353,71 +353,76 @@ export function SearchPanel({
       <h2 className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
         Search
       </h2>
-      <div className="relative mb-3" onBlur={onContainerBlur} onClick={openField}>
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={openField}
-          placeholder="Search the graph…"
-          className="pr-8 text-sm"
-        />
-        <RiArrowDownSLine className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-      </div>
-      {search.isError && (
-        <p className="mb-3 text-xs text-destructive">
-          Search failed. {search.error.message}
-        </p>
-      )}
-      {trimmed && search.data && (
-        <div className="divide-y rounded-xl border">
-          {search.data.results.length === 0 ? (
-            <p className="px-4 py-6 text-center text-xs text-muted-foreground">
-              No matches
-            </p>
-          ) : (
-            search.data.results.map((r) => (
-              <NodeRow
-                key={r.id}
-                node={r}
-                score={r.score}
-                checkoutPath={checkoutPath}
-                scheme={scheme}
-                onUseAsFrom={onUseAsFrom}
-                onUseAsTo={onUseAsTo}
-              />
-            ))
-          )}
+      {/* onBlur lives on this outer div, not just the input, so it wraps the results/browse
+       * list below too — otherwise clicking a row blurs the input with a relatedTarget outside
+       * this container, closing the list before the row's own click (e.g. "Use as From") fires. */}
+      <div onBlur={onContainerBlur}>
+        <div className="relative mb-3" onClick={openField}>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={openField}
+            placeholder="Search the graph…"
+            className="pr-8 text-sm"
+          />
+          <RiArrowDownSLine className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         </div>
-      )}
-      {open && !trimmed && browse.data && (
-        <div className="divide-y rounded-xl border">
-          {browse.data.groups.length === 0 ? (
-            <p className="px-4 py-6 text-center text-xs text-muted-foreground">
-              No nodes yet
-            </p>
-          ) : (
-            browse.data.groups.map((group) => (
-              <div key={group.fileType}>
-                <p className="bg-muted/40 px-4 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                  {group.fileType} · {group.total}
-                </p>
-                <div className="divide-y">
-                  {group.nodes.map((n) => (
-                    <NodeRow
-                      key={n.id}
-                      node={n}
-                      checkoutPath={checkoutPath}
-                      scheme={scheme}
-                      onUseAsFrom={onUseAsFrom}
-                      onUseAsTo={onUseAsTo}
-                    />
-                  ))}
+        {search.isError && (
+          <p className="mb-3 text-xs text-destructive">
+            Search failed. {search.error.message}
+          </p>
+        )}
+        {trimmed && search.data && (
+          <div className="max-h-96 divide-y overflow-y-auto rounded-xl border">
+            {search.data.results.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+                No matches
+              </p>
+            ) : (
+              search.data.results.map((r) => (
+                <NodeRow
+                  key={r.id}
+                  node={r}
+                  score={r.score}
+                  checkoutPath={checkoutPath}
+                  scheme={scheme}
+                  onUseAsFrom={onUseAsFrom}
+                  onUseAsTo={onUseAsTo}
+                />
+              ))
+            )}
+          </div>
+        )}
+        {open && !trimmed && browse.data && (
+          <div className="max-h-96 divide-y overflow-y-auto rounded-xl border">
+            {browse.data.groups.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+                No nodes yet
+              </p>
+            ) : (
+              browse.data.groups.map((group) => (
+                <div key={group.fileType}>
+                  <p className="bg-muted/40 px-4 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    {group.fileType} · {group.total}
+                  </p>
+                  <div className="divide-y">
+                    {group.nodes.map((n) => (
+                      <NodeRow
+                        key={n.id}
+                        node={n}
+                        checkoutPath={checkoutPath}
+                        scheme={scheme}
+                        onUseAsFrom={onUseAsFrom}
+                        onUseAsTo={onUseAsTo}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
