@@ -11,7 +11,7 @@ import type { Degraded, GraphEdge, GraphNode, OpResponse } from "./types.ts"
 import type { GraphIndex } from "./graph.ts"
 
 /** Also the version /v1/ping reports (companion-api.md §4.1) — the two must never drift apart. */
-export const API_VERSION = "0.1.0"
+export const API_VERSION = "0.2.0"
 const CAPABILITIES = ["search", "query", "path", "node", "browse"] as const
 
 /** Revised bounds (TBR-62, over companion-api.md §4.4's original defaults). */
