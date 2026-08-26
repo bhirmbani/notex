@@ -8,6 +8,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react"
+import { MAX_BROWSE_GROUP_LIMIT } from "notex-companion/client"
 import { NodePicker, PathPanel, SearchPanel } from "./graph"
 import type { ReactNode } from "react"
 
@@ -544,6 +545,53 @@ describe("SearchPanel", () => {
       id: "node-1",
       label: "authenticate",
     })
+  })
+
+  it("shows Load more when a group is truncated, and fetches the ceiling limit on click", async () => {
+    const browseSpy = vi.spyOn(client, "browse").mockImplementation((_url, _token, req) => {
+      const nodeCount = req?.limit === MAX_BROWSE_GROUP_LIMIT ? 20 : 8
+      return Promise.resolve({
+        graph: {} as never,
+        groups: [
+          {
+            fileType: "code",
+            total: 20,
+            nodes: Array.from({ length: nodeCount }, (_, i) => ({
+              id: `node-${i}`,
+              label: `node-${i}`,
+              sourceFile: "src/index.ts",
+              sourceLocation: "L1",
+              fileType: "code",
+              community: null,
+            })),
+          },
+        ],
+      })
+    })
+
+    render(
+      <SearchPanel
+        pairing={PAIRING}
+        checkoutPath="/Users/dev/notex"
+        onUseAsFrom={vi.fn()}
+        onUseAsTo={vi.fn()}
+      />,
+      { wrapper }
+    )
+
+    fireEvent.click(screen.getByPlaceholderText("Search the graph…"))
+    await waitFor(() => expect(screen.getByText("code · 20")).toBeTruthy())
+    expect(screen.getAllByText(/^node-/)).toHaveLength(8)
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }))
+
+    await waitFor(() => expect(screen.getAllByText(/^node-/)).toHaveLength(20))
+    expect(browseSpy).toHaveBeenLastCalledWith(
+      PAIRING.baseUrl,
+      PAIRING.token,
+      { limit: MAX_BROWSE_GROUP_LIMIT }
+    )
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull()
   })
 
   it("hides the browse list once the user starts typing", async () => {

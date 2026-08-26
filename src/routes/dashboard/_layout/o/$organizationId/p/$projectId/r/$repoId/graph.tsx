@@ -5,6 +5,7 @@ import {
   RiCloseLine,
   RiExternalLinkLine,
 } from "@remixicon/react"
+import { MAX_BROWSE_GROUP_LIMIT } from "notex-companion/client"
 import type { FocusEvent, ReactNode } from "react"
 
 import type { PairingRecord, ResolvedNode } from "@/features/companion/types"
@@ -343,10 +344,8 @@ export function SearchPanel({
   const { query, setQuery, search } = useDebouncedCompanionSearch(pairing)
   const scheme = getStoredEditorScheme()
   const trimmed = query.trim()
-  const { open, browse, openField, onContainerBlur } = useBrowsableField(
-    pairing,
-    trimmed
-  )
+  const { open, browse, hasMoreBrowse, loadMoreBrowse, openField, onContainerBlur } =
+    useBrowsableField(pairing, trimmed)
 
   return (
     <div>
@@ -420,6 +419,15 @@ export function SearchPanel({
                 </div>
               ))
             )}
+            {hasMoreBrowse && (
+              <button
+                type="button"
+                onClick={loadMoreBrowse}
+                className="block w-full px-4 py-2 text-center text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Load more
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -435,11 +443,25 @@ export function SearchPanel({
  */
 function useBrowsableField(pairing: PairingRecord, trimmed: string) {
   const [open, setOpen] = useState(false)
-  const browse = useCompanionBrowse(pairing, open && trimmed.length === 0)
+  // Undefined until "Load more" is clicked, so the initial fetch uses the server's own
+  // (smaller) default rather than always asking for the ceiling up front.
+  const [browseLimit, setBrowseLimit] = useState<number | undefined>(undefined)
+  const browse = useCompanionBrowse(
+    pairing,
+    open && trimmed.length === 0,
+    browseLimit
+  )
 
   return {
     open,
     browse,
+    // Each group is capped at whatever limit was requested — if any group's returned nodes
+    // fall short of its own `total`, there's more to fetch by asking for MAX_BROWSE_GROUP_LIMIT
+    // outright (the op has no cursor/offset, just a single top-N per group).
+    hasMoreBrowse:
+      browseLimit !== MAX_BROWSE_GROUP_LIMIT &&
+      (browse.data?.groups.some((g) => g.nodes.length < g.total) ?? false),
+    loadMoreBrowse: () => setBrowseLimit(MAX_BROWSE_GROUP_LIMIT),
     openField: () => setOpen(true),
     closeField: () => setOpen(false),
     onContainerBlur: (e: FocusEvent<HTMLDivElement>) => {
@@ -477,8 +499,15 @@ export function NodePicker({
   const { query, setQuery, search } = useDebouncedCompanionSearch(pairing)
   const { reset } = search
   const trimmed = query.trim()
-  const { open, browse, openField, closeField, onContainerBlur } =
-    useBrowsableField(pairing, trimmed)
+  const {
+    open,
+    browse,
+    hasMoreBrowse,
+    loadMoreBrowse,
+    openField,
+    closeField,
+    onContainerBlur,
+  } = useBrowsableField(pairing, trimmed)
 
   if (value) {
     return (
@@ -557,6 +586,15 @@ export function NodePicker({
                 ))}
               </div>
             ))
+          )}
+          {hasMoreBrowse && (
+            <button
+              type="button"
+              onClick={loadMoreBrowse}
+              className="block w-full px-3 py-2 text-center text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              Load more
+            </button>
           )}
         </PickerPopover>
       )}
