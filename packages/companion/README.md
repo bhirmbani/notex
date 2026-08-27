@@ -2,8 +2,7 @@
 
 A local retrieval companion for [Notex](https://github.com/bhirmbani/notex). It reads a checkout's
 `graphify-out/graph.json` and serves deterministic search/query/path/node lookups over it — to the
-Notex browser page over loopback HTTP, and (once [TBR-69](https://linear.app/bmbn/issue/TBR-69)
-lands) to an MCP host over stdio.
+Notex browser page over loopback HTTP, and to an MCP host over stdio.
 
 ## What it reads
 
@@ -42,9 +41,13 @@ of starting a broken server.
 
 ```bash
 notex-companion [serve] [options]   # start the loopback HTTP server — the default command
-notex-companion mcp                 # start the stdio MCP server (stub until TBR-69 — the bin
-                                     # wiring ships here, the tool surface does not yet)
+notex-companion mcp                 # start the stdio MCP server — graph_status, graph_search,
+                                     # graph_query, graph_path, graph_node, plus notex_* (listed,
+                                     # not yet backed by the Notex API — see TBR-72)
 ```
+
+Setup, how it picks which checkout to serve, and a manual verification walkthrough:
+[`docs/testing/mcp-server-setup.md`](https://github.com/bhirmbani/notex/blob/main/docs/testing/mcp-server-setup.md).
 
 ### `serve` options
 
@@ -63,7 +66,7 @@ browser's `localStorage`, keyed by Repository, and it is never sent to the Notex
 
 ## `apiVersion`
 
-`ping` and every op response report `apiVersion` (currently `0.1.0`). Compatibility rule — see
+`ping` and every op response report `apiVersion` (currently `0.2.1`). Compatibility rule — see
 [`companion-api.md` §1.1](https://github.com/bhirmbani/notex/blob/main/docs/specs/companion-api.md#11-apiversion-compatibility-rule-decided-by-tbr-66)
 for the full rationale:
 
