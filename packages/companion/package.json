@@ -1,7 +1,7 @@
 {
   "name": "notex-companion",
   "version": "0.2.1",
-  "description": "Local retrieval companion for Notex — reads a checkout's graphify-out/graph.json and serves deterministic search/query/path/node lookups over loopback HTTP and (stub) MCP stdio. No LLM, no graph building, no network beyond 127.0.0.1.",
+  "description": "Local retrieval companion for Notex — reads a checkout's graphify-out/graph.json and serves deterministic search/query/path/node lookups over loopback HTTP and MCP stdio. No LLM, no graph building, no network beyond 127.0.0.1.",
   "keywords": ["notex", "graphify", "mcp", "code-graph"],
   "license": "MIT",
   "repository": {
@@ -39,6 +39,10 @@
     "build:lib": "bun build ./src/index.ts --target=node --format=esm --outfile=dist/index.js && bun build ./src/client.ts --target=browser --format=esm --outfile=dist/client.js",
     "build:types": "tsc -p tsconfig.build.json && node scripts/fix-dts-extensions.mjs",
     "prepublishOnly": "bun run typecheck && bun test && bun run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
