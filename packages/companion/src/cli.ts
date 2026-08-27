@@ -2,7 +2,7 @@
 // docs/specs/notex-mcp-server.md §1 and companion-api.md describe as one command each:
 //
 //   notex-companion [serve] [options]   Start the loopback HTTP server (default)
-//   notex-companion mcp                 Start the stdio MCP server (stub until TBR-69)
+//   notex-companion mcp                 Start the stdio MCP server
 //
 // `main()` here is invoked from `bin.ts`, not from this file — npm installs `bin` targets as
 // symlinks, and an "am I the entry point" check comparing `process.argv[1]` (the invoked,
@@ -13,7 +13,7 @@
 import { existsSync } from "node:fs"
 import { resolve } from "node:path"
 import { serve } from "./serve.ts"
-import { startMcpStub } from "./mcp.ts"
+import { startMcpServer } from "./mcp.ts"
 
 const HELP = `notex-companion — local retrieval companion over a checkout's graphify-out/graph.json
 
@@ -67,6 +67,13 @@ export function parseServeArgs(args: Array<string>): ServeArgs {
   return { port, origins, rotateToken }
 }
 
+function runMcp(): void {
+  startMcpServer(process.cwd()).catch((err) => {
+    console.error(`notex-companion mcp: failed to start: ${err instanceof Error ? err.message : String(err)}`)
+    process.exit(1)
+  })
+}
+
 function runServe(args: Array<string>): void {
   const { port, origins, rotateToken } = parseServeArgs(args)
   const checkoutPath = process.cwd()
@@ -109,7 +116,7 @@ export function main(argv: Array<string> = process.argv.slice(2)): void {
 
   try {
     if (command === "mcp") {
-      startMcpStub()
+      runMcp()
     } else if (command === undefined || command === "serve" || command.startsWith("-")) {
       runServe(command === "serve" ? rest : argv)
     } else {

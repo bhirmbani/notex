@@ -72,7 +72,9 @@ function readGraphRoot(checkoutPath: string): string {
   }
 }
 
-function readHeadSha(checkoutPath: string): string | null {
+/** Also used by the MCP binding (mcpTools.ts) to detect staleness at call time — re-reads HEAD,
+ * doesn't cache it, so a commit made mid-session is picked up on the next tool call. */
+export function readHeadSha(checkoutPath: string): string | null {
   try {
     return execSync("git rev-parse HEAD", { cwd: checkoutPath, stdio: ["ignore", "pipe", "ignore"] })
       .toString()
