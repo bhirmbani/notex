@@ -7,6 +7,7 @@ import {
   useCompanionBrowse,
   useCompanionConnection,
   useCompanionPath,
+  useCompanionQuery,
   useCompanionSearch,
   useDebouncedCompanionSearch,
 } from "./hooks"
@@ -127,6 +128,32 @@ describe("useCompanionPath", () => {
       result.current.mutateAsync({ from: "a", to: "b" })
     ).rejects.toThrow()
     expect(pathSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("useCompanionQuery", () => {
+  it("calls the query op with the pairing's baseUrl/token, on demand", async () => {
+    const querySpy = vi.spyOn(client, "query").mockResolvedValue({
+      graph: {} as never,
+      subgraph: { nodes: [], edges: [], seeds: [] },
+    })
+
+    const { result } = renderHook(() => useCompanionQuery(PAIRING), { wrapper })
+    await result.current.mutateAsync({ question: "how does auth work?" })
+
+    expect(querySpy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token, {
+      question: "how does auth work?",
+    })
+  })
+
+  it("rejects without calling the client when there is no pairing", async () => {
+    const querySpy = vi.spyOn(client, "query")
+    const { result } = renderHook(() => useCompanionQuery(null), { wrapper })
+
+    await expect(
+      result.current.mutateAsync({ question: "x" })
+    ).rejects.toThrow()
+    expect(querySpy).not.toHaveBeenCalled()
   })
 })
 

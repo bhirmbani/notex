@@ -6,10 +6,10 @@
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { browse as browseOp, path as pathOp, search as searchOp } from "./client"
+import { browse as browseOp, path as pathOp, query as queryOp, search as searchOp } from "./client"
 import { resolveConnectionState } from "./connectionState"
 import type { ResolveConnectionStateDeps } from "./connectionState"
-import type { PathRequest } from "notex-companion/client"
+import type { PathRequest, QueryRequest } from "notex-companion/client"
 import type { PairingRecord } from "./types"
 
 export const companionConnectionKeys = {
@@ -114,6 +114,21 @@ export function useCompanionPath(pairing: PairingRecord | null) {
     mutationFn: (req: PathRequest) => {
       if (!pairing) return Promise.reject(new Error("not connected"))
       return pathOp(pairing.baseUrl, pairing.token, req)
+    },
+  })
+}
+
+/**
+ * The Question surface's "Draft this Answer from the graph" retrieval (companion-api.md
+ * §4.4, graph-gui.md §2). Bounds default to the companion's own defaults (depth 1 /
+ * maxNodes 60 / 5 seeds) by omission — a caller only ever sets `depth` explicitly for the
+ * "expand" action (graph-gui.md §3.1).
+ */
+export function useCompanionQuery(pairing: PairingRecord | null) {
+  return useMutation({
+    mutationFn: (req: QueryRequest) => {
+      if (!pairing) return Promise.reject(new Error("not connected"))
+      return queryOp(pairing.baseUrl, pairing.token, req)
     },
   })
 }
