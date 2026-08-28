@@ -322,7 +322,7 @@ export function createNotexTools(ctx: McpToolContext): Record<string, ToolDef> {
 
     notex_save_answer: {
       description:
-        "Save a graph-drafted Answer. Strictly additive — always creates a new Answer, never updates or deletes. Exactly one of question/questionId.",
+        "Save a graph-drafted Answer. Strictly additive — always creates a new Answer, never updates or deletes. Exactly one of question/questionId. `name` is the Answer's title, shown alongside the question in the Notex UI — write a short distinct label (e.g. \"Auth flow overview\"), not a restatement of the question text. `content` is the drafted prose itself, without the footer.",
       inputSchema: {
         question: z.string().min(1).optional(),
         questionId: z.string().min(1).optional(),
