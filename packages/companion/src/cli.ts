@@ -12,6 +12,8 @@
 
 import { existsSync } from "node:fs"
 import { resolve } from "node:path"
+import { CliUsageError } from "./cliErrors.ts"
+import { link, parseLinkArgs } from "./link.ts"
 import { serve } from "./serve.ts"
 import { startMcpServer } from "./mcp.ts"
 
@@ -20,16 +22,24 @@ const HELP = `notex-companion — local retrieval companion over a checkout's gr
 Usage:
   notex-companion [serve] [options]   Start the loopback HTTP server (default command)
   notex-companion mcp                 Start the stdio MCP server
+  notex-companion link [options]      Write .notex/notex.json, pairing this checkout to a Notex Repository
 
 Options for serve:
   --port <n>       Port to bind (default 7717)
   --origin <url>   Additional allowed CORS origin, beyond the built-in defaults. Repeatable.
   --rotate-token   Generate a new pairing token, invalidating the old one
   -h, --help       Show this message
+
+Options for link (all required):
+  --organization-id <id>
+  --project-id <id>
+  --repository-id <id>
+  --api-key <key>   Generated from Notex Settings → API keys
 `
 
-/** Thrown by argument parsing on bad input — `main()` turns it into a stderr message + exit 1. */
-export class CliUsageError extends Error {}
+// Re-exported for existing imports (`import { CliUsageError } from "./cli.ts"`) — the class
+// itself lives in cliErrors.ts so link.ts can throw it without importing this module.
+export { CliUsageError }
 
 export type ServeArgs = { port: number | undefined; origins: Array<string>; rotateToken: boolean }
 
@@ -65,6 +75,24 @@ export function parseServeArgs(args: Array<string>): ServeArgs {
   }
 
   return { port, origins, rotateToken }
+}
+
+function runLink(args: Array<string>): void {
+  // Parses synchronously so a bad flag surfaces via main()'s existing CliUsageError handling
+  // before any network call; validation against the Notex API is async and reported here instead.
+  const parsed = parseLinkArgs(args)
+  const checkoutPath = process.cwd()
+
+  link(parsed, { checkoutPath }).then(
+    () => {
+      console.log(`notex-companion: linked ${checkoutPath} to repository ${parsed.repositoryId}`)
+      console.log("notex-companion: wrote .notex/notex.json (mode 0600)")
+    },
+    (err) => {
+      console.error(`notex-companion link: ${err instanceof Error ? err.message : String(err)}`)
+      process.exit(1)
+    },
+  )
 }
 
 function runMcp(): void {
@@ -117,6 +145,8 @@ export function main(argv: Array<string> = process.argv.slice(2)): void {
   try {
     if (command === "mcp") {
       runMcp()
+    } else if (command === "link") {
+      runLink(rest)
     } else if (command === undefined || command === "serve" || command.startsWith("-")) {
       runServe(command === "serve" ? rest : argv)
     } else {

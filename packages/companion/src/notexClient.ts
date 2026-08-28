@@ -16,6 +16,8 @@ export type NotexFile = {
   createdAt: string
 }
 
+export type NotexRepository = { id: string; projectId: string; name: string; description: string | null }
+
 export type NotexClientConfig = { baseUrl: string; apiKey: string }
 
 type FetchImpl = typeof fetch
@@ -58,6 +60,12 @@ const enc = (id: string) => encodeURIComponent(id)
 
 export function createNotexClient(config: NotexClientConfig, fetchImpl: FetchImpl = fetch) {
   return {
+    /** Used by `link.ts` (TBR-85) to validate organizationId/repositoryId/apiKey together before
+     * writing `.notex/notex.json` — the returned `projectId` is checked against the one the user
+     * supplied, since no route accepts all three ids at once. */
+    getRepository: (organizationId: string, id: string) =>
+      request<NotexRepository>(config, fetchImpl, "GET", `/api/v1/organizations/${enc(organizationId)}/repositories/${enc(id)}`),
+
     listContexts: (organizationId: string, repositoryId: string) =>
       request<Array<NotexContext>>(
         config,

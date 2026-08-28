@@ -2,9 +2,10 @@
 // `.notex/companion.json` (mode 0600), reused across restarts. `.notex/` is gitignored
 // alongside `graphify-out/` — this file never leaves the machine it was generated on.
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { randomBytes } from "node:crypto"
 import { dirname, join } from "node:path"
+import { atomicWriteFile } from "./atomicWrite.ts"
 
 type PairingFile = { token: string }
 
@@ -43,19 +44,10 @@ function createTokenFileExclusive(path: string, token: string): void {
 
 /**
  * Rewrites the token file (rotate, or corrupted-file recovery) without ever leaving it at a
- * looser permission than 0600 — even momentarily. `mode` on writeFileSync only restricts
- * permissions at creation, so overwriting ("w") an existing file that something else already
- * left in a looser state, then chmod-ing afterward, leaves a window where the *fresh* token
- * sits at that looser mode until the chmod catches up. Writing to a freshly `wx`-created
- * (mode 0600) temp file and `rename()`-ing it into place closes that window instead of chasing
- * it after the fact: rename() replaces the destination atomically, and the result always
- * carries the temp file's mode, never the old file's, at every point in between.
+ * looser permission than 0600 — even momentarily. See atomicWrite.ts for why.
  */
 function rewriteTokenFile(path: string, token: string): void {
-  mkdirSync(dirname(path), { recursive: true })
-  const tmpPath = `${path}.${process.pid}.tmp`
-  writeFileSync(tmpPath, tokenContents(token), { mode: 0o600, flag: "wx" })
-  renameSync(tmpPath, path)
+  atomicWriteFile(path, tokenContents(token), 0o600)
 }
 
 /** Loads the persisted token, or generates and persists a new one. `rotate: true` always regenerates. */
