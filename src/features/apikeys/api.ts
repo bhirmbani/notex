@@ -1,9 +1,8 @@
 import { Hono } from 'hono'
-import { APIError } from 'better-auth'
 
 import type { ApiAuthEnv } from '@/api/middleware/auth'
 import type { ApiKeySummary, CreatedApiKey } from './types'
-import { forbiddenResponse, rateLimitedResponse, unauthorizedResponse } from '@/api/middleware/auth'
+import { forbiddenResponse, isBetterAuthApiError, rateLimitedResponse, unauthorizedResponse } from '@/api/middleware/auth'
 import { badRequestResponse, notFoundResponse, requireNonEmptyString } from '@/api/validation'
 import { createAuth } from '@/features/auth/lib/server'
 
@@ -14,8 +13,14 @@ export const apiKeysApi = new Hono<ApiAuthEnv>()
 // of the API uses. Anything outside this list (500s, etc.) is rethrown
 // rather than flattened to 400 — an internal failure should stay a 500, not
 // be reported to the client as a bad request.
+//
+// Detected by shape (isBetterAuthApiError), not `instanceof APIError` — see
+// api/middleware/auth.ts: Nitro's build can put the apiKey plugin's APIError
+// in a different bundle chunk than a statically-imported 'better-auth'
+// class, which makes `instanceof` silently false and this rethrow into an
+// uncaught 500 instead of the intended response.
 function mapAuthError(error: unknown) {
-  if (error instanceof APIError) {
+  if (isBetterAuthApiError(error)) {
     switch (error.statusCode) {
       case 400:
         return badRequestResponse(error.message)
