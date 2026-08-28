@@ -59,8 +59,48 @@ Click **Draft this Answer from the graph**.
   `A —relation→ B`, with a confidence tag only when it isn't `EXTRACTED`.
 - Switch back to **Files**. Watch DevTools → Network while switching: there must be **no** new
   `/v1/query` call — a variant switch is local state, never a new retrieval.
-- **Draft** and **Canvas** segments render but are inert — clicking them does nothing (they're
-  TBR-71's own deliverable).
+
+## 3.1 Draft — the trap: editing must survive a variant switch
+
+Click the **Draft** segment. The textarea is pre-filled with the same evidence markdown as
+"Copy for your agent" (§5). Edit it — paste in prose from your own agent, or just type
+something distinctive.
+
+- Switch to **Canvas**, then back to **Draft**. **This is the known trap (graph-gui.md
+  §2.5)** — confirm your edit is still there, verbatim, not reset to the original prefill.
+- Switch to **Files** and **Evidence** and back to **Draft** too, for good measure.
+- Below the textarea, a read-only footer preview should show — confirm it is **not** part of
+  the editable text (selecting-all in the textarea should not include it).
+- Click **Expand (depth 2)**. This *is* a new retrieval — confirm your edit is now
+  **replaced** by the new (wider) evidence markdown. This is the one case where losing the
+  edit is correct, not a bug.
+
+## 3.2 Draft — Save
+
+With the Draft textarea containing your edited text, click **Save as Answer**:
+
+- A new Answer appears in the Answer cards list below, named "Graph draft" (or whatever you
+  typed in the Name field).
+- Open it and confirm its content is **exactly** your draft text, followed by the provenance
+  footer, with no reformatting in between.
+- Confirm the footer's source paths are checkout-relative and actually resolve — `cat` one
+  from a plain `git clone` of this repo, not just your working tree.
+- Confirm **no editor links** appear anywhere in the Draft textarea itself (Files, Evidence
+  and Canvas all have them; Draft never does — graph-gui.md §2.6).
+- Click Save again with the same text: confirm a **second, separate** Answer is created
+  (saving is additive, never an update).
+
+## 3.3 Canvas
+
+Click the **Canvas** segment: a node-link diagram renders, nodes tinted by community. Click a
+node:
+
+- A detail panel appears below the diagram showing that node's source path **with an editor
+  link** — click it and confirm it opens your editor at the right file and line.
+- If the node has neighbours in the subgraph, they list below with their own editor links and
+  the relation name.
+- Confirm the diagram itself carries **no** direct editor links — only the detail panel does
+  (graph-gui.md §2.4's "✅ in the detail panel").
 
 ## 4. Expand
 
@@ -97,8 +137,16 @@ With a result already on screen, stop the companion process (Ctrl-C). Per
 `docs/specs/graph-gui.md` §6.2:
 
 - The rendered panel **stays** — banners, stamp, nodes, everything already drawn remains valid.
-- Clicking **Draft this Answer from the graph** again should fail visibly rather than silently
-  (the mutation's error path renders *"Couldn't draft from the graph. …"* in place of the panel).
+- Switch to **Draft** and confirm any text you'd already edited there is **still on screen** —
+  killing the companion must never clear it, since that would destroy work in progress.
+- **Save as Answer** still works — saving hits Notex's own API, not the companion, so it is
+  unaffected by the companion being down.
+- Click **Expand (depth 2)**. It fails — but the panel you already had on screen must **stay
+  exactly as it was**, not get replaced by a full-panel error. (Only the very first "Draft this
+  Answer from the graph" click, before anything has ever rendered, shows the full-panel *"Couldn't
+  draft from the graph. …"* error — once a result exists, a later failed retry must never destroy
+  it. This is the fix TBR-71 made to TBR-70's original behavior, which *did* wipe the panel on any
+  failed retry; if you see that here, it's a regression.)
 - The page must not auto-retry or silently poll — leave it idle with Network open for a minute and
   confirm nothing fires on its own.
 

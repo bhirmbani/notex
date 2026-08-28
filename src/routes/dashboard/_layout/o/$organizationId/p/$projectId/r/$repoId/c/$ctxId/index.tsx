@@ -134,7 +134,7 @@ function ContextPage() {
   const { data: repo } = useRepository(organizationId, repoId)
   const { data: files, isLoading } = useFiles(organizationId, ctxId)
   const updateCtx = useUpdateContext(organizationId, ctxId, repoId)
-  const draft = useQuestionGraphDraft(repoId, ctx?.question)
+  const draft = useQuestionGraphDraft(repoId, ctx?.question, organizationId, ctxId)
   const [showAdd, setShowAdd] = useState(false)
 
   return (
@@ -221,6 +221,15 @@ function ContextPage() {
           variant={draft.variant}
           onVariantChange={draft.setVariant}
           onExpand={draft.expand}
+          draftText={draft.draftText}
+          onDraftTextChange={draft.setDraftText}
+          draftName={draft.draftName}
+          onDraftNameChange={draft.setDraftName}
+          onSave={draft.save}
+          isSaving={draft.isSaving}
+          saveError={draft.saveError}
+          saved={draft.saved}
+          canRetrieve={draft.canDraft}
         />
       )}
 
