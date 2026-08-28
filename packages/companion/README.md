@@ -42,8 +42,9 @@ of starting a broken server.
 ```bash
 notex-companion [serve] [options]   # start the loopback HTTP server — the default command
 notex-companion mcp                 # start the stdio MCP server — graph_status, graph_search,
-                                     # graph_query, graph_path, graph_node, plus notex_* (listed,
-                                     # not yet backed by the Notex API — see TBR-72)
+                                     # graph_query, graph_path, graph_node, plus notex_list_questions,
+                                     # notex_get_question, notex_get_answer, notex_save_answer
+                                     # (require .notex/notex.json — see docs/specs/notex-mcp-server.md)
 ```
 
 Setup, how it picks which checkout to serve, and a manual verification walkthrough:

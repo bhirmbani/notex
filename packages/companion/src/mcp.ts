@@ -11,12 +11,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { loadGraph } from "./graph.ts"
 import { createHeadShaCache } from "./headShaCache.ts"
-import { createGraphTools, createNotexToolStubs, registerMcpTools } from "./mcpTools.ts"
+import { createGraphTools, createNotexTools, registerMcpTools } from "./mcpTools.ts"
+import { createNotexClient, resolveApiUrl } from "./notexClient.ts"
 import { loadNotexConfig } from "./notexConfig.ts"
 import { API_VERSION } from "./ops.ts"
 import { createRetrievalLog } from "./retrievalLog.ts"
 import { OpError } from "./types.ts"
 import type { McpGraphState } from "./mcpTools.ts"
+import type { NotexConfig } from "./notexConfig.ts"
 
 function loadGraphState(checkoutPath: string): McpGraphState {
   try {
@@ -42,10 +44,11 @@ export function buildMcpServer(checkoutPath: string): McpServer {
     // failure, and this is just a small local file, unlike the git spawn headShaCache guards.
     getConfigState: () => loadNotexConfig(checkoutPath),
     retrievalLog,
+    getNotexClient: (config: NotexConfig) => createNotexClient({ baseUrl: resolveApiUrl(), apiKey: config.apiKey }),
   }
 
   const server = new McpServer({ name: "notex-companion", version: API_VERSION })
-  registerMcpTools(server, { ...createGraphTools(ctx), ...createNotexToolStubs(ctx) })
+  registerMcpTools(server, { ...createGraphTools(ctx), ...createNotexTools(ctx) })
   return server
 }
 

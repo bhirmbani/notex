@@ -36,6 +36,10 @@ const ERROR_STATUS: Record<ErrorCode, number> = {
   [ERROR_CODES.graphUnreadable]: 409,
   [ERROR_CODES.invalidRequest]: 422,
   [ERROR_CODES.graphLoading]: 503,
+  // Never thrown by this REST binding's own ops (graph-read only) — present so the Record stays
+  // exhaustive against the shared ErrorCode union the Notex-write MCP tools also use.
+  [ERROR_CODES.forbidden]: 403,
+  [ERROR_CODES.notexApiError]: 502,
 }
 
 export function createHandler(opts: HandlerOptions): (req: Request) => Promise<Response> {

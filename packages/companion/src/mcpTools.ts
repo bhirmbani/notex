@@ -6,14 +6,18 @@
 // graph_* tools bind ops.ts verbatim (§2.1) and are always listed, even when the graph failed to
 // load — §4.1's "hiding a tool is rejected" argument isn't Notex-specific, and a listed-but-erroring
 // tool is a better failure mode for an MCP host than a dead process. notex_* tools are listed here
-// too (their argument shapes are §2.4's), but every handler errors: the write-tool's actual Notex
-// API binding is TBR-72's job, out of scope for "graph_* tools" (TBR-69).
+// too (their argument shapes are §2.4's) and, once `.notex/notex.json` is linked, are backed by
+// the real Notex API via notexClient.ts (TBR-72) — unlinked, every notex_* handler still returns
+// §4.1's actionable link message rather than erroring.
 
 import { z } from "zod"
+import { buildFooter } from "./footer.ts"
 import { node, path, query, search, status } from "./ops.ts"
 import { OpError } from "./types.ts"
+import type { FooterSource } from "./footer.ts"
 import type { GraphIndex } from "./graph.ts"
-import type { NotexConfigState } from "./notexConfig.ts"
+import type { NotexConfig, NotexConfigState } from "./notexConfig.ts"
+import type { NotexClient } from "./notexClient.ts"
 import type { RetrievalLog } from "./retrievalLog.ts"
 import type { GraphStamp, OpResponse } from "./types.ts"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
@@ -30,6 +34,9 @@ export type McpToolContext = {
    * run mid-session without a restart. */
   getConfigState: () => NotexConfigState
   retrievalLog: RetrievalLog
+  /** Built fresh from the linked config on every notex_* call — a seam mcpTools.test.ts uses to
+   * inject a fake client, and the same "re-verify, don't cache" posture as getConfigState. */
+  getNotexClient: (config: NotexConfig) => NotexClient
 }
 
 export type ToolDef = {
@@ -193,44 +200,126 @@ export function createGraphTools(ctx: McpToolContext): Record<string, ToolDef> {
   }
 }
 
-// ------------------------------------------------------------- notex_* stubs
+// ------------------------------------------------------------------ notex_*
 
 /** §4.1's exact wording — an agent reading this must land on the actionable fix. */
 const LINK_MESSAGE = "Not linked to a Notex Repository — run `npx notex-companion link`"
 
-function notexStubHandler(ctx: McpToolContext, notImplementedText: string): ToolDef["handler"] {
-  return () => {
-    const state = ctx.getConfigState()
-    if (state.kind === "unlinked") return { isError: true, content: [{ type: "text", text: LINK_MESSAGE }] }
-    return { isError: true, content: [{ type: "text", text: notImplementedText }] }
-  }
+/** §2.3: Answers with contentType "text" are inlined up to 4 KB each. */
+const MAX_INLINE_ANSWER_BYTES = 4096
+
+type Linked = { ok: true; config: NotexConfig } | { ok: false; error: CallToolResult }
+
+function requireLinked(ctx: McpToolContext): Linked {
+  const state = ctx.getConfigState()
+  if (state.kind === "unlinked") return { ok: false, error: { isError: true, content: [{ type: "text", text: LINK_MESSAGE }] } }
+  return { ok: true, config: state.config }
 }
 
-/**
- * Argument shapes only, per §2.3/§2.4 — every handler errors. The actual Notex Worker binding
- * (auth, requests, the retrieval-log-checked write) is TBR-72's job. What TBR-69 owes here is
- * §4.1's acceptance bar: the tools are listed, never hidden, and a missing/malformed
- * `.notex/notex.json` produces the documented actionable error rather than a stack trace.
- */
-export function createNotexToolStubs(ctx: McpToolContext): Record<string, ToolDef> {
-  const notImplemented = (name: string) => `${name} is linked but not yet implemented — see TBR-72`
+/** Re-throws anything that isn't the one error type this module's dependencies can throw —
+ * an unexpected exception should surface as a crash, not a silently swallowed tool error. */
+function fromNotexError(err: unknown): CallToolResult {
+  if (err instanceof OpError) return errorResult(err)
+  throw err
+}
 
+/** A naive byte-offset slice can land mid-character — `Buffer#toString("utf8")` then silently
+ * replaces the dangling bytes with U+FFFD, corrupting the content and pushing it back over
+ * `maxBytes`. Back off to the nearest character boundary at or before `maxBytes` instead. */
+function truncateUtf8(text: string, maxBytes: number): string {
+  const buf = Buffer.from(text, "utf8")
+  if (buf.length <= maxBytes) return text
+
+  let end = maxBytes
+  // A continuation byte (10xxxxxx) at the boundary belongs to a character that started earlier —
+  // back off over all of them to find the start of the character straddling `maxBytes`.
+  while (end > 0 && (buf[end - 1]! & 0xc0) === 0x80) end--
+  if (end > 0) {
+    const lead = buf[end - 1]!
+    const seqLen = lead >= 0xf0 ? 4 : lead >= 0xe0 ? 3 : lead >= 0xc0 ? 2 : 1
+    // That lead byte's full sequence doesn't fit before maxBytes — drop the whole character.
+    if (end - 1 + seqLen > maxBytes) end--
+  }
+  return buf.subarray(0, end).toString("utf8")
+}
+
+type AnswerSummary =
+  | { id: string; name: string; contentType: "upload"; createdAt: string }
+  | { id: string; name: string; contentType: "text"; content: string; truncated?: true; createdAt: string }
+
+/** §2.3's truncation rule for `notex_get_question`; `notex_get_answer` returns full content instead. */
+function summarizeAnswer(file: { id: string; name: string; contentType: "text" | "upload"; content: string; createdAt: string }): AnswerSummary {
+  if (file.contentType === "upload") return { id: file.id, name: file.name, contentType: "upload", createdAt: file.createdAt }
+  const bytes = Buffer.byteLength(file.content, "utf8")
+  if (bytes <= MAX_INLINE_ANSWER_BYTES) {
+    return { id: file.id, name: file.name, contentType: "text", content: file.content, createdAt: file.createdAt }
+  }
+  return { id: file.id, name: file.name, contentType: "text", content: truncateUtf8(file.content, MAX_INLINE_ANSWER_BYTES), truncated: true, createdAt: file.createdAt }
+}
+
+export function createNotexTools(ctx: McpToolContext): Record<string, ToolDef> {
   return {
     notex_list_questions: {
       description: "List the bound Repository's Questions.",
       inputSchema: {},
-      handler: notexStubHandler(ctx, notImplemented("notex_list_questions")),
+      handler: async () => {
+        const linked = requireLinked(ctx)
+        if (!linked.ok) return linked.error
+        try {
+          const client = ctx.getNotexClient(linked.config)
+          const questions = await client.listContexts(linked.config.organizationId, linked.config.repositoryId)
+          const text = questions.length === 0 ? "No Questions yet." : questions.map((q) => `${q.id} — ${q.question}`).join("\n")
+          return { content: [{ type: "text", text }], structuredContent: { questions } }
+        } catch (err) {
+          return fromNotexError(err)
+        }
+      },
     },
+
     notex_get_question: {
       description: "A Question plus its Answers.",
       inputSchema: { questionId: z.string().min(1) },
-      handler: notexStubHandler(ctx, notImplemented("notex_get_question")),
+      handler: async (args) => {
+        const linked = requireLinked(ctx)
+        if (!linked.ok) return linked.error
+        const { questionId } = args as { questionId: string }
+        try {
+          const client = ctx.getNotexClient(linked.config)
+          const question = await client.getContext(linked.config.organizationId, questionId)
+          // Treated as not-found, not forbidden: a Question outside the bound Repository is out
+          // of scope for this tool (§2.3's "the bound Repository's Questions"), same posture as
+          // §4's "the wrong Project is unrepresentable" for org/project/repo ids.
+          if (question.repositoryId !== linked.config.repositoryId) {
+            return errorResult(new OpError("not_found", `Unknown Question id: ${questionId}`))
+          }
+          const files = await client.listFiles(linked.config.organizationId, questionId)
+          const answers = files.map(summarizeAnswer)
+          const text = `${question.question}\n\n${answers.length} answer(s)`
+          return { content: [{ type: "text", text }], structuredContent: { question, answers } }
+        } catch (err) {
+          return fromNotexError(err)
+        }
+      },
     },
+
     notex_get_answer: {
       description: "Full Answer content.",
       inputSchema: { answerId: z.string().min(1) },
-      handler: notexStubHandler(ctx, notImplemented("notex_get_answer")),
+      handler: async (args) => {
+        const linked = requireLinked(ctx)
+        if (!linked.ok) return linked.error
+        const { answerId } = args as { answerId: string }
+        try {
+          const client = ctx.getNotexClient(linked.config)
+          const answer = await client.getFile(linked.config.organizationId, answerId)
+          const text = answer.contentType === "upload" ? `${answer.name} (upload, no readable content)` : answer.content
+          return { content: [{ type: "text", text }], structuredContent: { answer } }
+        } catch (err) {
+          return fromNotexError(err)
+        }
+      },
     },
+
     notex_save_answer: {
       description:
         "Save a graph-drafted Answer. Strictly additive — always creates a new Answer, never updates or deletes. Exactly one of question/questionId.",
@@ -241,7 +330,79 @@ export function createNotexToolStubs(ctx: McpToolContext): Record<string, ToolDe
         content: z.string().min(1),
         sourceNodeIds: z.array(z.string()).min(1),
       },
-      handler: notexStubHandler(ctx, notImplemented("notex_save_answer")),
+      handler: async (args) => {
+        const linked = requireLinked(ctx)
+        if (!linked.ok) return linked.error
+        const { config } = linked
+
+        const a = args as { question?: string; questionId?: string; name: string; content: string; sourceNodeIds: Array<string> }
+        if ((a.question === undefined) === (a.questionId === undefined)) {
+          return errorResult(new OpError("invalid_request", "Exactly one of question or questionId is required"))
+        }
+
+        const graphState = ctx.getGraphState()
+        if (graphState.kind === "error") return errorResult(graphState.error)
+        const { index } = graphState
+
+        // §5.1: any id the server did not itself return in this session is rejected and the
+        // whole write fails — a fabricated citation is worse than no footer.
+        const uniqueIds = [...new Set(a.sourceNodeIds)]
+        const unresolved = uniqueIds.filter((id) => !ctx.retrievalLog.has(id))
+        if (unresolved.length > 0) {
+          return errorResult(
+            new OpError("invalid_request", `sourceNodeIds cites id(s) not returned by this session's graph_query/graph_node/graph_path: ${unresolved.join(", ")}`),
+          )
+        }
+
+        const sources: Array<FooterSource> = uniqueIds.map((id) => {
+          const projected = index.project(index.nodesById.get(id)!)
+          return { file: projected.sourceFile, location: projected.sourceLocation }
+        })
+        // No truncated/degraded note here: unlike graph_query, this tool doesn't retrieve — the
+        // §2.4 schema gives it no way to know whether the retrieval that produced sourceNodeIds
+        // was truncated or degraded, so the line is correctly omitted rather than guessed at.
+        const footer = buildFooter(index.stamp, sources)
+        const fullContent = a.content + footer
+
+        try {
+          const client = ctx.getNotexClient(config)
+
+          let targetQuestionId: string
+          let createdNewQuestion = false
+          if (a.question !== undefined) {
+            const created = await client.createContext(config.organizationId, config.repositoryId, a.question)
+            targetQuestionId = created.id
+            createdNewQuestion = true
+          } else {
+            const existing = await client.getContext(config.organizationId, a.questionId!)
+            if (existing.repositoryId !== config.repositoryId) {
+              return errorResult(new OpError("not_found", `Unknown Question id: ${a.questionId}`))
+            }
+            targetQuestionId = existing.id
+          }
+
+          let file: Awaited<ReturnType<typeof client.createFile>>
+          try {
+            file = await client.createFile(config.organizationId, targetQuestionId, {
+              name: a.name,
+              contentType: "text",
+              content: fullContent,
+            })
+          } catch (fileErr) {
+            // §3.1: a Question may exist only atomically with its first Answer. The Answer write
+            // just failed, so a Question this call created moments ago would otherwise be left
+            // orphaned — exactly the "machine-generated Question nobody asked for" §3.1 says must
+            // be structurally impossible. Best-effort: the original error still wins either way.
+            if (createdNewQuestion) await client.deleteContext(config.organizationId, targetQuestionId).catch(() => {})
+            throw fileErr
+          }
+
+          const text = `Saved Answer "${file.name}" (${file.id}) to Question ${targetQuestionId}.`
+          return { content: [{ type: "text", text }], structuredContent: { answerId: file.id, questionId: targetQuestionId, footer } }
+        } catch (err) {
+          return fromNotexError(err)
+        }
+      },
     },
   }
 }
