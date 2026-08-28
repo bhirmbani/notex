@@ -18,6 +18,9 @@ import { Button } from "@/components/ui/button"
 import { LinkModal } from "@/components/LinkModal"
 import { Breadcrumb } from "@/components/Breadcrumb"
 import { InlineEditField } from "@/components/InlineEditField"
+import { QuestionGraphAction } from "@/features/companion/QuestionGraphAction"
+import { QuestionGraphPanel } from "@/features/companion/QuestionGraphPanel"
+import { useQuestionGraphDraft } from "@/features/companion/questionGraphDraft"
 
 export const Route = createFileRoute(
   "/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/"
@@ -131,6 +134,7 @@ function ContextPage() {
   const { data: repo } = useRepository(organizationId, repoId)
   const { data: files, isLoading } = useFiles(organizationId, ctxId)
   const updateCtx = useUpdateContext(organizationId, ctxId, repoId)
+  const draft = useQuestionGraphDraft(repoId, ctx?.question)
   const [showAdd, setShowAdd] = useState(false)
 
   return (
@@ -185,18 +189,40 @@ function ContextPage() {
       </div>
 
       {/* Answers header */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <p className="font-mono text-xs text-muted-foreground">
           <strong className="font-semibold text-foreground">
             {files?.length ?? 0}
           </strong>{" "}
           Answers
         </p>
-        <Button size="sm" onClick={() => setShowAdd(true)}>
-          <RiAddLine className="mr-1.5 size-4" />
-          Post Answer
-        </Button>
+        <div className="flex items-center gap-2">
+          <QuestionGraphAction
+            organizationId={organizationId}
+            projectId={projectId}
+            repoId={repoId}
+            canDraft={draft.canDraft}
+            connectionState={draft.connectionState}
+            isPending={draft.isPending}
+            onDraft={draft.run}
+          />
+          <Button size="sm" onClick={() => setShowAdd(true)}>
+            <RiAddLine className="mr-1.5 size-4" />
+            Post Answer
+          </Button>
+        </div>
       </div>
+
+      {(draft.result || draft.isPending || draft.error) && (
+        <QuestionGraphPanel
+          result={draft.result}
+          isPending={draft.isPending}
+          error={draft.error}
+          variant={draft.variant}
+          onVariantChange={draft.setVariant}
+          onExpand={draft.expand}
+        />
+      )}
 
       {/* Answer cards */}
       {isLoading ? (
