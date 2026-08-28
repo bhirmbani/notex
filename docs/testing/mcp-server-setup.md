@@ -57,7 +57,7 @@ to authentication" — and confirm:
 - If the checkout has commits after the graph's `headSha`, every response's text block carries a
   one-line staleness warning, and the call still succeeds (§6 — reported, never gated).
 
-## 4. Exercise the notex_* stubs
+## 4. Exercise the notex_* tools
 
 Without a `.notex/notex.json` in the checkout (the common case today — `npx notex-companion link`
 doesn't exist yet, tracked as
@@ -67,19 +67,26 @@ doesn't exist yet, tracked as
 Not linked to a Notex Repository — run `npx notex-companion link`
 ```
 
-To see the "linked" branch, hand-write `.notex/notex.json`:
+To see the "linked" branch, hand-write `.notex/notex.json` with a real API key (Notex Settings →
+API keys) and ids for a Repository you have access to:
 
 ```json
 {
-  "organizationId": "org_test",
-  "projectId": "proj_test",
-  "repositoryId": "repo_test",
-  "apiKey": "key_test"
+  "organizationId": "org_...",
+  "projectId": "proj_...",
+  "repositoryId": "repo_...",
+  "apiKey": "key_..."
 }
 ```
 
-`notex_*` calls should now return `"<tool> is linked but not yet implemented — see TBR-72"` instead
-— the real Notex Worker binding is [TBR-72](https://linear.app/bmbn/issue/TBR-72), not yet shipped.
+By default the server calls the Notex API at `http://localhost:3000` — set `NOTEX_API_URL` to
+point it at a different origin (e.g. a deployed Worker) before starting the MCP host.
+
+`notex_list_questions`, `notex_get_question`, and `notex_get_answer` should now return real data
+from that Repository. `notex_save_answer` requires `sourceNodeIds` that came from a `graph_query`,
+`graph_node`, or `graph_path` call earlier **in the same session** (§5.1) — citing an id the
+session never returned fails the write with `invalid_request`, and the saved Answer should appear
+in the Notex UI with a resolving provenance footer.
 
 ## Testing an unreleased build
 

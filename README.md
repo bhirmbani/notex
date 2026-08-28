@@ -27,6 +27,7 @@ Most of the suite is `bun run test` (Vitest). One flow can't be covered there:
 - [Manual test: the connect-companion flow on a deployed origin](docs/testing/companion-connect-flow.md) — the Local Network Access permission prompt never fires from `localhost`, so the companion's grant/deny paths have to be verified by hand against a deployed `https://` origin.
 - [Running the MCP server: setup and manual verification](docs/testing/mcp-server-setup.md) — how to wire `npx notex-companion mcp` into an MCP host, which directory it reads from, and how to verify the tool surface by hand (or test an unreleased build).
 - [Manual test: "Draft this Answer from the graph" on a Question](docs/testing/question-graph-draft.md) — the Question surface's graph draft action has no end-to-end coverage against a real companion process; this walks the retrieval, variant switcher, honesty banners, and clipboard handoff by hand, entirely in local dev.
+- [Manual test: notex_* MCP tools against a real Notex API](docs/testing/notex-save-answer-manual-test.md) — the `notex_*` MCP tools are unit-tested against a faked Notex client, not the real `/api/v1` routes; this walks linking a checkout, the read/write tools, the refusal paths (fabricated source, stale session, wrong Repository, no Grant), and the byte-identical-footer check against the UI's own save path.
 
 ## Database (D1)
 

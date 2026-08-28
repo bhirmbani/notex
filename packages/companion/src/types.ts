@@ -58,6 +58,11 @@ export const ERROR_CODES = {
   graphUnreadable: "graph_unreadable",
   invalidRequest: "invalid_request",
   graphLoading: "graph_loading",
+  /** The Notex API rejected a request as 403 — key holder lacks Grant access to the Project. */
+  forbidden: "forbidden",
+  /** Any other non-2xx from the Notex API (rate limit, 5xx, ...) — notex-mcp-server.md §4.1
+   * reuses this module's error vocabulary rather than inventing a second taxonomy. */
+  notexApiError: "notex_api_error",
 } as const
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES]

@@ -56,7 +56,7 @@ describe("MCP wiring", () => {
     expect(result.isError).toBe(true)
   })
 
-  it("calls a notex_* stub and gets the graph-only-mode error, since this checkout has no .notex/notex.json", async () => {
+  it("calls a notex_* tool and gets the graph-only-mode error, since this checkout has no .notex/notex.json", async () => {
     const client = await connectedClient()
     const result = await client.callTool({ name: "notex_list_questions", arguments: {} })
     expect(result.isError).toBe(true)
