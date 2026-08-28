@@ -1,19 +1,26 @@
-// The Question surface's inline result panel (graph-gui.md §2.3). Renders above the
-// Answer cards. Draft and Canvas are TBR-71's own deliverable — their segments render
-// disabled here so the switcher's final shape (and order) lands with this ticket.
+// The Question surface's inline result panel (graph-gui.md §2.3, §2.4, §2.5). Renders
+// above the Answer cards. Draft's own text is owned by the caller (`useQuestionGraphDraft`)
+// and passed in as a controlled value — this component never holds it in local state, which
+// is precisely the trap graph-gui.md §2.5 warns about: a variant switch must never discard
+// an edit.
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { RiExternalLinkLine } from "@remixicon/react"
 
 import { rankFiles } from "./rankFiles"
 import { groupEvidence } from "./groupEvidence"
-import type { ReactNode } from "react"
+import { computeCanvasLayout } from "./canvasLayout"
+import { communityColor } from "./communityColor"
+import type { KeyboardEvent, ReactNode } from "react"
 import type { GraphVariant } from "./questionGraphDraft"
 import type { EditorScheme } from "@/lib/editorScheme"
 import type { GraphEdge, GraphNode, OpResponse, QueryResult } from "notex-companion/client"
 import { cn } from "@/lib/utils"
 import { buildEditorLink, getStoredEditorScheme } from "@/lib/editorScheme"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
   result: OpResponse<QueryResult> | undefined
@@ -22,9 +29,23 @@ type Props = {
   variant: GraphVariant
   onVariantChange: (v: GraphVariant) => void
   onExpand: () => void
+  draftText: string
+  onDraftTextChange: (value: string) => void
+  draftName: string
+  onDraftNameChange: (value: string) => void
+  onSave: () => void
+  isSaving: boolean
+  saveError: Error | null
+  saved: boolean
+  /** Gates the Expand control only — Save and variant switching never need the companion. */
+  canRetrieve: boolean
 }
 
 const SEGMENTS = ["files", "evidence", "draft", "canvas"] as const
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled GraphVariant: ${JSON.stringify(value)}`)
+}
 
 export function QuestionGraphPanel({
   result,
@@ -33,6 +54,15 @@ export function QuestionGraphPanel({
   variant,
   onVariantChange,
   onExpand,
+  draftText,
+  onDraftTextChange,
+  draftName,
+  onDraftNameChange,
+  onSave,
+  isSaving,
+  saveError,
+  saved,
+  canRetrieve,
 }: Props) {
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState(false)
@@ -40,7 +70,10 @@ export function QuestionGraphPanel({
   if (isPending && !result) {
     return <div className="mb-6 h-24 animate-pulse rounded-xl border bg-muted/30" />
   }
-  if (error) {
+  // A result already on screen must survive a later failed retrieval — killing the companion
+  // mid-session (graph-gui.md §6.2) must never blank out evidence and Draft text the user is
+  // relying on. Only show the bare error state when there is nothing else to show yet.
+  if (error && !result) {
     return (
       <div className="mb-6 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
         Couldn&apos;t draft from the graph. {error.message}
@@ -96,31 +129,23 @@ export function QuestionGraphPanel({
         <>
           <div className="flex items-center justify-between border-b px-4 py-2">
             <div className="flex gap-1" role="tablist" aria-label="Result variant">
-              {SEGMENTS.map((seg) => {
-                const disabled = seg === "draft" || seg === "canvas"
-                return (
-                  <button
-                    key={seg}
-                    type="button"
-                    role="tab"
-                    aria-selected={variant === seg}
-                    disabled={disabled}
-                    onClick={() => {
-                      if (seg === "files" || seg === "evidence") onVariantChange(seg)
-                    }}
-                    className={cn(
-                      "rounded-md px-2.5 py-1 text-xs font-medium capitalize",
-                      disabled
-                        ? "cursor-not-allowed text-muted-foreground/40"
-                        : variant === seg
-                          ? "bg-foreground text-background"
-                          : "text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    {seg}
-                  </button>
-                )
-              })}
+              {SEGMENTS.map((seg) => (
+                <button
+                  key={seg}
+                  type="button"
+                  role="tab"
+                  aria-selected={variant === seg}
+                  onClick={() => onVariantChange(seg)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium capitalize",
+                    variant === seg
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  {seg}
+                </button>
+              ))}
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>
@@ -129,7 +154,13 @@ export function QuestionGraphPanel({
               <button
                 type="button"
                 onClick={onExpand}
-                className="underline hover:text-foreground"
+                disabled={!canRetrieve}
+                title={canRetrieve ? undefined : "Companion not connected — reconnect to expand."}
+                className={cn(
+                  canRetrieve
+                    ? "underline hover:text-foreground"
+                    : "cursor-not-allowed text-muted-foreground/40"
+                )}
               >
                 Expand (depth 2)
               </button>
@@ -137,22 +168,55 @@ export function QuestionGraphPanel({
           </div>
 
           <div className="p-4">
-            {variant === "files" ? (
-              <FilesVariant
-                nodes={result.subgraph.nodes}
-                seeds={result.subgraph.seeds}
-                checkoutPath={checkoutPath}
-                scheme={scheme}
-              />
-            ) : (
-              <EvidenceVariant
-                nodes={result.subgraph.nodes}
-                edges={result.subgraph.edges}
-                seeds={result.subgraph.seeds}
-                checkoutPath={checkoutPath}
-                scheme={scheme}
-              />
-            )}
+            {(() => {
+              switch (variant) {
+                case "files":
+                  return (
+                    <FilesVariant
+                      nodes={result.subgraph.nodes}
+                      seeds={result.subgraph.seeds}
+                      checkoutPath={checkoutPath}
+                      scheme={scheme}
+                    />
+                  )
+                case "evidence":
+                  return (
+                    <EvidenceVariant
+                      nodes={result.subgraph.nodes}
+                      edges={result.subgraph.edges}
+                      seeds={result.subgraph.seeds}
+                      checkoutPath={checkoutPath}
+                      scheme={scheme}
+                    />
+                  )
+                case "draft":
+                  return (
+                    <DraftVariant
+                      value={draftText}
+                      onChange={onDraftTextChange}
+                      name={draftName}
+                      onNameChange={onDraftNameChange}
+                      footer={result.footer}
+                      onSave={onSave}
+                      isSaving={isSaving}
+                      saveError={saveError}
+                      saved={saved}
+                    />
+                  )
+                case "canvas":
+                  return (
+                    <CanvasVariant
+                      nodes={result.subgraph.nodes}
+                      edges={result.subgraph.edges}
+                      seeds={result.subgraph.seeds}
+                      checkoutPath={checkoutPath}
+                      scheme={scheme}
+                    />
+                  )
+                default:
+                  return assertNever(variant)
+              }
+            })()}
           </div>
         </>
       )}
@@ -317,6 +381,213 @@ export function EvidenceVariant({
             ))}
           </ul>
         </details>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The Answer you would save: deterministic body, editable, plus a read-only preview of the
+ * provenance footer (graph-gui.md §2.4, §2.6). No editor links here — the text is saved
+ * verbatim as the Answer, so nothing may be injected into it that is not Answer content.
+ */
+function DraftVariant({
+  value,
+  onChange,
+  name,
+  onNameChange,
+  footer,
+  onSave,
+  isSaving,
+  saveError,
+  saved,
+}: {
+  value: string
+  onChange: (value: string) => void
+  name: string
+  onNameChange: (value: string) => void
+  footer: string | undefined
+  onSave: () => void
+  isSaving: boolean
+  saveError: Error | null
+  saved: boolean
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor="graph-draft-name">Name</Label>
+        <Input
+          id="graph-draft-name"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="graph-draft-text">Draft answer</Label>
+        <Textarea
+          id="graph-draft-text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={12}
+          className="font-mono text-xs"
+        />
+      </div>
+      {footer && (
+        <div className="rounded-md border bg-muted/20 p-3 font-mono text-[11px] whitespace-pre-wrap text-muted-foreground">
+          {footer}
+          <p className="mt-1 font-sans text-[10px] text-muted-foreground/70">
+            Appended automatically when you save — not part of the editable text above.
+          </p>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-3">
+        <Button size="sm" onClick={onSave} disabled={isSaving || !value.trim() || !name.trim()}>
+          {isSaving ? "Saving…" : saved ? "Saved" : "Save as Answer"}
+        </Button>
+        {saveError && (
+          <p role="alert" className="text-xs text-destructive">
+            Couldn&apos;t save. {saveError.message}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const CANVAS_WIDTH = 600
+const CANVAS_HEIGHT = 360
+
+/**
+ * The subgraph as a node-link diagram, community-coloured, click for neighbours
+ * (graph-gui.md §2.4). Editor links live in the detail panel below the diagram, not on the
+ * diagram itself — one per node would be unreadable at 60 nodes.
+ */
+function CanvasVariant({
+  nodes,
+  edges,
+  seeds,
+  checkoutPath,
+  scheme,
+}: {
+  nodes: Array<GraphNode>
+  edges: Array<GraphEdge>
+  seeds: Array<string>
+  checkoutPath: string
+  scheme: EditorScheme
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // A new retrieval (Expand) hands down a new `nodes` array — any prior selection belongs
+  // to the subgraph that's now gone, so it must not silently persist into the new one.
+  useEffect(() => setSelectedId(null), [nodes])
+
+  const layout = useMemo(
+    () => computeCanvasLayout(nodes, edges, seeds, { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }),
+    [nodes, edges, seeds]
+  )
+  const seedSet = useMemo(() => new Set(seeds), [seeds])
+  const nodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
+  const selected = selectedId ? nodeById.get(selectedId) : undefined
+  const neighbours = useMemo(() => {
+    if (!selected) return []
+    return edges
+      .filter((e) => e.source === selected.id || e.target === selected.id)
+      .map((e) => ({
+        node: nodeById.get(e.source === selected.id ? e.target : e.source),
+        relation: e.relation,
+      }))
+      .filter((n): n is { node: GraphNode; relation: string } => !!n.node)
+  }, [edges, nodeById, selected])
+
+  const selectNode = (id: string) => setSelectedId(id)
+  const handleNodeKeyDown = (id: string) => (e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      selectNode(id)
+    }
+  }
+
+  if (nodes.length === 0) {
+    return <p className="text-xs text-muted-foreground">No results.</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      <svg
+        viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
+        role="img"
+        aria-label="Subgraph diagram"
+        className="w-full rounded-lg border bg-muted/10"
+      >
+        {edges.map((e, i) => {
+          const a = layout.get(e.source)
+          const b = layout.get(e.target)
+          if (!a || !b) return null
+          return (
+            <line
+              key={i}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              stroke="currentColor"
+              className="text-border"
+              strokeWidth={1}
+            />
+          )
+        })}
+        {nodes.map((n) => {
+          const p = layout.get(n.id)
+          if (!p) return null
+          return (
+            <g
+              key={n.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Show ${n.label} in the graph`}
+              onClick={() => selectNode(n.id)}
+              onKeyDown={handleNodeKeyDown(n.id)}
+              className="cursor-pointer"
+            >
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={seedSet.has(n.id) ? 8 : 5}
+                fill={communityColor(n.community)}
+                stroke={selectedId === n.id ? "currentColor" : "none"}
+                strokeWidth={2}
+              >
+                <title>{n.label}</title>
+              </circle>
+            </g>
+          )
+        })}
+      </svg>
+
+      {selected ? (
+        <div className="rounded-lg border">
+          <GraphNodeRow node={selected} checkoutPath={checkoutPath} scheme={scheme} />
+          {neighbours.length > 0 && (
+            <div className="divide-y border-t bg-muted/20">
+              {neighbours.map(({ node, relation }) => (
+                <GraphNodeRow
+                  key={node.id}
+                  node={node}
+                  checkoutPath={checkoutPath}
+                  scheme={scheme}
+                  badge={
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                      {relation}
+                    </span>
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Click a node to see its source and neighbours.
+        </p>
       )}
     </div>
   )
