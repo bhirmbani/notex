@@ -2,11 +2,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { renderHook, waitFor } from "@testing-library/react"
-import type { ReactNode } from "react"
 
 import { useQuestionGraphDraft } from "./questionGraphDraft"
 import * as connectionState from "./connectionState"
 import * as client from "./client"
+import type { ReactNode } from "react"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -38,7 +38,6 @@ describe("useQuestionGraphDraft", () => {
 
     await waitFor(() => expect(result.current.connectionState).toBe("unpaired"))
     expect(result.current.canDraft).toBe(false)
-    expect(result.current.checkoutPath).toBeNull()
 
     result.current.run()
     expect(querySpy).not.toHaveBeenCalled()
@@ -61,7 +60,6 @@ describe("useQuestionGraphDraft", () => {
     )
 
     await waitFor(() => expect(result.current.canDraft).toBe(true))
-    expect(result.current.checkoutPath).toBe("/repo")
 
     result.current.run()
 

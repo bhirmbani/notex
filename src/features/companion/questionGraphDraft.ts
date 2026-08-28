@@ -7,8 +7,6 @@
 import { useState } from "react"
 
 import { useCompanionConnection, useCompanionQuery } from "./hooks"
-import type { ConnectionState } from "./types"
-import type { OpResponse, QueryResult } from "notex-companion/client"
 
 export type GraphVariant = "files" | "evidence"
 
@@ -19,10 +17,6 @@ export function useQuestionGraphDraft(
   const connection = useCompanionConnection(repositoryId)
   const pairing =
     connection.data?.state === "connected" ? connection.data.pairing : null
-  const checkoutPath =
-    connection.data?.state === "connected"
-      ? connection.data.status.graph.checkoutPath
-      : null
   const mutation = useCompanionQuery(pairing)
   const [variant, setVariant] = useState<GraphVariant>("files")
 
@@ -38,14 +32,13 @@ export function useQuestionGraphDraft(
   }
 
   return {
-    connectionState: connection.data?.state as ConnectionState | undefined,
+    connectionState: connection.data?.state,
     canDraft: connection.data?.state === "connected" && !!question,
-    checkoutPath,
     variant,
     setVariant,
     run,
     expand,
-    result: mutation.data as OpResponse<QueryResult> | undefined,
+    result: mutation.data,
     isPending: mutation.isPending,
     error: mutation.error,
   }

@@ -215,7 +215,6 @@ function ContextPage() {
 
       {(draft.result || draft.isPending || draft.error) && (
         <QuestionGraphPanel
-          checkoutPath={draft.checkoutPath}
           result={draft.result}
           isPending={draft.isPending}
           error={draft.error}

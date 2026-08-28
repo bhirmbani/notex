@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 
 import { QuestionGraphPanel } from "./QuestionGraphPanel"
 import type { OpResponse, QueryResult } from "notex-companion/client"
@@ -59,7 +59,6 @@ function renderPanel(overrides: Partial<Parameters<typeof QuestionGraphPanel>[0]
   const onExpand = vi.fn()
   render(
     <QuestionGraphPanel
-      checkoutPath="/Users/dev/notex"
       result={baseResult()}
       isPending={false}
       error={null}
@@ -76,7 +75,6 @@ describe("QuestionGraphPanel", () => {
   it("renders nothing before a draft has been run", () => {
     const { container } = render(
       <QuestionGraphPanel
-        checkoutPath="/Users/dev/notex"
         result={undefined}
         isPending={false}
         error={null}
@@ -147,14 +145,28 @@ describe("QuestionGraphPanel", () => {
     expect(onExpand).toHaveBeenCalledTimes(1)
   })
 
-  it("copies the context markdown verbatim, and nothing else, to the clipboard", () => {
+  it("copies the context markdown verbatim, and nothing else, to the clipboard", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
 
     renderPanel()
     fireEvent.click(screen.getByRole("button", { name: "Copy for your agent" }))
 
-    expect(writeText).toHaveBeenCalledWith("# question\n\nevidence")
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("# question\n\nevidence"))
+  })
+
+  it("shows a clipboard error message when the copy fails", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"))
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    renderPanel()
+    fireEvent.click(screen.getByRole("button", { name: "Copy for your agent" }))
+
+    expect(
+      await screen.findByText(
+        "Could not copy to your clipboard. Try again, or check your browser's clipboard permission."
+      )
+    ).toBeTruthy()
   })
 
   it("builds an editor link from checkoutPath + sourceFile honouring the stored scheme", () => {

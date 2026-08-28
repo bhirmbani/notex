@@ -1,7 +1,9 @@
 // src/features/companion/QuestionGraphAction.test.tsx
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen, fireEvent } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+
+import { QuestionGraphAction } from "./QuestionGraphAction"
 
 // No route tree exists in an isolated component test, and this codebase has no precedent
 // for mounting a real TanStack Router just to render one Link — mock it as a plain anchor,
@@ -28,8 +30,6 @@ vi.mock("@tanstack/react-router", () => ({
     )
   },
 }))
-
-import { QuestionGraphAction } from "./QuestionGraphAction"
 
 afterEach(cleanup)
 

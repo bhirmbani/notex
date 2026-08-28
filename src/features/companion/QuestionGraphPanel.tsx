@@ -2,6 +2,7 @@
 // Answer cards. Draft and Canvas are TBR-71's own deliverable — their segments render
 // disabled here so the switcher's final shape (and order) lands with this ticket.
 
+import { useState } from "react"
 import { RiExternalLinkLine } from "@remixicon/react"
 
 import { rankFiles } from "./rankFiles"
@@ -15,7 +16,6 @@ import { buildEditorLink, getStoredEditorScheme } from "@/lib/editorScheme"
 import { Button } from "@/components/ui/button"
 
 type Props = {
-  checkoutPath: string | null
   result: OpResponse<QueryResult> | undefined
   isPending: boolean
   error: Error | null
@@ -27,7 +27,6 @@ type Props = {
 const SEGMENTS = ["files", "evidence", "draft", "canvas"] as const
 
 export function QuestionGraphPanel({
-  checkoutPath,
   result,
   isPending,
   error,
@@ -35,6 +34,9 @@ export function QuestionGraphPanel({
   onVariantChange,
   onExpand,
 }: Props) {
+  const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState(false)
+
   if (isPending && !result) {
     return <div className="mb-6 h-24 animate-pulse rounded-xl border bg-muted/30" />
   }
@@ -45,10 +47,22 @@ export function QuestionGraphPanel({
       </div>
     )
   }
-  if (!result || !checkoutPath) return null
+  if (!result) return null
 
+  const checkoutPath = result.graph.checkoutPath
   const scheme = getStoredEditorScheme()
   const builtDate = result.graph.builtAt.slice(0, 10)
+
+  const handleCopy = async () => {
+    if (!result.context) return
+    try {
+      await navigator.clipboard.writeText(result.context.markdown)
+      setCopied(true)
+      setCopyError(false)
+    } catch {
+      setCopyError(true)
+    }
+  }
 
   return (
     <div className="mb-6 rounded-xl border bg-card">
@@ -143,20 +157,21 @@ export function QuestionGraphPanel({
         </>
       )}
 
-      <div className="flex items-center justify-between gap-4 border-t p-4">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!result.context}
-          onClick={() => {
-            if (result.context) void navigator.clipboard.writeText(result.context.markdown)
-          }}
-        >
-          Copy for your agent
-        </Button>
-        <p className="text-right text-[11px] text-muted-foreground">
-          Evidence only — no role, framing, or instructions added.
-        </p>
+      <div className="flex flex-col gap-2 border-t p-4">
+        <div className="flex items-center justify-between gap-4">
+          <Button size="sm" variant="outline" disabled={!result.context} onClick={handleCopy}>
+            {copied ? "Copied" : "Copy for your agent"}
+          </Button>
+          <p className="text-right text-[11px] text-muted-foreground">
+            Evidence only — no role, framing, or instructions added.
+          </p>
+        </div>
+        {copyError && (
+          <p role="alert" className="text-xs text-destructive">
+            Could not copy to your clipboard. Try again, or check your browser&apos;s clipboard
+            permission.
+          </p>
+        )}
       </div>
     </div>
   )

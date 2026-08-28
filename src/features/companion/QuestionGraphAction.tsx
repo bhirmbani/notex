@@ -7,8 +7,8 @@
 import { Link } from "@tanstack/react-router"
 
 import { questionGraphNotice } from "./questionGraphNotice"
-import { Button } from "@/components/ui/button"
 import type { ConnectionState } from "./types"
+import { Button } from "@/components/ui/button"
 
 type Props = {
   organizationId: string
