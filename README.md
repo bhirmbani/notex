@@ -29,6 +29,24 @@ Most of the suite is `bun run test` (Vitest). One flow can't be covered there:
 - [Manual test: "Draft this Answer from the graph" on a Question](docs/testing/question-graph-draft.md) — the Question surface's graph draft action has no end-to-end coverage against a real companion process; this walks the retrieval, variant switcher, honesty banners, and clipboard handoff by hand, entirely in local dev.
 - [Manual test: notex_* MCP tools against a real Notex API](docs/testing/notex-save-answer-manual-test.md) — the `notex_*` MCP tools are unit-tested against a faked Notex client, not the real `/api/v1` routes; this walks linking a checkout, the read/write tools, the refusal paths (fabricated source, stale session, wrong Repository, no Grant), and the byte-identical-footer check against the UI's own save path.
 
+## Code graph (graphify)
+
+`graphify-out/graph.json` is the code graph the `notex-companion` MCP server's `graph_*` and `notex_*` tools read from (see [Running the MCP server](docs/testing/mcp-server-setup.md)). It's built by the `graphify` Claude Code skill and isn't regenerated automatically — rerun it after code changes so queries and drafted Answers reflect the current source, not a stale graph.
+
+Scan root is `src` (tracked in `graphify-out/.graphify_root`). From a Claude Code session in the repo root:
+
+```
+/graphify src --update
+```
+
+`--update` re-extracts only new/changed files since the last build — the fast path for routine reruns. For a full rebuild from scratch (e.g. after a graphify version bump, or if the graph looks corrupted), drop the flag:
+
+```
+/graphify src
+```
+
+Both commands refresh `graphify-out/graph.json`, `GRAPH_REPORT.md`, and `graph.html` in place. `graphify-out/` is gitignored — each checkout builds its own.
+
 ## Database (D1)
 
 This project uses Cloudflare D1 via Drizzle ORM. Schema lives in `src/db/schema.ts`, migrations in `./migrations`.

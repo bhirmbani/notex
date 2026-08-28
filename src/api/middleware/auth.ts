@@ -1,4 +1,3 @@
-import { APIError } from 'better-auth'
 import { createMiddleware } from 'hono/factory'
 
 import type { AuthBindings } from '@/features/auth/lib/server'
@@ -56,6 +55,23 @@ export const rateLimitedResponse = (message = 'Too many requests') => {
   return createErrorResponse(429, 'RATE_LIMITED', message)
 }
 
+// Nitro's build splits `@/features/auth/lib/server` (imported dynamically
+// below) into its own chunk, each with its own bundled copy of 'better-auth'
+// — so an error thrown by the apiKey plugin's APIError there is never
+// `instanceof` a same-named class imported statically here from a different
+// chunk. better-auth's APIError always sets `name` and `statusCode` in its
+// constructor regardless of which chunk defines the class, so detect it by
+// that shape instead of by identity.
+export function isBetterAuthApiError(error: unknown): error is { name: string; statusCode: number; message: string } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'APIError' &&
+    typeof (error as { statusCode?: unknown }).statusCode === 'number' &&
+    typeof (error as { message?: unknown }).message === 'string'
+  )
+}
+
 export const requireAuth = createMiddleware<ApiAuthEnv>(async (c, next) => {
   const { createAuth } = await import('@/features/auth/lib/server')
   const auth = createAuth(c.env)
@@ -72,7 +88,7 @@ export const requireAuth = createMiddleware<ApiAuthEnv>(async (c, next) => {
       headers: c.req.raw.headers,
     })
   } catch (error) {
-    if (!(error instanceof APIError)) {
+    if (!isBetterAuthApiError(error)) {
       throw error
     }
 
