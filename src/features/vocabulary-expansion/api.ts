@@ -16,23 +16,13 @@
 
 import { Hono } from 'hono'
 
-import type { ApiAuthEnv } from '@/api/middleware/auth'
-import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
 import { callExpansion as callAnthropic } from './anthropicAdapter'
 import { callExpansion as callOpenAiCompatible } from './openAiCompatibleAdapter'
-import type { ExpansionResult } from './shared'
+import type { ApiAuthEnv } from '@/api/middleware/auth'
+import type { ExpandRequestBody, ExpandResponseBody, ExpansionResult } from './shared'
+import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
 
-export type ExpandRequestBody = {
-  question: string
-  adapter: 'anthropic' | 'openai-compatible'
-  baseUrl?: string
-  key: string
-  model: string
-}
-
-export type ExpandResponseBody =
-  | { terms: Array<string> }
-  | { error: { code: string; message: string } }
+export type { ExpandRequestBody, ExpandResponseBody }
 
 export const expandApi = new Hono<ApiAuthEnv>()
 

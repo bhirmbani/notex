@@ -6,6 +6,16 @@ import { QuestionGraphPanel } from "./QuestionGraphPanel"
 import type { OpResponse, QueryResult } from "notex-companion/client"
 import { EDITOR_SCHEME_STORAGE_KEY } from "@/lib/editorScheme"
 
+// No route tree exists in an isolated component test — mock Link as a plain anchor, matching
+// QuestionGraphAction.test.tsx's precedent rather than mounting a real TanStack Router.
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, children, ...props }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
+}))
+
 afterEach(() => {
   cleanup()
   localStorage.clear()
@@ -288,12 +298,30 @@ describe("QuestionGraphPanel", () => {
     })
   })
 
-  it("shows the degraded banner only when the response sets it", () => {
-    renderPanel({ result: baseResult({ degraded: { expansion: "none" } }) })
-    expect(screen.getByText(/Matched literally/)).toBeTruthy()
+  it("shows the 'configure a provider' banner with a Settings link when no Provider key is configured", () => {
+    renderPanel({
+      result: baseResult({ degraded: { expansion: "none" } }),
+      expansionBanner: "noProvider",
+    })
+    expect(
+      screen.getByText(/Matched literally — configure a model provider to do better/)
+    ).toBeTruthy()
+    const link = screen.getByRole<HTMLAnchorElement>("link", { name: "Set it up" })
+    expect(link.getAttribute("href")).toBe("/dashboard/settings/provider-keys")
   })
 
-  it("omits the degraded banner when absent", () => {
+  it("shows the 'expansion failed' banner, with no action offered, when a configured key's call fails", () => {
+    renderPanel({
+      result: baseResult({ degraded: { expansion: "none" } }),
+      expansionBanner: "expansionFailed",
+    })
+    expect(
+      screen.getByText(/Matched literally — vocabulary expansion failed this time/)
+    ).toBeTruthy()
+    expect(screen.queryByRole("link", { name: "Set it up" })).toBeNull()
+  })
+
+  it("omits both expansion banners when neither applies", () => {
     renderPanel()
     expect(screen.queryByText(/Matched literally/)).toBeNull()
   })

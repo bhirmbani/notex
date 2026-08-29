@@ -9,6 +9,21 @@ export type ExpansionResult =
   | { status: "transportFailure"; message: string }
   | { status: "llmFailure"; message: string }
 
+// The `POST /v1/expand` wire shape (docs/specs/vocabulary-expansion.md §4) — shared between
+// the Worker route (api.ts) and the browser-side proxy caller (expandForDraft.ts) so neither
+// restates it.
+export type ExpandRequestBody = {
+  question: string
+  adapter: "anthropic" | "openai-compatible"
+  baseUrl?: string
+  key: string
+  model: string
+}
+
+export type ExpandResponseBody =
+  | { terms: Array<string> }
+  | { error: { code: string; message: string } }
+
 const TIMEOUT_MS = 5000
 
 export function buildExpansionPrompt(question: string): string {
