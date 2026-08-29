@@ -55,6 +55,49 @@ Each adapter maps its config to one call producing free-form model output, which
 parses into `terms[]` (flat string array). A single call, not a tool-call/JSON-mode requirement —
 malformed output is treated the same as an LLM-level failure (§1d).
 
+### Provider setup examples
+
+`baseUrl` is a user-typed Settings field (§3), not a per-provider preset — these are the values
+to type for the providers covered by `openai-compatible`:
+
+| Provider | Adapter | `baseUrl` |
+|---|---|---|
+| OpenAI | `openai-compatible` | `https://api.openai.com/v1` |
+| OpenRouter | `openai-compatible` | `https://openrouter.ai/api/v1` |
+| Groq | `openai-compatible` | `https://api.groq.com/openai/v1` |
+| Together | `openai-compatible` | `https://api.together.xyz/v1` |
+| Mistral | `openai-compatible` | `https://api.mistral.ai/v1` |
+| Gemini (OpenAI-compat) | `openai-compatible` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| Anthropic | `anthropic` | not applicable — fixed Messages API endpoint |
+
+`model` is whatever model string the chosen provider expects (for OpenRouter, its
+`vendor/model-name` slug, e.g. `anthropic/claude-sonnet-5`).
+
+### Local models
+
+`openai-compatible` also covers any server that speaks the same `/chat/completions` shape,
+including a model running on the user's own machine — Ollama, LM Studio, llama.cpp's server,
+vLLM's OpenAI-compat mode, etc.
+
+| Local server | `baseUrl` |
+|---|---|
+| Ollama | `http://localhost:11434/v1` |
+| LM Studio | `http://localhost:1234/v1` |
+
+Two caveats specific to local models, both already implied by this spec's design rather than new
+constraints:
+
+- **The `apiKey` field is still required by the Settings form** even though a local server
+  usually ignores it — type any placeholder value (e.g. `"ollama"`).
+- **CORS and the fixed ~5s timeout (§1) are unforgiving here.** The local server must send
+  `Access-Control-Allow-Origin` for whatever origin Notex is served from — this is easiest when
+  both run on `localhost` (local dev); a deployed `https://` Notex talking to a local model needs
+  the server's CORS allowlist configured for that origin (e.g. `OLLAMA_ORIGINS`). And unlike a
+  hosted provider's CORS rejection, a CORS failure here **cannot** be rescued by the §4 proxy
+  fallback — `POST /v1/expand` runs on Cloudflare's Worker, which has no route to `localhost` on
+  the user's machine. A slow local model (CPU inference) that trips the ~5s timeout is also
+  terminal, not retried, same as any other LLM-level failure (§1d).
+
 ---
 
 ## 3. Settings surface

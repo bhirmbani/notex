@@ -29,6 +29,13 @@ Most of the suite is `bun run test` (Vitest). One flow can't be covered there:
 - [Manual test: "Draft this Answer from the graph" on a Question](docs/testing/question-graph-draft.md) — the Question surface's graph draft action has no end-to-end coverage against a real companion process; this walks the retrieval, variant switcher, honesty banners, and clipboard handoff by hand, entirely in local dev.
 - [Manual test: notex_* MCP tools against a real Notex API](docs/testing/notex-save-answer-manual-test.md) — the `notex_*` MCP tools are unit-tested against a faked Notex client, not the real `/api/v1` routes; this walks linking a checkout, the read/write tools, the refusal paths (fabricated source, stale session, wrong Repository, no Grant), and the byte-identical-footer check against the UI's own save path.
 
+## Vocabulary expansion
+
+Settings → Provider keys configures the BYO-key LLM call used by "Draft from graph". See
+[docs/specs/vocabulary-expansion.md](docs/specs/vocabulary-expansion.md) §2 ("Provider setup
+examples") for which adapter and `baseUrl` to use per provider, including OpenRouter and
+locally-hosted models (Ollama, LM Studio).
+
 ## Code graph (graphify)
 
 `graphify-out/graph.json` is the code graph the `notex-companion` MCP server's `graph_*` and `notex_*` tools read from (see [Running the MCP server](docs/testing/mcp-server-setup.md)). It's built by the `graphify` Claude Code skill and isn't regenerated automatically — rerun it after code changes so queries and drafted Answers reflect the current source, not a stale graph.
