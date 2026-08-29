@@ -231,6 +231,7 @@ function ContextPage() {
           saved={draft.saved}
           canRetrieve={draft.canDraft}
           expansionBanner={draft.expansionBanner}
+          synthesisBanner={draft.synthesisBanner}
         />
       )}
 

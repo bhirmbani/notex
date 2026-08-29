@@ -9,8 +9,10 @@ import * as client from "./client"
 import type { ReactNode } from "react"
 import type { ProviderConfig } from "@/features/provider-keys/types"
 import type { DraftExpansionOutcome } from "@/features/vocabulary-expansion/expandForDraft"
+import type { DraftSynthesisOutcome } from "@/features/draft-synthesis/synthesizeForDraft"
 import * as providerKeyStorage from "@/features/provider-keys/storage"
 import * as expandForDraftModule from "@/features/vocabulary-expansion/expandForDraft"
+import * as synthesizeForDraftModule from "@/features/draft-synthesis/synthesizeForDraft"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -480,6 +482,312 @@ describe("useQuestionGraphDraft", () => {
       expect(querySpy).toHaveBeenCalledTimes(1)
       expect(result.current.expansionBanner).toBeUndefined()
       await waitFor(() => expect(result.current.isPending).toBe(false))
+    })
+  })
+
+  // docs/adr/0007-draft-synthesis-runs-in-the-browser-not-the-companion.md, TBR-102.
+  describe("draft synthesis wiring", () => {
+    const ANTHROPIC_PROVIDER: ProviderConfig = {
+      id: "p1",
+      adapter: "anthropic",
+      apiKey: "sk-ant-test",
+      model: "claude-haiku-test",
+    }
+
+    it("with no Provider key configured, never attempts synthesis — raw-evidence Draft stays byte-identical (regression guard)", async () => {
+      connectAsConnected()
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+        context: { markdown: "raw evidence body", sources: [] },
+      })
+      const synthesizeSpy = vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft")
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() => expect(result.current.draftText).toBe("raw evidence body"))
+      expect(synthesizeSpy).not.toHaveBeenCalled()
+      expect(result.current.synthesisBanner).toBeUndefined()
+    })
+
+    it("with a Provider key and a successful non-lowConfidence query, seeds draftText with the synthesized prose", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      const context = { markdown: "raw evidence body", sources: [{ file: "a.ts", location: "L1" }] }
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+        context,
+      })
+      const synthesizeSpy = vi
+        .spyOn(synthesizeForDraftModule, "synthesizeForDraft")
+        .mockResolvedValue({ status: "success", prose: "Cited prose (a.ts:L1)." })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() => expect(result.current.draftText).toBe("Cited prose (a.ts:L1)."))
+      expect(synthesizeSpy).toHaveBeenCalledWith("how does auth work?", context, ANTHROPIC_PROVIDER)
+      expect(result.current.synthesisBanner).toBeUndefined()
+    })
+
+    it("on synthesis failure, falls back to the raw-evidence draftText and sets 'synthesisFailed'", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+        context: { markdown: "raw evidence body", sources: [] },
+      })
+      vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft").mockResolvedValue({
+        status: "failed",
+        message: "provider timed out",
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() => expect(result.current.synthesisBanner).toBe("synthesisFailed"))
+      expect(result.current.draftText).toBe("raw evidence body")
+    })
+
+    it("fires synthesis even when the preceding expansion call itself failed", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "failed",
+        message: "expansion provider error",
+      })
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+        context: { markdown: "raw evidence body", sources: [] },
+        degraded: { expansion: "none" },
+      })
+      const synthesizeSpy = vi
+        .spyOn(synthesizeForDraftModule, "synthesizeForDraft")
+        .mockResolvedValue({ status: "success", prose: "Synthesized anyway." })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() => expect(result.current.expansionBanner).toBe("expansionFailed"))
+      await waitFor(() => expect(result.current.draftText).toBe("Synthesized anyway."))
+      expect(synthesizeSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it("never attempts synthesis on a lowConfidence result — nothing sensible to synthesize", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+        context: { markdown: "", sources: [] },
+        lowConfidence: { topScore: 0 },
+      })
+      const synthesizeSpy = vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft")
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() => expect(result.current.result).toBeTruthy())
+      expect(synthesizeSpy).not.toHaveBeenCalled()
+      expect(result.current.synthesisBanner).toBeUndefined()
+    })
+
+    it("ignores a superseded synthesis attempt — a stale outcome must not override a newer retrieval's draftText or banner", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      vi.spyOn(client, "query")
+        .mockResolvedValueOnce({
+          graph: {} as never,
+          subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+          context: { markdown: "first evidence", sources: [] },
+        })
+        .mockResolvedValueOnce({
+          graph: {} as never,
+          subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+          context: { markdown: "second evidence", sources: [] },
+        })
+
+      let resolveStale!: (outcome: DraftSynthesisOutcome) => void
+      const stalePromise = new Promise<DraftSynthesisOutcome>((resolve) => {
+        resolveStale = resolve
+      })
+      vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft")
+        .mockReturnValueOnce(stalePromise)
+        .mockResolvedValueOnce({ status: "success", prose: "second prose" })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+      await waitFor(() => expect(result.current.draftText).toBe("first evidence"))
+
+      act(() => result.current.expand())
+      await waitFor(() => expect(result.current.draftText).toBe("second prose"))
+
+      // The stale first synthesis call finally settles after the newer one already won.
+      await act(async () => {
+        resolveStale({ status: "success", prose: "stale prose — must not apply" })
+        await Promise.resolve()
+      })
+
+      expect(result.current.draftText).toBe("second prose")
+      expect(result.current.synthesisBanner).toBeUndefined()
+    })
+
+    it("invalidates an earlier in-flight synthesis attempt even when the newer result doesn't itself start a new one", async () => {
+      connectAsConnected()
+      // First run has a Provider key (synthesis starts, left unresolved); the key is then
+      // "removed" before the second run, so its own result never starts a new synthesis call.
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey")
+        .mockReturnValueOnce(ANTHROPIC_PROVIDER) // runQuery's own expansion-routing check
+        .mockReturnValueOnce(ANTHROPIC_PROVIDER) // the mutation.data effect's synthesis check
+        .mockReturnValue(null) // every call from the second run() onward
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      vi.spyOn(client, "query")
+        .mockResolvedValueOnce({
+          graph: {} as never,
+          subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+          context: { markdown: "first evidence", sources: [] },
+        })
+        .mockResolvedValueOnce({
+          graph: {} as never,
+          subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+          context: { markdown: "second evidence", sources: [] },
+        })
+
+      let resolveStale!: (outcome: DraftSynthesisOutcome) => void
+      const stalePromise = new Promise<DraftSynthesisOutcome>((resolve) => {
+        resolveStale = resolve
+      })
+      vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft").mockReturnValueOnce(stalePromise)
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+      await waitFor(() => expect(result.current.draftText).toBe("first evidence"))
+
+      // No Provider key this time — the second result never starts its own synthesis attempt.
+      act(() => result.current.expand())
+      await waitFor(() => expect(result.current.draftText).toBe("second evidence"))
+
+      // The first run's synthesis call finally settles — it must not clobber the second,
+      // unrelated result's draftText just because nothing newer replaced it.
+      await act(async () => {
+        resolveStale({ status: "success", prose: "stale prose — must not apply" })
+        await Promise.resolve()
+      })
+
+      expect(result.current.draftText).toBe("second evidence")
+      expect(result.current.synthesisBanner).toBeUndefined()
+    })
+
+    it("pairs a landed query result with the question it was issued for, not the hook's possibly-since-changed `question` prop", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+
+      let resolveQuery!: (data: {
+        graph: never
+        subgraph: { nodes: Array<never>; edges: Array<never>; seeds: Array<string> }
+        context: { markdown: string; sources: Array<never> }
+      }) => void
+      const queryPromise = new Promise<Parameters<typeof resolveQuery>[0]>((resolve) => {
+        resolveQuery = resolve
+      })
+      vi.spyOn(client, "query").mockReturnValueOnce(queryPromise as never)
+
+      const synthesizeSpy = vi
+        .spyOn(synthesizeForDraftModule, "synthesizeForDraft")
+        .mockResolvedValue({ status: "success", prose: "synthesized" })
+
+      const { result, rerender } = renderHook(
+        ({ question }) => useQuestionGraphDraft("repo-1", question, "org-1", "ctx-1"),
+        { wrapper, initialProps: { question: "first question?" } }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      // Issues the companion query for "first question?" and leaves it in flight.
+      act(() => result.current.run())
+
+      // The surface navigates to a different Question while that request is still pending —
+      // same hook instance, new `question` prop.
+      rerender({ question: "second question?" })
+
+      await act(async () => {
+        resolveQuery({
+          graph: {} as never,
+          subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+          context: { markdown: "first-question evidence", sources: [] },
+        })
+        await Promise.resolve()
+      })
+
+      // Synthesis must be paired with "first question?" — the question that produced this
+      // evidence — never with "second question?", which is only the hook's current prop value.
+      await waitFor(() => expect(synthesizeSpy).toHaveBeenCalled())
+      expect(synthesizeSpy).toHaveBeenCalledWith(
+        "first question?",
+        { markdown: "first-question evidence", sources: [] },
+        ANTHROPIC_PROVIDER
+      )
     })
   })
 })

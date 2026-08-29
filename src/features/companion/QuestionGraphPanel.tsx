@@ -13,7 +13,7 @@ import { groupEvidence } from "./groupEvidence"
 import { computeCanvasLayout } from "./canvasLayout"
 import { communityColor } from "./communityColor"
 import type { KeyboardEvent, ReactNode } from "react"
-import type { ExpansionBanner, GraphVariant } from "./questionGraphDraft"
+import type { ExpansionBanner, GraphVariant, SynthesisBanner } from "./questionGraphDraft"
 import type { EditorScheme } from "@/lib/editorScheme"
 import type { GraphEdge, GraphNode, OpResponse, QueryResult } from "notex-companion/client"
 import { cn } from "@/lib/utils"
@@ -46,6 +46,13 @@ type Props = {
    * `terms[]`), in which case neither banner renders.
    */
   expansionBanner?: ExpansionBanner
+  /**
+   * Set when a configured Provider key's synthesis call failed (docs/adr/0007, TBR-102) —
+   * `undefined` when synthesis succeeded, was never attempted (no Provider key, or a
+   * `lowConfidence` result), in which case no synthesis banner renders. Stackable with
+   * `expansionBanner`: both can be set at once.
+   */
+  synthesisBanner?: SynthesisBanner
 }
 
 const SEGMENTS = ["files", "evidence", "draft", "canvas"] as const
@@ -71,6 +78,7 @@ export function QuestionGraphPanel({
   saved,
   canRetrieve,
   expansionBanner,
+  synthesisBanner,
 }: Props) {
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState(false)
@@ -123,6 +131,11 @@ export function QuestionGraphPanel({
         {expansionBanner === "expansionFailed" && (
           <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
             Matched literally — vocabulary expansion failed this time.
+          </p>
+        )}
+        {synthesisBanner === "synthesisFailed" && (
+          <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            Showing raw evidence — synthesis failed this time.
           </p>
         )}
         {result.truncated && (

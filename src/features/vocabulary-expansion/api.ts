@@ -19,8 +19,8 @@ import { Hono } from 'hono'
 import { callExpansion as callAnthropic } from './anthropicAdapter'
 import { callExpansion as callOpenAiCompatible } from './openAiCompatibleAdapter'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
-import { buildExpansionPrompt, EXPANSION_TIMEOUT_MS } from './shared'
-import type { ExpandRequestBody, ExpandResponseBody, ExpansionResult } from './shared'
+import { buildExpansionPrompt, EXPANSION_TIMEOUT_MS, parseTerms } from './shared'
+import type { ExpandRequestBody, ExpandResponseBody, ProviderCallResult } from './shared'
 import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
 
 export type { ExpandRequestBody, ExpandResponseBody }
@@ -31,7 +31,7 @@ function isProviderAdapter(value: unknown): value is ExpandRequestBody['adapter'
   return value === 'anthropic' || value === 'openai-compatible'
 }
 
-function runAdapter(body: ExpandRequestBody): Promise<ExpansionResult> {
+function runAdapter(body: ExpandRequestBody): Promise<ProviderCallResult> {
   const prompt = buildExpansionPrompt(body.question)
   if (body.adapter === 'anthropic') {
     return callAnthropic(
@@ -86,7 +86,7 @@ expandApi.post('/expand', async (c) => {
   const result = await runAdapter({ question, adapter: raw.adapter, baseUrl, key, model })
 
   if (result.status === 'success') {
-    return c.json({ terms: result.terms } satisfies ExpandResponseBody)
+    return c.json({ terms: parseTerms(result.text) } satisfies ExpandResponseBody)
   }
 
   // A provider-side failure (transport or LLM-level) is an expected outcome

@@ -8,7 +8,7 @@
 // may still need further changes here, not just a different prompt.
 
 import { callProvider, EXPANSION_TIMEOUT_MS } from "./shared"
-import type { ExpansionResult } from "./shared"
+import type { ProviderCallResult } from "./shared"
 
 export type OpenAiCompatibleConfig = {
   adapter: "openai-compatible"
@@ -21,7 +21,7 @@ export function callExpansion(
   config: OpenAiCompatibleConfig,
   prompt: string,
   timeoutMs: number = EXPANSION_TIMEOUT_MS
-): Promise<ExpansionResult> {
+): Promise<ProviderCallResult> {
   // baseUrl is a user-typed Settings field (spec §3) — a pasted trailing
   // slash is common enough (many providers' docs show one) that it must not
   // produce a double slash the provider 404s on.

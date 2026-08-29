@@ -326,6 +326,24 @@ describe("QuestionGraphPanel", () => {
     expect(screen.queryByText(/Matched literally/)).toBeNull()
   })
 
+  it("shows the 'synthesis failed' banner when set", () => {
+    renderPanel({ synthesisBanner: "synthesisFailed" })
+    expect(screen.getByText(/Showing raw evidence — synthesis failed this time/)).toBeTruthy()
+  })
+
+  it("omits the synthesis banner when it doesn't apply", () => {
+    renderPanel()
+    expect(screen.queryByText(/synthesis failed/)).toBeNull()
+  })
+
+  it("stacks the synthesis banner alongside an expansion banner — docs/adr/0007", () => {
+    renderPanel({ expansionBanner: "expansionFailed", synthesisBanner: "synthesisFailed" })
+    expect(
+      screen.getByText(/Matched literally — vocabulary expansion failed this time/)
+    ).toBeTruthy()
+    expect(screen.getByText(/Showing raw evidence — synthesis failed this time/)).toBeTruthy()
+  })
+
   it("shows the truncated banner only when the response sets it", () => {
     renderPanel({
       result: baseResult({ truncated: { reason: "maxNodes", omittedCount: 12 } }),

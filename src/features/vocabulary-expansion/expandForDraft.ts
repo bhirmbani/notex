@@ -3,10 +3,9 @@
 // transport-level failure — to the credential-blind `POST /v1/expand` proxy. An LLM-level
 // failure (direct or proxied) is terminal: it never triggers a retry.
 
-import { callExpansion as callAnthropic } from "./anthropicAdapter"
-import { callExpansion as callOpenAiCompatible } from "./openAiCompatibleAdapter"
-import { buildExpansionPrompt, EXPANSION_TIMEOUT_MS } from "./shared"
-import type { ExpandRequestBody, ExpandResponseBody, ExpansionResult } from "./shared"
+import { callProviderAdapter } from "./callProviderAdapter"
+import { buildExpansionPrompt, EXPANSION_TIMEOUT_MS, parseTerms } from "./shared"
+import type { ExpandRequestBody, ExpandResponseBody } from "./shared"
 import type { ProviderConfig } from "@/features/provider-keys/types"
 
 export type DraftExpansionOutcome =
@@ -20,27 +19,6 @@ export type DraftExpansionOutcome =
 function finalizeSuccess(terms: Array<string>): DraftExpansionOutcome {
   if (terms.length === 0) return { status: "failed", message: "provider returned no usable terms" }
   return { status: "success", terms }
-}
-
-function callDirect(provider: ProviderConfig, question: string): Promise<ExpansionResult> {
-  const prompt = buildExpansionPrompt(question)
-  if (provider.adapter === "anthropic") {
-    return callAnthropic(
-      { adapter: "anthropic", apiKey: provider.apiKey, model: provider.model },
-      prompt,
-      EXPANSION_TIMEOUT_MS
-    )
-  }
-  return callOpenAiCompatible(
-    {
-      adapter: "openai-compatible",
-      apiKey: provider.apiKey,
-      model: provider.model,
-      baseUrl: provider.baseUrl,
-    },
-    prompt,
-    EXPANSION_TIMEOUT_MS
-  )
 }
 
 async function callProxy(
@@ -80,8 +58,8 @@ export async function expandForDraft(
   question: string,
   provider: ProviderConfig
 ): Promise<DraftExpansionOutcome> {
-  const direct = await callDirect(provider, question)
-  if (direct.status === "success") return finalizeSuccess(direct.terms)
+  const direct = await callProviderAdapter(provider, buildExpansionPrompt(question), EXPANSION_TIMEOUT_MS)
+  if (direct.status === "success") return finalizeSuccess(parseTerms(direct.text))
   if (direct.status === "llmFailure") return { status: "failed", message: direct.message }
   return callProxy(provider, question)
 }

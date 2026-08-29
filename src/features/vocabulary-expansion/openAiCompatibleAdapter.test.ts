@@ -34,7 +34,7 @@ describe("openAiCompatibleAdapter callExpansion", () => {
       "what is X?"
     )
 
-    expect(result).toEqual({ status: "success", terms: ["alpha", "beta"] })
+    expect(result).toEqual({ status: "success", text: "alpha, beta" })
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
     expect(url).toBe("https://openrouter.ai/api/v1/chat/completions")
