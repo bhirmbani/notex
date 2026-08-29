@@ -575,6 +575,48 @@ describe("useQuestionGraphDraft", () => {
       expect(result.current.draftText).toBe("raw evidence body")
     })
 
+    it("exposes isSynthesizing while the call is in flight and clears it once it settles (TBR-110)", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+        context: { markdown: "raw evidence body", sources: [] },
+      })
+
+      let resolveSynthesis!: (outcome: DraftSynthesisOutcome) => void
+      const synthesisPromise = new Promise<DraftSynthesisOutcome>((resolve) => {
+        resolveSynthesis = resolve
+      })
+      vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft").mockReturnValue(synthesisPromise)
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      expect(result.current.isSynthesizing).toBe(false)
+      act(() => result.current.run())
+
+      // The companion result has already landed (draftText seeded with raw evidence), but
+      // synthesis is still in flight — this is exactly the window QuestionGraphPanel's old
+      // `isPending && !result` gate could never see, since `result` is truthy by this point.
+      await waitFor(() => expect(result.current.draftText).toBe("raw evidence body"))
+      expect(result.current.isSynthesizing).toBe(true)
+
+      await act(async () => {
+        resolveSynthesis({ status: "success", prose: "Cited prose." })
+        await Promise.resolve()
+      })
+
+      expect(result.current.isSynthesizing).toBe(false)
+    })
+
     it("fires synthesis even when the preceding expansion call itself failed", async () => {
       connectAsConnected()
       vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
@@ -806,6 +848,10 @@ describe("useQuestionGraphDraft", () => {
       // No Provider key this time — the second result never starts its own synthesis attempt.
       act(() => result.current.expand())
       await waitFor(() => expect(result.current.draftText).toBe("second evidence"))
+      // The second result is ineligible for synthesis (no provider) — isSynthesizing must clear
+      // immediately, not stay stuck true from the first (now-superseded) call that never got its
+      // own .finally() to run, since that call's version check bails out (TBR-110 regression).
+      expect(result.current.isSynthesizing).toBe(false)
 
       // The first run's synthesis call finally settles — it must not clobber the second,
       // unrelated result's draftText just because nothing newer replaced it.

@@ -53,6 +53,14 @@ type Props = {
    * `expansionBanner`: both can be set at once.
    */
   synthesisBanner?: SynthesisBanner
+  /**
+   * True while a synthesis call is in flight (TBR-110). Synthesis only starts once a companion
+   * `query` result already exists, so the top-of-panel `isPending && !result` skeleton can never
+   * cover this window — this prop is this component's only signal that a second, slower call is
+   * running in the background. Always settles to `false` before `synthesisBanner` is set, so the
+   * two never render together.
+   */
+  isSynthesizing?: boolean
 }
 
 const SEGMENTS = ["files", "evidence", "draft", "canvas"] as const
@@ -79,6 +87,7 @@ export function QuestionGraphPanel({
   canRetrieve,
   expansionBanner,
   synthesisBanner,
+  isSynthesizing,
 }: Props) {
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState(false)
@@ -136,6 +145,15 @@ export function QuestionGraphPanel({
         {synthesisBanner === "synthesisFailed" && (
           <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
             Showing raw evidence — synthesis failed this time.
+          </p>
+        )}
+        {isSynthesizing && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span
+              className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground"
+              aria-hidden="true"
+            />
+            Synthesizing a cited answer…
           </p>
         )}
         {result.truncated && (

@@ -232,6 +232,7 @@ function ContextPage() {
           canRetrieve={draft.canDraft}
           expansionBanner={draft.expansionBanner}
           synthesisBanner={draft.synthesisBanner}
+          isSynthesizing={draft.isSynthesizing}
         />
       )}
 
