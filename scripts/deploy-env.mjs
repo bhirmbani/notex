@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process"
+
 // Single source of truth for what differs between the dev and production deploys.
 //
 // These values used to live in three hand-synced places — root `wrangler.jsonc`,
@@ -29,9 +31,31 @@ export const DEPLOY_ENVS = {
  * Worker runtime var is invisible to it — leave this unset and the deployed client ships
  * with `DEFAULT_APP_URL` ("http://localhost:3000") baked in and aims its auth calls at
  * localhost.
+ *
+ * `VITE_COMMIT_SHA` and `VITE_APP_ENV` are the same story (TBR-106): baked in at build
+ * time so the sidebar can show which commit is actually live without a runtime lookup.
  */
 export function buildEnv(envName) {
-  return { VITE_APP_URL: envFor(envName).appUrl }
+  return {
+    VITE_APP_URL: envFor(envName).appUrl,
+    VITE_APP_ENV: envName,
+    VITE_COMMIT_SHA: commitSha(),
+  }
+}
+
+/**
+ * Short hash of the commit being deployed. Prefers `GITHUB_SHA` (or any CI-provided
+ * equivalent) over `git rev-parse` so a shallow CI checkout — where `.git` history may
+ * be truncated — still gets the right value; falls back to the local `HEAD` otherwise.
+ * Also used by `scripts/dev.mjs` to show a real hash (not a placeholder) in local dev.
+ */
+export function commitSha() {
+  const ciSha = process.env.GITHUB_SHA
+  if (ciSha) return ciSha.slice(0, 7)
+
+  return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+    encoding: "utf8",
+  }).trim()
 }
 
 /**
