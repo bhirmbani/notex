@@ -168,8 +168,11 @@ describe("openAiCompatibleAdapter callExpansion", () => {
     )
 
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
-    const body = JSON.parse(init.body as string) as { max_tokens?: number }
+    const body = JSON.parse(init.body as string) as { max_tokens?: number; reasoning?: { effort?: string } }
     expect(body.max_tokens).toBe(1024)
+    // Draft synthesis (TBR-109) is exactly the caller that supplies maxTokens — reasoning must
+    // stay present alongside it, not get dropped by whatever conditional gates max_tokens (TBR-111).
+    expect(body.reasoning).toEqual({ effort: "none" })
   })
 
   it("passes a caller-supplied timeout through to the underlying request", async () => {
