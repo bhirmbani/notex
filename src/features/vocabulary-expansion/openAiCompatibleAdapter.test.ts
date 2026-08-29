@@ -107,6 +107,50 @@ describe("openAiCompatibleAdapter callExpansion", () => {
     expect(body.messages[0]?.content).toBe("a fully custom prompt, not a question")
   })
 
+  it("omits max_tokens from the request body when the caller supplies none (today's behavior)", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ choices: [{ message: { content: "ok" } }] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await callExpansion(
+      {
+        adapter: "openai-compatible",
+        apiKey: "test-key",
+        model: "gpt-4o-mini",
+        baseUrl: "https://api.openai.com/v1",
+      },
+      "prompt"
+    )
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as { max_tokens?: number }
+    expect(body.max_tokens).toBeUndefined()
+  })
+
+  it("includes a caller-supplied maxTokens as max_tokens in the request body", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ choices: [{ message: { content: "ok" } }] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await callExpansion(
+      {
+        adapter: "openai-compatible",
+        apiKey: "test-key",
+        model: "gpt-4o-mini",
+        baseUrl: "https://api.openai.com/v1",
+      },
+      "prompt",
+      15000,
+      1024
+    )
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as { max_tokens?: number }
+    expect(body.max_tokens).toBe(1024)
+  })
+
   it("passes a caller-supplied timeout through to the underlying request", async () => {
     vi.useFakeTimers()
     vi.stubGlobal(

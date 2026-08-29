@@ -32,6 +32,7 @@ export function callProviderAdapter(
       baseUrl: provider.baseUrl,
     },
     prompt,
-    timeoutMs
+    timeoutMs,
+    maxTokens
   )
 }

@@ -10,10 +10,9 @@ import { callProviderAdapter } from "@/features/vocabulary-expansion/callProvide
 
 export const SYNTHESIS_TIMEOUT_MS = 15000
 
-// Cited prose runs well past expansion's short term-list budget (256 tokens) — the anthropic
-// adapter's own default would silently truncate a synthesized answer mid-sentence otherwise.
-// Only plumbed through to the `anthropic` adapter; `openai-compatible` requests set no
-// `max_tokens` at all today and fall back to the provider's own default.
+// Cited prose runs well past expansion's short term-list budget (256 tokens) — a provider's own
+// default would silently truncate a synthesized answer mid-sentence otherwise. Plumbed through to
+// both adapters via callProviderAdapter (TBR-107).
 export const SYNTHESIS_MAX_TOKENS = 1024
 
 export type SynthesisContext = {

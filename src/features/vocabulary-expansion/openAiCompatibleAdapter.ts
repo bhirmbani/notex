@@ -20,7 +20,8 @@ export type OpenAiCompatibleConfig = {
 export function callExpansion(
   config: OpenAiCompatibleConfig,
   prompt: string,
-  timeoutMs: number = EXPANSION_TIMEOUT_MS
+  timeoutMs: number = EXPANSION_TIMEOUT_MS,
+  maxTokens?: number
 ): Promise<ProviderCallResult> {
   // baseUrl is a user-typed Settings field (spec §3) — a pasted trailing
   // slash is common enough (many providers' docs show one) that it must not
@@ -37,6 +38,10 @@ export function callExpansion(
       body: JSON.stringify({
         model: config.model,
         messages: [{ role: "user", content: prompt }],
+        // Unlike the anthropic adapter, there is no expansion-sized default here — omitting
+        // `maxTokens` (expansion's own call sites) must leave the request body exactly as it
+        // was before this parameter existed (TBR-107).
+        ...(maxTokens === undefined ? {} : { max_tokens: maxTokens }),
       }),
     },
     extractText,
