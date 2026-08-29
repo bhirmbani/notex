@@ -108,9 +108,10 @@ function ProviderKeysPage() {
       </div>
 
       <p className="mb-6 text-sm text-muted-foreground">
-        Used by "Draft from graph" to expand your question before searching — called directly
-        from your browser to the provider. The key is stored only in this browser and never sent
-        to Notex.
+        Used by "Draft from graph" to expand your question before searching, and to synthesize a
+        cited answer from the retrieved evidence — which sends that evidence, not just your
+        question, to the provider. Calls go directly from your browser to the provider; the key
+        is stored only in this browser and never sent to Notex.
       </p>
 
       {addOpen && <AddProviderKeyModal onAdd={handleAdd} onClose={() => setAddOpen(false)} />}
