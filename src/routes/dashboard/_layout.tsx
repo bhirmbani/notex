@@ -17,6 +17,13 @@ import type { DashboardSession } from '@/features/auth/lib/validation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Sidebar } from '@/components/Sidebar'
 import { OrgSwitcher } from '@/components/OrgSwitcher'
+import {
+  CommitHashAboutTrigger,
+  CommitHashFooterVariant,
+  CommitHashHeaderBadge,
+  CommitHashPrototypeSwitcher,
+  useCommitHashPrototypeVariant,
+} from '@/components/prototype-tbr-106-commit-hash'
 import { signOutCurrentSession } from '@/features/auth/lib/client'
 import { createAuth } from '@/features/auth/lib/server'
 import { isDashboardSession } from '@/features/auth/lib/validation'
@@ -101,17 +108,25 @@ function DashboardLayout() {
   const organizationId = (params as Record<string, string>).organizationId
   const projectId = (params as Record<string, string>).projectId
 
+  // PROTOTYPE (TBR-106) — remove with src/components/prototype-tbr-106-commit-hash.tsx
+  const isDevBuild = !import.meta.env.PROD
+  const { variant: commitHashVariant, set: setCommitHashVariant } = useCommitHashPrototypeVariant()
+
   return (
     <div className="flex h-screen flex-col bg-background">
       <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
-        {organizationId ? (
-          <OrgSwitcher organizationId={organizationId} />
-        ) : (
-          <Link to="/dashboard" className="text-sm font-bold">
-            Notex
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {organizationId ? (
+            <OrgSwitcher organizationId={organizationId} />
+          ) : (
+            <Link to="/dashboard" className="text-sm font-bold">
+              Notex
+            </Link>
+          )}
+          {isDevBuild && commitHashVariant === 'C' && <CommitHashAboutTrigger />}
+        </div>
         <div className="flex items-center gap-4">
+          {isDevBuild && commitHashVariant === 'B' && <CommitHashHeaderBadge />}
           <span className="text-xs text-muted-foreground">
             {session.user.email}
           </span>
@@ -150,6 +165,11 @@ function DashboardLayout() {
           <Outlet />
         </main>
       </div>
+
+      {isDevBuild && commitHashVariant === 'A' && <CommitHashFooterVariant />}
+      {isDevBuild && (
+        <CommitHashPrototypeSwitcher variant={commitHashVariant} onChange={setCommitHashVariant} />
+      )}
     </div>
   )
 }
