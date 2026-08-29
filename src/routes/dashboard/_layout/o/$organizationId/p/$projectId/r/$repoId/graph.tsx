@@ -24,6 +24,7 @@ import {
   useDebouncedCompanionSearch,
 } from "@/features/companion/hooks"
 import { getPairing } from "@/features/companion/pairing"
+import { NotexJsonCard } from "@/features/companion/NotexJsonCard"
 import { stalenessMessage } from "@/features/companion/staleness"
 import { stateNotice } from "@/features/companion/stateNotice"
 import { buildEditorLink, getStoredEditorScheme } from "@/lib/editorScheme"
@@ -90,6 +91,12 @@ function GraphPage() {
           setShowFlow={setShowFlow}
         />
       ) : null}
+
+      <NotexJsonCard
+        organizationId={organizationId}
+        projectId={projectId}
+        repositoryId={repoId}
+      />
 
       {connection.data?.state === "connected" && (
         <ExploreSection
