@@ -143,6 +143,58 @@ describe("synthesizeForDraft", () => {
     expect(result.status).toBe("failed")
   })
 
+  it("accepts prose whose citations all resolve against context.sources", async () => {
+    const prose = "Auth is handled by `authenticate` (api/middleware/auth.ts:L18)."
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ content: [{ text: prose }] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    const result = await synthesizeForDraft("how does auth work?", CONTEXT, ANTHROPIC_PROVIDER)
+
+    expect(result).toEqual({ status: "success", prose })
+  })
+
+  it("treats a fabricated citation as a synthesis failure, with no partial/surgical stripping (TBR-104)", async () => {
+    const prose =
+      "Auth is handled by `authenticate` (api/middleware/auth.ts:L18), which delegates to " +
+      "`hashPassword` (api/lib/crypto.ts:L42)."
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ content: [{ text: prose }] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    // CONTEXT.sources only lists api/middleware/auth.ts:L18 — api/lib/crypto.ts:L42 is fabricated.
+    const result = await synthesizeForDraft("how does auth work?", CONTEXT, ANTHROPIC_PROVIDER)
+
+    expect(result.status).toBe("failed")
+    expect(result).not.toHaveProperty("prose")
+  })
+
+  it("catches a fabricated citation even when it isn't alone in its own parens", async () => {
+    const prose = "Auth is handled by `authenticate` (see api/lib/crypto.ts:L42 for details)."
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ content: [{ text: prose }] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    const result = await synthesizeForDraft("how does auth work?", CONTEXT, ANTHROPIC_PROVIDER)
+
+    expect(result.status).toBe("failed")
+  })
+
+  it("catches a fabricated citation packed alongside a real one in the same parenthetical", async () => {
+    const prose = "Auth is handled here (api/middleware/auth.ts:L18, api/lib/crypto.ts:L42)."
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ content: [{ text: prose }] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    const result = await synthesizeForDraft("how does auth work?", CONTEXT, ANTHROPIC_PROVIDER)
+
+    expect(result.status).toBe("failed")
+  })
+
   it("routes to the openai-compatible adapter with its configured baseUrl", async () => {
     const provider: ProviderConfig = {
       id: "p2",
