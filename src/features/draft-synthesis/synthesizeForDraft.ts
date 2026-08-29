@@ -15,8 +15,12 @@ export const SYNTHESIS_TIMEOUT_MS = 60000
 
 // Cited prose runs well past expansion's short term-list budget (256 tokens) — a provider's own
 // default would silently truncate a synthesized answer mid-sentence otherwise. Plumbed through to
-// both adapters via callProviderAdapter (TBR-107).
-export const SYNTHESIS_MAX_TOKENS = 1024
+// both adapters via callProviderAdapter (TBR-107). Sized well past prose length alone: a
+// reasoning model's thinking tokens share this same max_tokens budget on OpenAI-compatible
+// completions APIs, and 1024 proved insufficient live — a reasoning model spent its whole budget
+// on hidden reasoning and returned finish_reason: "length" with content: null, never reaching the
+// answer (TBR-109).
+export const SYNTHESIS_MAX_TOKENS = 4096
 
 export type SynthesisContext = {
   markdown: string
