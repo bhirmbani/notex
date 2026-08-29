@@ -98,6 +98,39 @@ constraints:
   the user's machine. A slow local model (CPU inference) that trips the ~5s timeout is also
   terminal, not retried, same as any other LLM-level failure (§1d).
 
+### Reasoning models
+
+A **reasoning model** (e.g. `moonshotai/kimi-k3`) spends part of its output budget on hidden
+"thinking" tokens before it ever writes the answer — and on OpenAI-compatible completions APIs,
+those thinking tokens share the *same* `max_tokens` cap as the answer. Left unbounded, this is
+mostly harmless for expansion's short term-list output; it became a real bug for Draft synthesis
+(TBR-99), whose longer cited-prose budget is exactly what a reasoning model's thinking pass can
+exhaust before emitting any `content` at all.
+
+**Root cause, observed live (TBR-109):** an OpenRouter/`moonshotai/kimi-k3` Provider key call
+returned `finish_reason: "length"` with `message.content: null` — the model's `reasoning_details`
+showed it was still mid-draft ("Let me draft prose with citations: ...") when its 1024-token
+`max_tokens` budget ran out. `extractText` (`openAiCompatibleAdapter.ts`) correctly treats a
+non-string `content` as unparseable, so this surfaced as a normal `llmFailure`, not a crash — but
+every call to a reasoning-capable model failed this way, every time.
+
+**Fix (TBR-111):** the `openai-compatible` adapter now sends `reasoning: { effort: "none" }`
+unconditionally on every request. This is an OpenRouter-specific extension to the OpenAI-compatible
+request shape — sent to every provider covered by this adapter regardless (no per-provider
+branching, consistent with this spec's one-adapter design), on the assumption that a non-OpenRouter
+provider silently ignores an unrecognized top-level field rather than rejecting it. `effort: "none"`
+stops reasoning generation entirely, unlike `exclude: true`, which still burns reasoning tokens
+internally and only hides them from the response — that would not have fixed this. A model with
+`mandatory: true` reasoning (checkable via OpenRouter's `GET /api/v1/models`) ignores the disable
+regardless; TBR-109's larger `SYNTHESIS_MAX_TOKENS` (4096) and `SYNTHESIS_TIMEOUT_MS` (120s) remain
+the fallback headroom for those.
+
+**Verified live (2026-08-29),** same `moonshotai/kimi-k3` Provider key, same Question: the
+completions response came back with `reasoning: null`, `usage.completion_tokens_details.reasoning_tokens: 0`,
+and `finish_reason: "stop"` — a clean, un-truncated answer (593 completion tokens, well under the
+4096 cap) citing real `path:Lnn` sources. Wall-clock time for the call: **16.81s**, comfortably
+inside the 120s `SYNTHESIS_TIMEOUT_MS` budget.
+
 ---
 
 ## 3. Settings surface

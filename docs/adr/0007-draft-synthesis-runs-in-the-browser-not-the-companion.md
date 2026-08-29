@@ -25,3 +25,9 @@ accepting the CORS/proxy complexity as a known, already-paid cost rather than an
   `docs/specs/vocabulary-expansion.md` §4 for the expansion-only proxy this does not extend to.
 - The companion's "holds no LLM" invariant (`companion-api.md` §1, `CONTEXT.md`'s Companion entry)
   stays intact for this feature line.
+- Because synthesis's own call reuses the shared `openai-compatible` adapter, a reasoning-capable
+  Provider key model (e.g. OpenRouter's `moonshotai/kimi-k3`) can burn synthesis's `max_tokens`
+  budget on hidden thinking before ever writing an answer — this surfaced live as a
+  `finish_reason: "length"` / `content: null` failure (TBR-109) and was mitigated by raising the
+  budget/timeout and disabling reasoning by default (TBR-111). See `docs/specs/vocabulary-expansion.md`'s
+  "Reasoning models" section.
