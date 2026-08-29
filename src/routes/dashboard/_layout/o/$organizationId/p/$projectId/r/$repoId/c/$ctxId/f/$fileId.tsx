@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { LinkModal } from "@/components/LinkModal"
 import { Breadcrumb } from "@/components/Breadcrumb"
 import { InlineEditField } from "@/components/InlineEditField"
+import { MarkdownContent } from "@/components/MarkdownContent"
 
 export const Route = createFileRoute(
   "/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/f/$fileId"
@@ -228,9 +229,7 @@ function FilePage() {
               </div>
             </div>
           ) : (
-            <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground">
-              {file.content}
-            </pre>
+            <MarkdownContent content={file.content} />
           )
         ) : (
           <div className="p-6 text-center font-mono text-xs text-muted-foreground">
