@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import {
   RiArrowDownSLine,
   RiCloseLine,
@@ -9,6 +9,7 @@ import { MAX_BROWSE_GROUP_LIMIT } from "notex-companion/client"
 import type { FocusEvent, ReactNode } from "react"
 
 import type { PairingRecord, ResolvedNode } from "@/features/companion/types"
+import type { NotexJsonVariant } from "@/features/companion/NotexJsonCopyPrototype"
 import { useProject } from "@/features/projects/hooks"
 import { useRepository } from "@/features/repositories/hooks"
 import { Breadcrumb } from "@/components/Breadcrumb"
@@ -27,15 +28,39 @@ import { getPairing } from "@/features/companion/pairing"
 import { stalenessMessage } from "@/features/companion/staleness"
 import { stateNotice } from "@/features/companion/stateNotice"
 import { buildEditorLink, getStoredEditorScheme } from "@/lib/editorScheme"
+import {
+  NOTEX_JSON_VARIANTS,
+  NOTEX_JSON_VARIANT_LABELS,
+  NotexJsonVariantA,
+  NotexJsonVariantBSlot,
+  NotexJsonVariantC,
+  PrototypeSwitcher,
+} from "@/features/companion/NotexJsonCopyPrototype"
+
+type GraphSearch = {
+  /** PROTOTYPE (TBR-89) — which copy-ids affordance to render. Defaults to "A". */
+  variant?: NotexJsonVariant
+}
 
 export const Route = createFileRoute(
   "/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/graph"
 )({
+  validateSearch: (search): GraphSearch => ({
+    variant: NOTEX_JSON_VARIANTS.includes(search.variant as NotexJsonVariant)
+      ? (search.variant as NotexJsonVariant)
+      : undefined,
+  }),
   component: GraphPage,
 })
 
 function GraphPage() {
   const { organizationId, projectId, repoId } = Route.useParams()
+  const { variant: variantParam } = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+  const variant = variantParam ?? "A"
+  const setVariant = (v: NotexJsonVariant) =>
+    void navigate({ search: { variant: v } })
+  const ids = { organizationId, projectId, repositoryId: repoId }
   const { data: project } = useProject(organizationId, projectId)
   const { data: repo } = useRepository(organizationId, repoId)
   const connection = useCompanionConnection(repoId)
@@ -88,8 +113,12 @@ function GraphPage() {
           retry={connection.retry}
           showFlow={showFlow}
           setShowFlow={setShowFlow}
+          notexJsonSlot={variant === "B" ? <NotexJsonVariantBSlot ids={ids} /> : undefined}
         />
       ) : null}
+
+      {variant === "A" && <NotexJsonVariantA ids={ids} />}
+      {variant === "C" && <NotexJsonVariantC ids={ids} />}
 
       {connection.data?.state === "connected" && (
         <ExploreSection
@@ -97,6 +126,13 @@ function GraphPage() {
           status={connection.data.status}
         />
       )}
+
+      <PrototypeSwitcher
+        variants={NOTEX_JSON_VARIANTS}
+        labels={NOTEX_JSON_VARIANT_LABELS}
+        current={variant}
+        onChange={setVariant}
+      />
     </div>
   )
 }
@@ -107,12 +143,15 @@ function ConnectionSection({
   retry,
   showFlow,
   setShowFlow,
+  notexJsonSlot,
 }: {
   repositoryId: string
   result: ReturnType<typeof useCompanionConnection>["data"] & {}
   retry: () => Promise<unknown> | void
   showFlow: boolean
   setShowFlow: (v: boolean) => void
+  /** PROTOTYPE (TBR-89) — variant B's merged-placement candidate. */
+  notexJsonSlot?: ReactNode
 }) {
   const notice = stateNotice(result)
   const repairReason =
@@ -161,6 +200,7 @@ function ConnectionSection({
         <p className="mt-4 text-xs text-muted-foreground">
           {stalenessMessage(result.status.graph)}
         </p>
+        {notexJsonSlot}
       </div>
     )
   }
@@ -188,6 +228,7 @@ function ConnectionSection({
             </Button>
           </div>
         )}
+        {notexJsonSlot}
       </div>
 
       {showFlow &&
