@@ -5,6 +5,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { QuestionGraphPanel } from "./QuestionGraphPanel"
 import type { OpResponse, QueryResult } from "notex-companion/client"
 import { EDITOR_SCHEME_STORAGE_KEY } from "@/lib/editorScheme"
+import * as providerKeyStorage from "@/features/provider-keys/storage"
+import * as synthesizeNodeExplanationModule from "@/features/draft-synthesis/synthesizeNodeExplanation"
+import type { ProviderConfig } from "@/features/provider-keys/types"
 
 // No route tree exists in an isolated component test — mock Link as a plain anchor, matching
 // QuestionGraphAction.test.tsx's precedent rather than mounting a real TanStack Router.
@@ -19,6 +22,7 @@ vi.mock("@tanstack/react-router", () => ({
 afterEach(() => {
   cleanup()
   localStorage.clear()
+  vi.restoreAllMocks()
 })
 
 const STAMP = {
@@ -295,6 +299,137 @@ describe("QuestionGraphPanel", () => {
 
       expect(screen.queryByText("authenticate", { selector: "p" })).toBeNull()
       expect(screen.getByText("Click a node to see its source and neighbours.")).toBeTruthy()
+    })
+
+    describe("Explain action (TBR-114)", () => {
+      const ANTHROPIC_PROVIDER: ProviderConfig = {
+        id: "p1",
+        adapter: "anthropic",
+        apiKey: "sk-ant-test",
+        model: "claude-haiku-test",
+      }
+      const EDGE = {
+        source: "n1",
+        target: "n2",
+        relation: "calls",
+        weight: 1,
+        confidence: "EXTRACTED",
+        sourceFile: "api/middleware/auth.ts",
+        sourceLocation: "L18",
+      }
+
+      function selectNodeA() {
+        fireEvent.click(screen.getByLabelText("Show authenticate in the graph"))
+      }
+
+      it("is absent from view before a node is selected", () => {
+        renderPanel({ variant: "canvas" })
+        expect(screen.queryByRole("button", { name: "Explain" })).toBeNull()
+      })
+
+      it("is disabled with a one-line reason when no Provider key is configured", () => {
+        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(null)
+        renderPanel({ variant: "canvas" })
+        selectNodeA()
+
+        const button = screen.getByRole<HTMLButtonElement>("button", { name: "Explain" })
+        expect(button.disabled).toBe(true)
+        expect(button.title).toBe("Configure a model provider to explain this node.")
+      })
+
+      it("calls synthesizeNodeExplanation with the node, its neighbours, and degree, and renders the returned prose below the raw rows", async () => {
+        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+        const explainSpy = vi
+          .spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation")
+          .mockResolvedValue({ status: "success", prose: "authenticate calls logout." })
+
+        renderPanel({
+          variant: "canvas",
+          result: baseResult({ subgraph: { nodes: [NODE_A, NODE_B], edges: [EDGE], seeds: ["n1"] } }),
+        })
+        selectNodeA()
+
+        fireEvent.click(screen.getByRole("button", { name: "Explain" }))
+
+        expect(explainSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            label: "authenticate",
+            file: "api/middleware/auth.ts",
+            location: "L18",
+            community: "Auth",
+            degree: 1,
+            neighbours: [
+              expect.objectContaining({
+                label: "logout",
+                file: "api/middleware/session.ts",
+                location: "L40",
+                relation: "calls",
+                confidence: "EXTRACTED",
+              }),
+            ],
+          }),
+          ANTHROPIC_PROVIDER
+        )
+        expect(await screen.findByText("authenticate calls logout.")).toBeTruthy()
+        // The raw evidence rows stay visible alongside the synthesized prose (additive, not a
+        // replacement).
+        expect(screen.getByLabelText("Open api/middleware/session.ts in editor")).toBeTruthy()
+      })
+
+      it("shows a failure banner when synthesis fails, with the raw rows still visible", async () => {
+        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+        vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockResolvedValue({
+          status: "failed",
+          message: "provider responded 500",
+        })
+
+        renderPanel({ variant: "canvas" })
+        selectNodeA()
+        fireEvent.click(screen.getByRole("button", { name: "Explain" }))
+
+        expect(await screen.findByText(/synthesis failed/)).toBeTruthy()
+        expect(screen.getByText("authenticate", { selector: "p" })).toBeTruthy()
+      })
+
+      it("clears a previously synthesized explanation when a different node is selected", async () => {
+        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+        vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockResolvedValue({
+          status: "success",
+          prose: "authenticate calls logout.",
+        })
+
+        renderPanel({ variant: "canvas" })
+        selectNodeA()
+        fireEvent.click(screen.getByRole("button", { name: "Explain" }))
+        expect(await screen.findByText("authenticate calls logout.")).toBeTruthy()
+
+        fireEvent.click(screen.getByLabelText("Show logout in the graph"))
+
+        expect(screen.queryByText("authenticate calls logout.")).toBeNull()
+      })
+
+      it("drops a stale in-flight explanation if the selection changes before it resolves", async () => {
+        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+        let resolveExplain: ((outcome: { status: "success"; prose: string }) => void) | undefined
+        vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockReturnValue(
+          new Promise((resolve) => {
+            resolveExplain = resolve
+          })
+        )
+
+        renderPanel({
+          variant: "canvas",
+          result: baseResult({ subgraph: { nodes: [NODE_A, NODE_B], edges: [EDGE], seeds: ["n1"] } }),
+        })
+        selectNodeA()
+        fireEvent.click(screen.getByRole("button", { name: "Explain" }))
+
+        fireEvent.click(screen.getByLabelText("Show logout in the graph"))
+        resolveExplain?.({ status: "success", prose: "authenticate calls logout." })
+        await Promise.resolve()
+
+        expect(screen.queryByText("authenticate calls logout.")).toBeNull()
+      })
     })
   })
 
