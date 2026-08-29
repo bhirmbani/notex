@@ -15,3 +15,8 @@ const sourcePath = resolve(import.meta.dir, "sample-checkout-graph.source.json")
 
 mkdirSync(graphDir, { recursive: true })
 writeFileSync(graphPath, readFileSync(sourcePath))
+
+const reportPath = resolve(graphDir, "GRAPH_REPORT.md")
+const reportSourcePath = resolve(import.meta.dir, "sample-checkout-report.source.md")
+
+writeFileSync(reportPath, readFileSync(reportSourcePath))

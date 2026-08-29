@@ -1,4 +1,4 @@
-// The five ops (companion-api.md §1) as pure functions of a loaded GraphIndex.
+// The six ops (companion-api.md §1, plus suggestedQuestions) as pure functions of a loaded GraphIndex.
 // REST binds these at /v1/<op>, MCP binds them as tool handlers, and a reverse-tunnel
 // transport would bind them as framed messages — this module knows about none of them.
 
@@ -7,12 +7,12 @@ import { buildFooter } from "./footer.ts"
 import { scoreNodes, terms } from "./scoring.ts"
 import { traverse } from "./traversal.ts"
 import { OpError } from "./types.ts"
-import type { Degraded, GraphEdge, GraphNode, OpResponse } from "./types.ts"
+import type { Degraded, GraphEdge, GraphNode, OpResponse, SuggestedQuestion } from "./types.ts"
 import type { GraphIndex } from "./graph.ts"
 
 /** Also the version /v1/ping reports (companion-api.md §4.1) — the two must never drift apart. */
 export const API_VERSION = "0.2.1"
-const CAPABILITIES = ["search", "query", "path", "node", "browse"] as const
+const CAPABILITIES = ["search", "query", "path", "node", "browse", "suggestedQuestions"] as const
 
 /** Revised bounds (TBR-62, over companion-api.md §4.4's original defaults). */
 const MAX_NODES_CEILING = 1000
@@ -42,6 +42,17 @@ export function status(index: GraphIndex): OpResponse<StatusResult> {
     capabilities: [...CAPABILITIES],
     limits: { maxNodes: MAX_NODES_CEILING, maxDepth: MAX_DEPTH_CEILING },
   }
+}
+
+// --------------------------------------------------------- suggestedQuestions
+
+export type SuggestedQuestionsResult = { questions: Array<SuggestedQuestion> }
+
+/** graphify's own `GRAPH_REPORT.md`-derived suggestions (graph.ts's loadSuggestedQuestions),
+ * already loaded onto the index at graph-load time — this op just echoes them alongside the
+ * stamp, same shape as every other op. */
+export function suggestedQuestions(index: GraphIndex): OpResponse<SuggestedQuestionsResult> {
+  return { graph: index.stamp, questions: index.suggestedQuestions }
 }
 
 // ------------------------------------------------------------------- search

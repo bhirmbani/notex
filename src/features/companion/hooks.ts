@@ -6,7 +6,13 @@
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { browse as browseOp, path as pathOp, query as queryOp, search as searchOp } from "./client"
+import {
+  browse as browseOp,
+  fetchSuggestedQuestions,
+  path as pathOp,
+  query as queryOp,
+  search as searchOp,
+} from "./client"
 import { resolveConnectionState } from "./connectionState"
 import type { ResolveConnectionStateDeps } from "./connectionState"
 import type { PathRequest, QueryRequest } from "notex-companion/client"
@@ -102,6 +108,31 @@ export function useCompanionBrowse(
     queryFn: () => {
       if (!pairing) return Promise.reject(new Error("not connected"))
       return browseOp(pairing.baseUrl, pairing.token, { limit })
+    },
+    enabled: enabled && !!pairing,
+    staleTime: 60_000,
+  })
+}
+
+export const companionSuggestedQuestionsKeys = {
+  all: ["companion", "suggestedQuestions"] as const,
+  detail: (baseUrl: string) => [...companionSuggestedQuestionsKeys.all, baseUrl] as const,
+}
+
+/**
+ * The "New context" modal's suggestion list (TBR-112) — lets the user pick from graphify's own
+ * suggested questions instead of typing one from scratch. `enabled` is caller-driven (only
+ * fetch while the modal is open), matching `useCompanionBrowse`'s posture.
+ */
+export function useCompanionSuggestedQuestions(
+  pairing: PairingRecord | null,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: companionSuggestedQuestionsKeys.detail(pairing?.baseUrl ?? ""),
+    queryFn: () => {
+      if (!pairing) return Promise.reject(new Error("not connected"))
+      return fetchSuggestedQuestions(pairing.baseUrl, pairing.token)
     },
     enabled: enabled && !!pairing,
     staleTime: 60_000,

@@ -17,6 +17,7 @@ import type {
   SearchRequest,
   SearchResult,
   StatusResult,
+  SuggestedQuestionsResult,
 } from "notex-companion/client"
 
 export type PingResult = { ok: true; apiVersion: string }
@@ -147,4 +148,15 @@ export function browse(
   const route =
     req.limit === undefined ? "/v1/browse" : `/v1/browse?limit=${req.limit}`
   return authedOp<BrowseResult>(baseUrl, token, route)
+}
+
+export function fetchSuggestedQuestions(
+  baseUrl: string,
+  token: string
+): Promise<OpResponse<SuggestedQuestionsResult>> {
+  return authedOp<SuggestedQuestionsResult>(
+    baseUrl,
+    token,
+    "/v1/suggested-questions"
+  )
 }

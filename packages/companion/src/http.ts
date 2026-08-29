@@ -11,7 +11,8 @@ import {
   path,
   query,
   search,
-  status
+  status,
+  suggestedQuestions
 } from "./ops.ts"
 import { ERROR_CODES,   OpError } from "./types.ts"
 import type { BrowseRequest, PathRequest, QueryRequest, SearchRequest } from "./ops.ts"
@@ -79,6 +80,7 @@ async function dispatch(req: Request, url: URL, opts: HandlerOptions): Promise<u
     return node(index, { id: decodeNodeId(pathname.slice("/v1/node/".length)) })
   }
   if (method === "GET" && pathname === "/v1/browse") return browse(index, parseBrowseRequest(url.searchParams))
+  if (method === "GET" && pathname === "/v1/suggested-questions") return suggestedQuestions(index)
 
   throw new OpError("not_found", `No such route: ${method} ${pathname}`)
 }

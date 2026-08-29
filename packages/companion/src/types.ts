@@ -23,6 +23,13 @@ export type GraphNode = {
   community: { id: number; name: string } | null
 }
 
+/** Parsed from `graphify-out/GRAPH_REPORT.md`'s "## Suggested Questions" section — free-text,
+ * not derived from graph.json, so there is no stable id to key it by. */
+export type SuggestedQuestion = {
+  question: string
+  rationale: string
+}
+
 export type GraphEdge = {
   source: string // node id
   target: string // node id

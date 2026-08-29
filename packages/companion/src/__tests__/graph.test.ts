@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "bun:test"
-import { loadGraph, rootPrefixFor } from "../graph.ts"
+import { loadGraph, loadSuggestedQuestions, parseSuggestedQuestions, rootPrefixFor } from "../graph.ts"
 import { FIXTURE_ROOT } from "./fixtures/setup.ts"
 
 const REPO_ROOT = resolve(import.meta.dir, "../../../..")
@@ -91,6 +91,86 @@ describe("loadGraph against the fixture checkout", () => {
 
   it("throws graph_unreadable for a checkout with no graph.json", () => {
     expect(() => loadGraph(resolve(import.meta.dir, "fixtures/no-such-checkout"))).toThrow()
+  })
+
+  it("loads suggestedQuestions from the checkout's GRAPH_REPORT.md", () => {
+    expect(index.suggestedQuestions).toEqual([
+      {
+        question: "Why does `authLogin()` connect `Auth` to `Session`, `Util`?",
+        rationale: "High betweenness centrality (0.06) - this node is a cross-community bridge.",
+      },
+      {
+        question: "Should `Auth` be split into smaller, more focused modules?",
+        rationale: "Cohesion score 0.05 - nodes in this community are weakly interconnected.",
+      },
+    ])
+  })
+})
+
+describe("parseSuggestedQuestions", () => {
+  it("extracts question/rationale pairs from the Suggested Questions section", () => {
+    const md = [
+      "## Knowledge Gaps",
+      "- some other bullet",
+      "",
+      "## Suggested Questions",
+      "_Questions this graph is uniquely positioned to answer:_",
+      "",
+      "- **Why does `authLogin()` connect `Auth` to `Session`, `Util`?**",
+      "  _High betweenness centrality (0.06) - this node is a cross-community bridge._",
+      "- **Should `Auth` be split into smaller, more focused modules?**",
+      "  _Cohesion score 0.05 - nodes in this community are weakly interconnected._",
+      "",
+      "## Next Section",
+      "- unrelated bullet that must not leak in",
+    ].join("\n")
+
+    expect(parseSuggestedQuestions(md)).toEqual([
+      {
+        question: "Why does `authLogin()` connect `Auth` to `Session`, `Util`?",
+        rationale: "High betweenness centrality (0.06) - this node is a cross-community bridge.",
+      },
+      {
+        question: "Should `Auth` be split into smaller, more focused modules?",
+        rationale: "Cohesion score 0.05 - nodes in this community are weakly interconnected.",
+      },
+    ])
+  })
+
+  it("returns an empty array when the Suggested Questions heading is absent", () => {
+    const md = ["## Knowledge Gaps", "- some bullet"].join("\n")
+    expect(parseSuggestedQuestions(md)).toEqual([])
+  })
+
+  it("includes a question with an empty rationale when the italic line is missing", () => {
+    const md = [
+      "## Suggested Questions",
+      "- **Why does this happen?**",
+      "- **Should this be split?**",
+      "  _Cohesion score 0.05._",
+    ].join("\n")
+
+    expect(parseSuggestedQuestions(md)).toEqual([
+      { question: "Why does this happen?", rationale: "" },
+      { question: "Should this be split?", rationale: "Cohesion score 0.05." },
+    ])
+  })
+
+  it("skips a bullet that isn't a bold question line", () => {
+    const md = [
+      "## Suggested Questions",
+      "- not a bold question",
+      "- **A real question?**",
+      "  _rationale._",
+    ].join("\n")
+
+    expect(parseSuggestedQuestions(md)).toEqual([{ question: "A real question?", rationale: "rationale." }])
+  })
+})
+
+describe("loadSuggestedQuestions", () => {
+  it("returns an empty array for a checkout with no GRAPH_REPORT.md", () => {
+    expect(loadSuggestedQuestions(resolve(import.meta.dir, "fixtures/no-such-checkout"))).toEqual([])
   })
 })
 
