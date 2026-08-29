@@ -1,6 +1,6 @@
 // Orchestrates the Draft-from-graph synthesis call (TBR-99/TBR-102, docs/adr/0007): a single
 // browser→provider call using the same active Provider key/model as vocabulary expansion, over
-// its own ~15s budget. Unlike expandForDraft.ts, there is no proxy fallback — ADR-0007 accepts
+// its own ~60s budget. Unlike expandForDraft.ts, there is no proxy fallback — ADR-0007 accepts
 // that a transport-level failure degrades exactly like any other synthesis failure, since
 // carrying real evidence/code content through Notex's Worker is a materially bigger exposure
 // than the bare question text expansion's proxy was built for.
@@ -8,7 +8,10 @@
 import type { ProviderConfig } from "@/features/provider-keys/types"
 import { callProviderAdapter } from "@/features/vocabulary-expansion/callProviderAdapter"
 
-export const SYNTHESIS_TIMEOUT_MS = 15000
+// Full cited prose (up to SYNTHESIS_MAX_TOKENS) takes meaningfully longer to generate than
+// expansion's short term list — 15s proved too tight for slower providers/models in practice
+// (TBR-108), so this budget is generous, independent of expansion's 5s (EXPANSION_TIMEOUT_MS).
+export const SYNTHESIS_TIMEOUT_MS = 60000
 
 // Cited prose runs well past expansion's short term-list budget (256 tokens) — a provider's own
 // default would silently truncate a synthesized answer mid-sentence otherwise. Plumbed through to
