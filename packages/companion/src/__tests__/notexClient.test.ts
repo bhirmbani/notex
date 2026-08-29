@@ -19,6 +19,17 @@ describe("resolveApiUrl", () => {
 })
 
 describe("createNotexClient", () => {
+  it("hits the documented repository route for getRepository", async () => {
+    const fetchImpl = fakeFetch(200, { id: "repo_1", projectId: "proj_1", name: "notex", description: null })
+    const client = createNotexClient(CONFIG, fetchImpl as unknown as typeof fetch)
+
+    const result = await client.getRepository("org_1", "repo_1")
+
+    expect(result).toEqual({ id: "repo_1", projectId: "proj_1", name: "notex", description: null })
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string]
+    expect(url).toBe("http://localhost:3000/api/v1/organizations/org_1/repositories/repo_1")
+  })
+
   it("sends x-api-key and hits the documented contexts route", async () => {
     const fetchImpl = fakeFetch(200, [{ id: "ctx_1", repositoryId: "repo_1", question: "q?", createdAt: "2026-01-01" }])
     const client = createNotexClient(CONFIG, fetchImpl as unknown as typeof fetch)

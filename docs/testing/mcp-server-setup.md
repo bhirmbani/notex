@@ -59,25 +59,28 @@ to authentication" — and confirm:
 
 ## 4. Exercise the notex_* tools
 
-Without a `.notex/notex.json` in the checkout (the common case today — `npx notex-companion link`
-doesn't exist yet, tracked as
-[TBR-85](https://linear.app/bmbn/issue/TBR-85)), every `notex_*` call should return exactly:
+Without a `.notex/notex.json` in the checkout (the default for a fresh clone), every `notex_*` call
+should return exactly:
 
 ```
 Not linked to a Notex Repository — run `npx notex-companion link`
 ```
 
-To see the "linked" branch, hand-write `.notex/notex.json` with a real API key (Notex Settings →
-API keys) and ids for a Repository you have access to:
+To see the "linked" branch, run that command with a real API key (Notex Settings → API keys) and
+ids for a Repository you have access to:
 
-```json
-{
-  "organizationId": "org_...",
-  "projectId": "proj_...",
-  "repositoryId": "repo_...",
-  "apiKey": "key_..."
-}
+```bash
+npx notex-companion link \
+  --organization-id org_... \
+  --project-id proj_... \
+  --repository-id repo_... \
+  --api-key key_...
 ```
+
+It validates the ids and key against the Notex API before writing `.notex/notex.json` (mode
+`0600`) — see
+[`notex-companion-link-manual-test.md`](notex-companion-link-manual-test.md) for the full walkthrough,
+including every refusal path.
 
 By default the server calls the Notex API at `http://localhost:3000` — set `NOTEX_API_URL` to
 point it at a different origin (e.g. a deployed Worker) before starting the MCP host.

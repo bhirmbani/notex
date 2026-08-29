@@ -17,7 +17,8 @@ export type NotexConfig = {
 
 export type NotexConfigState = { kind: "linked"; config: NotexConfig } | { kind: "unlinked"; reason: string }
 
-function configFilePath(checkoutPath: string): string {
+/** Also used by `link.ts` (TBR-85), the sole writer of this path — this module is the sole reader. */
+export function configFilePath(checkoutPath: string): string {
   return join(checkoutPath, ".notex", "notex.json")
 }
 

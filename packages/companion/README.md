@@ -45,10 +45,13 @@ notex-companion mcp                 # start the stdio MCP server — graph_statu
                                      # graph_query, graph_path, graph_node, plus notex_list_questions,
                                      # notex_get_question, notex_get_answer, notex_save_answer
                                      # (require .notex/notex.json — see docs/specs/notex-mcp-server.md)
+notex-companion link [options]      # write .notex/notex.json, pairing this checkout to a Notex Repository
 ```
 
 Setup, how it picks which checkout to serve, and a manual verification walkthrough:
 [`docs/testing/mcp-server-setup.md`](https://github.com/bhirmbani/notex/blob/main/docs/testing/mcp-server-setup.md).
+For `link` specifically — happy path, rotation, and every refusal path — see
+[`docs/testing/notex-companion-link-manual-test.md`](https://github.com/bhirmbani/notex/blob/main/docs/testing/notex-companion-link-manual-test.md).
 
 ### `serve` options
 
@@ -57,6 +60,19 @@ Setup, how it picks which checkout to serve, and a manual verification walkthrou
 | `--port <n>` | `7717` | Port to bind on `127.0.0.1`. There is no port scanning — pass this explicitly if `7717` is taken. |
 | `--origin <url>` | — | An additional allowed CORS origin, beyond the production Notex origin (and `http://localhost:3000` outside `NODE_ENV=production`). Repeatable. |
 | `--rotate-token` | off | Generate a new pairing token, invalidating the previous one. |
+
+### `link` options (all required)
+
+| Flag | Meaning |
+|---|---|
+| `--organization-id <id>` | Notex organization id. |
+| `--project-id <id>` | Notex project id — cross-checked against the Repository's actual project before writing. |
+| `--repository-id <id>` | Notex repository id to bind this checkout to. |
+| `--api-key <key>` | Generated once, plaintext, from Notex Settings → API keys. |
+
+`link` validates all four against the Notex API before writing `.notex/notex.json` (mode `0600`) —
+a bad key, an inaccessible repository, or a repository/project mismatch fails with an actionable
+message and writes nothing.
 
 ## Pairing
 
