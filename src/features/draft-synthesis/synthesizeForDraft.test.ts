@@ -85,7 +85,14 @@ describe("synthesizeForDraft", () => {
     expect(body.max_tokens).toBeGreaterThan(256)
   })
 
-  it("uses its own ~60s timeout, independent of expansion's 5s budget", async () => {
+  it("budgets enough headroom for a reasoning model's thinking tokens, not just prose length", () => {
+    // 1024 proved insufficient live: a reasoning model (moonshotai/kimi-k3) spent its whole
+    // budget on hidden `reasoning`/`reasoning_details` tokens and returned finish_reason:
+    // "length" with content: null, never reaching the actual answer (TBR-109).
+    expect(SYNTHESIS_MAX_TOKENS).toBe(4096)
+  })
+
+  it("uses its own ~120s timeout, independent of expansion's 5s budget", async () => {
     vi.useFakeTimers()
     vi.stubGlobal(
       "fetch",
@@ -98,11 +105,11 @@ describe("synthesizeForDraft", () => {
       })
     )
 
-    expect(SYNTHESIS_TIMEOUT_MS).toBe(60000)
+    expect(SYNTHESIS_TIMEOUT_MS).toBe(120000)
 
     const resultPromise = synthesizeForDraft("how does auth work?", CONTEXT, ANTHROPIC_PROVIDER)
 
-    await vi.advanceTimersByTimeAsync(50000)
+    await vi.advanceTimersByTimeAsync(110000)
     let settled = false
     void resultPromise.then(() => {
       settled = true
