@@ -19,6 +19,7 @@ import { Hono } from 'hono'
 import { callExpansion as callAnthropic } from './anthropicAdapter'
 import { callExpansion as callOpenAiCompatible } from './openAiCompatibleAdapter'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
+import { buildExpansionPrompt, EXPANSION_TIMEOUT_MS } from './shared'
 import type { ExpandRequestBody, ExpandResponseBody, ExpansionResult } from './shared'
 import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
 
@@ -31,10 +32,12 @@ function isProviderAdapter(value: unknown): value is ExpandRequestBody['adapter'
 }
 
 function runAdapter(body: ExpandRequestBody): Promise<ExpansionResult> {
+  const prompt = buildExpansionPrompt(body.question)
   if (body.adapter === 'anthropic') {
     return callAnthropic(
       { adapter: 'anthropic', apiKey: body.key, model: body.model },
-      body.question,
+      prompt,
+      EXPANSION_TIMEOUT_MS,
     )
   }
 
@@ -46,7 +49,8 @@ function runAdapter(body: ExpandRequestBody): Promise<ExpansionResult> {
       // Validated present below when adapter === 'openai-compatible'.
       baseUrl: body.baseUrl as string,
     },
-    body.question,
+    prompt,
+    EXPANSION_TIMEOUT_MS,
   )
 }
 

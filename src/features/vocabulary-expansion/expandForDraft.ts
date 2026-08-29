@@ -5,6 +5,7 @@
 
 import { callExpansion as callAnthropic } from "./anthropicAdapter"
 import { callExpansion as callOpenAiCompatible } from "./openAiCompatibleAdapter"
+import { buildExpansionPrompt, EXPANSION_TIMEOUT_MS } from "./shared"
 import type { ExpandRequestBody, ExpandResponseBody, ExpansionResult } from "./shared"
 import type { ProviderConfig } from "@/features/provider-keys/types"
 
@@ -22,10 +23,12 @@ function finalizeSuccess(terms: Array<string>): DraftExpansionOutcome {
 }
 
 function callDirect(provider: ProviderConfig, question: string): Promise<ExpansionResult> {
+  const prompt = buildExpansionPrompt(question)
   if (provider.adapter === "anthropic") {
     return callAnthropic(
       { adapter: "anthropic", apiKey: provider.apiKey, model: provider.model },
-      question
+      prompt,
+      EXPANSION_TIMEOUT_MS
     )
   }
   return callOpenAiCompatible(
@@ -35,7 +38,8 @@ function callDirect(provider: ProviderConfig, question: string): Promise<Expansi
       model: provider.model,
       baseUrl: provider.baseUrl,
     },
-    question
+    prompt,
+    EXPANSION_TIMEOUT_MS
   )
 }
 

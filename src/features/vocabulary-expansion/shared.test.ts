@@ -151,4 +151,68 @@ describe("callProvider", () => {
       message: "unparseable provider response",
     })
   })
+
+  it("honors a caller-supplied timeout shorter than the 5s default", async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted", "AbortError"))
+          })
+        })
+      })
+    )
+
+    const resultPromise = callProvider(
+      "https://example.test/v1/x",
+      { method: "POST" },
+      (body) => (body as { text: string }).text,
+      2000
+    )
+    await vi.advanceTimersByTimeAsync(2000)
+    const result = await resultPromise
+
+    expect(result).toEqual({
+      status: "llmFailure",
+      message: "provider request timed out",
+    })
+  })
+
+  it("does not time out before a caller-supplied timeout longer than the 5s default elapses", async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted", "AbortError"))
+          })
+        })
+      })
+    )
+
+    const resultPromise = callProvider(
+      "https://example.test/v1/x",
+      { method: "POST" },
+      (body) => (body as { text: string }).text,
+      15000
+    )
+    await vi.advanceTimersByTimeAsync(5000)
+
+    let settled = false
+    void resultPromise.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(10000)
+    const result = await resultPromise
+    expect(result).toEqual({
+      status: "llmFailure",
+      message: "provider request timed out",
+    })
+  })
 })
