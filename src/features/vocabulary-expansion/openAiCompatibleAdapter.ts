@@ -2,8 +2,12 @@
 // §2): `/chat/completions` shape with a configurable `baseUrl`, covering
 // OpenAI, OpenRouter, Groq, Together, Mistral, and Gemini's OpenAI-compat
 // endpoint from one adapter rather than a hardcoded provider list.
+// Generalized (TBR-101) to accept the prompt and timeout from the caller
+// instead of hardcoding expansion's — building the prompt is the caller's
+// job, not this adapter's. A future caller like Draft synthesis (TBR-99)
+// may still need further changes here, not just a different prompt.
 
-import { buildExpansionPrompt, callProvider } from "./shared"
+import { callProvider, EXPANSION_TIMEOUT_MS } from "./shared"
 import type { ExpansionResult } from "./shared"
 
 export type OpenAiCompatibleConfig = {
@@ -15,7 +19,8 @@ export type OpenAiCompatibleConfig = {
 
 export function callExpansion(
   config: OpenAiCompatibleConfig,
-  question: string
+  prompt: string,
+  timeoutMs: number = EXPANSION_TIMEOUT_MS
 ): Promise<ExpansionResult> {
   // baseUrl is a user-typed Settings field (spec §3) — a pasted trailing
   // slash is common enough (many providers' docs show one) that it must not
@@ -31,10 +36,11 @@ export function callExpansion(
       },
       body: JSON.stringify({
         model: config.model,
-        messages: [{ role: "user", content: buildExpansionPrompt(question) }],
+        messages: [{ role: "user", content: prompt }],
       }),
     },
-    extractText
+    extractText,
+    timeoutMs
   )
 }
 

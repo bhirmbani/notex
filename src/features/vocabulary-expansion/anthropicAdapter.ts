@@ -1,8 +1,13 @@
 // The `anthropic` provider adapter (docs/specs/vocabulary-expansion.md §2):
 // Messages API shape, with the header that opts an Anthropic key into direct
-// browser-origin calls.
+// browser-origin calls. Generalized (TBR-101) to accept the prompt and
+// timeout from the caller instead of hardcoding expansion's — building the
+// prompt is the caller's job, not this adapter's. Still expansion-shaped in
+// other respects (e.g. the fixed max_tokens); a future caller like Draft
+// synthesis (TBR-99) may need further changes here, not just a different
+// prompt.
 
-import { buildExpansionPrompt, callProvider } from "./shared"
+import { callProvider, EXPANSION_TIMEOUT_MS } from "./shared"
 import type { ExpansionResult } from "./shared"
 
 export type AnthropicConfig = {
@@ -15,7 +20,8 @@ const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 
 export function callExpansion(
   config: AnthropicConfig,
-  question: string
+  prompt: string,
+  timeoutMs: number = EXPANSION_TIMEOUT_MS
 ): Promise<ExpansionResult> {
   return callProvider(
     ANTHROPIC_MESSAGES_URL,
@@ -30,10 +36,11 @@ export function callExpansion(
       body: JSON.stringify({
         model: config.model,
         max_tokens: 256,
-        messages: [{ role: "user", content: buildExpansionPrompt(question) }],
+        messages: [{ role: "user", content: prompt }],
       }),
     },
-    extractText
+    extractText,
+    timeoutMs
   )
 }
 

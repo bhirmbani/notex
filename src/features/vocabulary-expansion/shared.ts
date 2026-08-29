@@ -24,7 +24,9 @@ export type ExpandResponseBody =
   | { terms: Array<string> }
   | { error: { code: string; message: string } }
 
-const TIMEOUT_MS = 5000
+// Expansion's own budget (docs/specs/vocabulary-expansion.md §1). Callers other than
+// expansion (e.g. Draft synthesis, TBR-99) pass their own timeout to `callProvider`.
+export const EXPANSION_TIMEOUT_MS = 5000
 
 export function buildExpansionPrompt(question: string): string {
   return `List, as a comma-separated line, the key search terms that best expand this question for a knowledge-graph lookup. Return only the terms, nothing else.\n\nQuestion: ${question}`
@@ -38,11 +40,12 @@ function parseTerms(text: string): Array<string> {
 }
 
 /**
- * A single attempt, no retries, ~5s timeout. Distinguishes a transport-level
- * failure (fetch rejection before any response header arrives — network
- * error or CORS rejection) from an LLM-level failure (non-2xx, timeout, or a
- * response whose shape `extractText` can't make sense of) — spec §1 depends
- * on telling these apart to decide whether to fall back to the proxy or go
+ * A single attempt, no retries, caller-supplied timeout (defaults to
+ * expansion's ~5s budget). Distinguishes a transport-level failure (fetch
+ * rejection before any response header arrives — network error or CORS
+ * rejection) from an LLM-level failure (non-2xx, timeout, or a response
+ * whose shape `extractText` can't make sense of) — spec §1 depends on
+ * telling these apart to decide whether to fall back to the proxy or go
  * straight to degraded. A timeout is classified LLM-level, not transport:
  * unlike a CORS/network rejection it doesn't tell us whether the call ever
  * reached the provider.
@@ -50,10 +53,11 @@ function parseTerms(text: string): Array<string> {
 export async function callProvider(
   url: string,
   init: RequestInit,
-  extractText: (body: unknown) => string | null
+  extractText: (body: unknown) => string | null,
+  timeoutMs: number = EXPANSION_TIMEOUT_MS
 ): Promise<ExpansionResult> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   // The timer stays armed for the whole request, including the body read —
   // clearing it as soon as `fetch()` resolves would leave a slow/stalled

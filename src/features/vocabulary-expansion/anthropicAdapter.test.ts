@@ -5,6 +5,7 @@ import { callExpansion } from "./anthropicAdapter"
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 function jsonResponse(body: unknown, init?: { status?: number }) {
@@ -62,5 +63,60 @@ describe("anthropicAdapter callExpansion", () => {
       status: "llmFailure",
       message: "unparseable provider response",
     })
+  })
+
+  it("sends the caller-supplied prompt verbatim, without wrapping it in the expansion prompt", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ content: [{ text: "ok" }] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await callExpansion(
+      {
+        adapter: "anthropic",
+        apiKey: "sk-ant-test",
+        model: "claude-haiku-test",
+      },
+      "a fully custom prompt, not a question"
+    )
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as { messages: Array<{ content: string }> }
+    expect(body.messages[0]?.content).toBe("a fully custom prompt, not a question")
+  })
+
+  it("passes a caller-supplied timeout through to the underlying request", async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted", "AbortError"))
+          })
+        })
+      })
+    )
+
+    const resultPromise = callExpansion(
+      {
+        adapter: "anthropic",
+        apiKey: "sk-ant-test",
+        model: "claude-haiku-test",
+      },
+      "prompt",
+      15000
+    )
+    await vi.advanceTimersByTimeAsync(5000)
+
+    let settled = false
+    void resultPromise.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(10000)
+    await resultPromise
   })
 })
