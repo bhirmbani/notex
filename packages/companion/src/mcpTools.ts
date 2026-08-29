@@ -1,4 +1,4 @@
-// The nine MCP tools (docs/specs/notex-mcp-server.md §2), as a plain name -> definition table
+// The ten MCP tools (docs/specs/notex-mcp-server.md §2, plus graph_suggested_questions), as a plain name -> definition table
 // rather than direct McpServer registrations, so a test can call a handler without going through
 // a real stdio/InMemory transport — the same "pure function, thin transport binding" split http.ts
 // uses for the REST binding. `registerMcpTools` is the only place that touches the SDK's types.
@@ -12,7 +12,7 @@
 
 import { z } from "zod"
 import { buildFooter } from "./footer.ts"
-import { node, path, query, search, status } from "./ops.ts"
+import { node, path, query, search, status, suggestedQuestions } from "./ops.ts"
 import { OpError } from "./types.ts"
 import type { FooterSource } from "./footer.ts"
 import type { GraphIndex } from "./graph.ts"
@@ -107,6 +107,19 @@ export function createGraphTools(ctx: McpToolContext): Record<string, ToolDef> {
         if (!outcome.ok) return outcome.error
         const { result } = outcome
         const text = `apiVersion ${result.apiVersion} · capabilities: ${result.capabilities.join(", ")} · graph: ${result.graph.nodeCount} nodes, ${result.graph.edgeCount} edges, ${result.graph.communityCount} communities (built ${result.graph.builtAt})`
+        return toResult(outcome, text)
+      },
+    },
+
+    graph_suggested_questions: {
+      description:
+        "Questions graphify's own analysis (GRAPH_REPORT.md) flagged as ones this graph is uniquely positioned to answer, each with a one-line rationale (e.g. high betweenness centrality, a weakly-connected community). Empty when the checkout has no GRAPH_REPORT.md.",
+      inputSchema: {},
+      handler: () => {
+        const outcome = runOp(ctx, (index) => suggestedQuestions(index))
+        if (!outcome.ok) return outcome.error
+        const { result } = outcome
+        const text = `${result.questions.length} suggested question(s)`
         return toResult(outcome, text)
       },
     },

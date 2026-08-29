@@ -12,7 +12,7 @@ import { resolve } from "node:path"
 import { shatter } from "./scoring.ts"
 import { OpError } from "./types.ts"
 import type { ScoreIndexEntry } from "./scoring.ts"
-import type { GraphEdge, GraphNode, GraphStamp } from "./types.ts"
+import type { GraphEdge, GraphNode, GraphStamp, SuggestedQuestion } from "./types.ts"
 
 type RawNode = {
   id: string
@@ -50,6 +50,7 @@ export type GraphIndex = {
   /** Undirected — the graph is `"directed": false` (companion-api.md §2.2). */
   adjacency: Map<string, Array<AdjacencyEntry>>
   scoreIndex: Array<ScoreIndexEntry>
+  suggestedQuestions: Array<SuggestedQuestion>
   project: (n: RawNode) => GraphNode
   projectEdge: (e: RawEdge) => GraphEdge
 }
@@ -81,6 +82,47 @@ export function readHeadSha(checkoutPath: string): string | null {
       .trim()
   } catch {
     return null
+  }
+}
+
+const SUGGESTED_QUESTIONS_HEADING = /^## Suggested Questions\s*$/
+const SECTION_HEADING = /^## /
+const QUESTION_BULLET = /^- \*\*(.+)\*\*$/
+const RATIONALE_LINE = /^\s*_(.+)_\s*$/
+
+/**
+ * Parses graphify's own `GRAPH_REPORT.md` "## Suggested Questions" section (a bullet list of
+ * bold question / italic one-line rationale pairs) into structured pairs. Pure and best-effort:
+ * an absent heading yields `[]`, a bullet that isn't a bold question line is skipped, and a
+ * question with no following italic line still gets a `""` rationale rather than being dropped.
+ */
+export function parseSuggestedQuestions(markdown: string): Array<SuggestedQuestion> {
+  const lines = markdown.split("\n")
+  const headingIndex = lines.findIndex((line) => SUGGESTED_QUESTIONS_HEADING.test(line))
+  if (headingIndex === -1) return []
+
+  const sectionEnd = lines.findIndex((line, i) => i > headingIndex && SECTION_HEADING.test(line))
+  const section = lines.slice(headingIndex + 1, sectionEnd === -1 ? undefined : sectionEnd)
+
+  const result: Array<SuggestedQuestion> = []
+  for (let i = 0; i < section.length; i++) {
+    const questionMatch = section[i]!.match(QUESTION_BULLET)
+    if (!questionMatch) continue
+    const rationaleMatch = section[i + 1]?.match(RATIONALE_LINE)
+    result.push({ question: questionMatch[1]!, rationale: rationaleMatch?.[1] ?? "" })
+  }
+  return result
+}
+
+/** Best-effort: a missing/unreadable `GRAPH_REPORT.md` (e.g. graphify was never run for
+ * suggestions, or only `graph.json` is present) degrades to `[]` rather than failing the
+ * whole graph load — suggested questions are a nice-to-have, never load-bearing. */
+export function loadSuggestedQuestions(checkoutPath: string): Array<SuggestedQuestion> {
+  try {
+    const raw = readFileSync(resolve(checkoutPath, "graphify-out/GRAPH_REPORT.md"), "utf8")
+    return parseSuggestedQuestions(raw)
+  } catch {
+    return []
   }
 }
 
@@ -153,5 +195,14 @@ export function loadGraph(checkoutPath: string): GraphIndex {
     sourceLocation: e.source_location,
   })
 
-  return { stamp, nodesById, edges: doc.links, adjacency, scoreIndex, project, projectEdge }
+  return {
+    stamp,
+    nodesById,
+    edges: doc.links,
+    adjacency,
+    scoreIndex,
+    suggestedQuestions: loadSuggestedQuestions(checkoutPath),
+    project,
+    projectEdge,
+  }
 }

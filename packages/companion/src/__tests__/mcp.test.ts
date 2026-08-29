@@ -19,7 +19,7 @@ async function connectedClient() {
 }
 
 describe("MCP wiring", () => {
-  it("lists all nine tools", async () => {
+  it("lists all ten tools", async () => {
     const client = await connectedClient()
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
@@ -28,6 +28,7 @@ describe("MCP wiring", () => {
       "graph_query",
       "graph_search",
       "graph_status",
+      "graph_suggested_questions",
       "notex_get_answer",
       "notex_get_question",
       "notex_list_questions",

@@ -44,7 +44,7 @@ describe("GET /v1/ping", () => {
 
 describe("bearer auth", () => {
   it("returns 401 without a token on every op except ping", async () => {
-    for (const path of ["/v1/status", "/v1/search", "/v1/query", "/v1/path", "/v1/node/auth_login", "/v1/browse"]) {
+    for (const path of ["/v1/status", "/v1/search", "/v1/query", "/v1/path", "/v1/node/auth_login", "/v1/browse", "/v1/suggested-questions"]) {
       const res = await handler()(req(path, { token: null }))
       expect([401]).toContain(res.status)
       const body = await json(res)
@@ -127,7 +127,16 @@ describe("GET /v1/status", () => {
     expect(res.status).toBe(200)
     const body = await json(res)
     expect(body.apiVersion).toBe(API_VERSION)
-    expect(body.capabilities).toEqual(["search", "query", "path", "node", "browse"])
+    expect(body.capabilities).toEqual(["search", "query", "path", "node", "browse", "suggestedQuestions"])
+  })
+})
+
+describe("GET /v1/suggested-questions", () => {
+  it("returns the suggestedQuestions op result", async () => {
+    const res = await handler()(req("/v1/suggested-questions"))
+    expect(res.status).toBe(200)
+    const body = await json(res)
+    expect(body.questions).toEqual(index.suggestedQuestions)
   })
 })
 

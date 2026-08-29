@@ -2,7 +2,7 @@ import { existsSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "bun:test"
 import { loadGraph } from "../graph.ts"
-import { browse, node, path, query, search, status } from "../ops.ts"
+import { browse, node, path, query, search, status, suggestedQuestions } from "../ops.ts"
 import { OpError } from "../types.ts"
 import { FIXTURE_ROOT } from "./fixtures/setup.ts"
 import type { GraphIndex } from "../graph.ts"
@@ -38,6 +38,7 @@ function buildMultiTypeIndex(): GraphIndex {
     edges: [],
     adjacency: new Map(),
     scoreIndex: [],
+    suggestedQuestions: [],
     project: (n) => ({
       id: n.id,
       label: n.label,
@@ -56,9 +57,17 @@ describe("status", () => {
   it("echoes the graph stamp and reports capabilities/limits", () => {
     const res = status(index)
     expect(res.graph).toBe(index.stamp)
-    expect(res.capabilities).toEqual(["search", "query", "path", "node", "browse"])
+    expect(res.capabilities).toEqual(["search", "query", "path", "node", "browse", "suggestedQuestions"])
     expect(res.limits).toEqual({ maxNodes: 1000, maxDepth: 3 })
     expect(typeof res.apiVersion).toBe("string")
+  })
+})
+
+describe("suggestedQuestions", () => {
+  it("echoes the graph stamp and the loaded suggested questions", () => {
+    const res = suggestedQuestions(index)
+    expect(res.graph).toBe(index.stamp)
+    expect(res.questions).toBe(index.suggestedQuestions)
   })
 })
 

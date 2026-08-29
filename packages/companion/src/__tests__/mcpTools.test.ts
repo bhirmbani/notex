@@ -68,7 +68,9 @@ describe("graph_status", () => {
     const ctx = makeCtx()
     const result = await createGraphTools(ctx).graph_status!.handler({})
     expect(result.isError).toBeUndefined()
-    expect(result.structuredContent).toMatchObject({ capabilities: ["search", "query", "path", "node", "browse"] })
+    expect(result.structuredContent).toMatchObject({
+      capabilities: ["search", "query", "path", "node", "browse", "suggestedQuestions"],
+    })
     expect(text(result)).toContain("apiVersion")
     expect(text(result)).toContain(`${index.stamp.nodeCount} nodes`)
   })
@@ -76,6 +78,23 @@ describe("graph_status", () => {
   it("errors with graph_unreadable when the graph failed to load, without crashing", async () => {
     const ctx = makeCtx({ getGraphState: () => ERROR })
     const result = await createGraphTools(ctx).graph_status!.handler({})
+    expect(result.isError).toBe(true)
+    expect(text(result)).toBe("graph_unreadable: graph.json missing")
+  })
+})
+
+describe("graph_suggested_questions", () => {
+  it("reports graphify's suggested questions from GRAPH_REPORT.md", async () => {
+    const ctx = makeCtx()
+    const result = await createGraphTools(ctx).graph_suggested_questions!.handler({})
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent).toEqual({ graph: index.stamp, questions: index.suggestedQuestions })
+    expect(text(result)).toContain(`${index.suggestedQuestions.length}`)
+  })
+
+  it("errors with graph_unreadable when the graph failed to load, without crashing", async () => {
+    const ctx = makeCtx({ getGraphState: () => ERROR })
+    const result = await createGraphTools(ctx).graph_suggested_questions!.handler({})
     expect(result.isError).toBe(true)
     expect(text(result)).toBe("graph_unreadable: graph.json missing")
   })
@@ -207,7 +226,7 @@ describe("notex_* tools: shape and link-state gating", () => {
 
   it("never disappear regardless of config or graph state — always listed", () => {
     const ctx = makeCtx({ getGraphState: () => ERROR, getConfigState: () => UNLINKED })
-    expect(Object.keys(createGraphTools(ctx))).toHaveLength(5)
+    expect(Object.keys(createGraphTools(ctx))).toHaveLength(6)
     expect(Object.keys(createNotexTools(ctx))).toHaveLength(4)
   })
 })

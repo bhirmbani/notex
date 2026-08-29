@@ -25,6 +25,11 @@ import { LinkModal } from "@/components/LinkModal"
 import { Breadcrumb } from "@/components/Breadcrumb"
 import { InlineEditField } from "@/components/InlineEditField"
 import { ConnectionStateChip } from "@/features/companion/ConnectionStateChip"
+import {
+  useCompanionConnection,
+  useCompanionSuggestedQuestions,
+} from "@/features/companion/hooks"
+import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute(
   "/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/"
@@ -40,20 +45,30 @@ function formatDate(ts: number) {
   })
 }
 
-function CreateContextModal({
+export function CreateContextModal({
   organizationId,
   repoId,
   projectId,
+  existingQuestions,
   onClose,
 }: {
   organizationId: string
   repoId: string
   projectId: string
+  existingQuestions: Array<string>
   onClose: () => void
 }) {
   const [question, setQuestion] = useState("")
   const create = useCreateContext(organizationId, repoId)
   const navigate = useNavigate()
+
+  const connection = useCompanionConnection(repoId)
+  const pairing =
+    connection.data?.state === "connected" ? connection.data.pairing : null
+  const suggestions = useCompanionSuggestedQuestions(pairing, true)
+  const askedQuestions = new Set(
+    existingQuestions.map((q) => q.trim().toLowerCase())
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,6 +104,37 @@ function CreateContextModal({
               className="text-sm"
             />
           </div>
+          {pairing && suggestions.data && suggestions.data.questions.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Suggested questions</Label>
+              <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+                {suggestions.data.questions.map((sq) => {
+                  const alreadyAsked = askedQuestions.has(
+                    sq.question.trim().toLowerCase()
+                  )
+                  return (
+                    <button
+                      key={sq.question}
+                      type="button"
+                      onClick={() => setQuestion(sq.question)}
+                      className="flex items-start justify-between gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs hover:bg-accent"
+                    >
+                      <span className="min-w-0 flex-1">{sq.question}</span>
+                      {alreadyAsked && (
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                          )}
+                        >
+                          Already asked
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
               Cancel
@@ -296,6 +342,7 @@ function RepositoryPage() {
           organizationId={organizationId}
           repoId={repoId}
           projectId={projectId}
+          existingQuestions={contexts?.map((ctx) => ctx.question) ?? []}
           onClose={() => setShowCreate(false)}
         />
       )}

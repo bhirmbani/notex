@@ -9,6 +9,7 @@ import {
   useCompanionPath,
   useCompanionQuery,
   useCompanionSearch,
+  useCompanionSuggestedQuestions,
   useDebouncedCompanionSearch,
 } from "./hooks"
 import * as connectionState from "./connectionState"
@@ -182,6 +183,34 @@ describe("useCompanionBrowse", () => {
     renderHook(() => useCompanionBrowse(null, true), { wrapper })
 
     expect(browseSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("useCompanionSuggestedQuestions", () => {
+  it("does not call the client when disabled", () => {
+    const spy = vi.spyOn(client, "fetchSuggestedQuestions")
+    renderHook(() => useCompanionSuggestedQuestions(PAIRING, false), { wrapper })
+
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it("calls fetchSuggestedQuestions with the pairing's baseUrl/token once enabled", async () => {
+    const spy = vi
+      .spyOn(client, "fetchSuggestedQuestions")
+      .mockResolvedValue({ graph: {} as never, questions: [] })
+
+    renderHook(() => useCompanionSuggestedQuestions(PAIRING, true), { wrapper })
+
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token)
+    )
+  })
+
+  it("does not call the client when there is no pairing, even if enabled", () => {
+    const spy = vi.spyOn(client, "fetchSuggestedQuestions")
+    renderHook(() => useCompanionSuggestedQuestions(null, true), { wrapper })
+
+    expect(spy).not.toHaveBeenCalled()
   })
 })
 

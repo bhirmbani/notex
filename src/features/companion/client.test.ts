@@ -4,6 +4,7 @@ import {
   CompanionRequestError,
   browse,
   fetchStatus,
+  fetchSuggestedQuestions,
   node,
   path,
   ping,
@@ -196,6 +197,20 @@ describe("op fetch targets", () => {
     await browse(BASE_URL, TOKEN, { limit: 5 })
 
     expect(firstCall(fetchSpy)[0]).toBe(`${BASE_URL}/v1/browse?limit=5`)
+  })
+
+  it("fetchSuggestedQuestions GETs /v1/suggested-questions with a bearer token", async () => {
+    const body = { graph: {}, questions: [{ question: "Why?", rationale: "Because." }] }
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(body))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    const result = await fetchSuggestedQuestions(BASE_URL, TOKEN)
+
+    expect(result).toEqual(body)
+    const [url, init] = firstCall(fetchSpy)
+    expect(url).toBe(`${BASE_URL}/v1/suggested-questions`)
+    expect(init.targetAddressSpace).toBe("loopback")
+    expect(new Headers(init.headers).get("authorization")).toBe(`Bearer ${TOKEN}`)
   })
 
   it("every fetch target is the companion baseUrl, never a Notex-side endpoint (ADR-0003)", async () => {
