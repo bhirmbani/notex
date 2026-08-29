@@ -74,6 +74,13 @@ export function useQuestionGraphDraft(
   // stale synthesis call (superseded by a newer retrieval before it resolves) can tell it's
   // been superseded and skip overwriting draftText/synthesisBanner with a stale answer.
   const synthesisVersion = useRef(0)
+  // Whether the user has edited draftText since it was last auto-seeded from a query result
+  // (TBR-105) — flipped true by the `setDraftText` the Draft textarea calls, and reset false
+  // each time a new result re-seeds the draft below. A synthesis call in flight when the user
+  // starts typing must not clobber that edit once it resolves, mirroring the resultVersion/
+  // expansionVersion staleness pattern for a different kind of staleness: not a superseded
+  // request, but a result whose seed the user has since diverged from by hand.
+  const draftEditedSinceSeed = useRef(false)
   // The exact question text that produced the query result currently in `mutation.data` —
   // set from each `mutate()` call's own `onSuccess(data, variables)`, never from the hook's
   // live `question` prop (which could already differ, e.g. after navigating to a different
@@ -89,6 +96,7 @@ export function useQuestionGraphDraft(
       const data = mutation.data
       setLastResult(data)
       setDraftTextState(data.context?.markdown ?? "")
+      draftEditedSinceSeed.current = false
       resultVersion.current += 1
       setSaved(false)
       setSynthesisBanner(undefined)
@@ -115,6 +123,11 @@ export function useQuestionGraphDraft(
             // A newer retrieval landed while this synthesis call was still in flight — its own
             // draftText/banner already superseded whatever this call would apply.
             if (synthesisVersion.current !== version) return
+            // The user started editing the seeded draft before synthesis resolved (TBR-105) —
+            // their edit wins, silently: the synthesized prose is dropped, and the "synthesis
+            // failed, showing raw evidence" banner is skipped too, since draftText is no longer
+            // the raw evidence it would claim to describe.
+            if (draftEditedSinceSeed.current) return
             if (outcome.status === "success") {
               setDraftTextState(outcome.prose)
             } else {
@@ -130,6 +143,7 @@ export function useQuestionGraphDraft(
 
   const setDraftText = (value: string) => {
     setDraftTextState(value)
+    draftEditedSinceSeed.current = true
     setSaved(false)
   }
 

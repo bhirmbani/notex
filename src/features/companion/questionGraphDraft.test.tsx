@@ -682,6 +682,88 @@ describe("useQuestionGraphDraft", () => {
       expect(result.current.synthesisBanner).toBeUndefined()
     })
 
+    it("drops a synthesis result that resolves after the user has already edited the seeded draft (TBR-105)", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+        context: { markdown: "raw evidence body", sources: [] },
+      })
+
+      let resolveSynthesis!: (outcome: DraftSynthesisOutcome) => void
+      const synthesisPromise = new Promise<DraftSynthesisOutcome>((resolve) => {
+        resolveSynthesis = resolve
+      })
+      vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft").mockReturnValue(synthesisPromise)
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      // Draft still seeds with raw evidence immediately, while synthesis is in flight.
+      act(() => result.current.run())
+      await waitFor(() => expect(result.current.draftText).toBe("raw evidence body"))
+
+      // The user starts editing before synthesis resolves.
+      act(() => result.current.setDraftText("the user's own edit"))
+
+      // Synthesis now resolves — its result must be dropped, not overwrite the user's edit.
+      await act(async () => {
+        resolveSynthesis({ status: "success", prose: "synthesized prose — must not apply" })
+        await Promise.resolve()
+      })
+
+      expect(result.current.draftText).toBe("the user's own edit")
+    })
+
+    it("drops a synthesis failure banner too, once the user has edited away from the raw evidence it would describe (TBR-105)", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+        context: { markdown: "raw evidence body", sources: [] },
+      })
+
+      let resolveSynthesis!: (outcome: DraftSynthesisOutcome) => void
+      const synthesisPromise = new Promise<DraftSynthesisOutcome>((resolve) => {
+        resolveSynthesis = resolve
+      })
+      vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft").mockReturnValue(synthesisPromise)
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+      await waitFor(() => expect(result.current.draftText).toBe("raw evidence body"))
+
+      act(() => result.current.setDraftText("the user's own edit"))
+
+      await act(async () => {
+        resolveSynthesis({ status: "failed", message: "provider timed out" })
+        await Promise.resolve()
+      })
+
+      // draftText is the user's own prose now, not raw evidence — the "showing raw evidence,
+      // synthesis failed" banner would be a lie if shown here.
+      expect(result.current.draftText).toBe("the user's own edit")
+      expect(result.current.synthesisBanner).toBeUndefined()
+    })
+
     it("invalidates an earlier in-flight synthesis attempt even when the newer result doesn't itself start a new one", async () => {
       connectAsConnected()
       // First run has a Provider key (synthesis starts, left unresolved); the key is then
