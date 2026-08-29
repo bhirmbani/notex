@@ -10,7 +10,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { APIError } from 'better-auth'
 import { useState } from 'react'
-import { RiKey2Line } from '@remixicon/react'
+import { RiCpuLine, RiKey2Line } from '@remixicon/react'
 
 import type { AuthBindings } from '@/features/auth/lib/server'
 import type { DashboardSession } from '@/features/auth/lib/validation'
@@ -122,6 +122,14 @@ function DashboardLayout() {
             title="API keys"
           >
             <RiKey2Line className="size-4" />
+          </Link>
+          <Link
+            to="/dashboard/settings/provider-keys"
+            className="text-muted-foreground hover:text-foreground [&.active]:text-foreground"
+            aria-label="Provider keys"
+            title="Provider keys"
+          >
+            <RiCpuLine className="size-4" />
           </Link>
           <ThemeToggle />
           <button
