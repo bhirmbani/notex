@@ -42,6 +42,27 @@ describe("openAiCompatibleAdapter callExpansion", () => {
     expect(headers.get("authorization")).toBe("Bearer test-key")
   })
 
+  it("sends reasoning: { effort: 'none' } unconditionally, to stop reasoning models burning the max_tokens budget on thinking (TBR-111)", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ choices: [{ message: { content: "ok" } }] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await callExpansion(
+      {
+        adapter: "openai-compatible",
+        apiKey: "test-key",
+        model: "gpt-4o-mini",
+        baseUrl: "https://openrouter.ai/api/v1",
+      },
+      "what is X?"
+    )
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as { reasoning?: { effort?: string } }
+    expect(body.reasoning).toEqual({ effort: "none" })
+  })
+
   it("strips a trailing slash from baseUrl before appending /chat/completions", async () => {
     const fetchSpy = vi.fn().mockResolvedValue(
       jsonResponse({
