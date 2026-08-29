@@ -22,20 +22,21 @@ companion before — this doc picks up where its §4 leaves off, once a checkout
 
 ## 1. Link the checkout
 
-`npx notex-companion link` doesn't exist yet (TBR-85) — hand-write `.notex/notex.json` at the repo
-root with the Repository's real ids and the key you just created:
+From the repo root, run `npx notex-companion link` with the Repository's real ids and the key you
+just created:
 
-```json
-{
-  "organizationId": "org_...",
-  "projectId": "proj_...",
-  "repositoryId": "repo_...",
-  "apiKey": "key_..."
-}
+```bash
+npx notex-companion link \
+  --organization-id org_... \
+  --project-id proj_... \
+  --repository-id repo_... \
+  --api-key key_...
 ```
 
-Mode `0600`: `chmod 600 .notex/notex.json`. Leave `NOTEX_API_URL` unset — the default already
-points at `bun run dev`.
+It validates all four against the Notex API and writes `.notex/notex.json` at mode `0600` —
+[`notex-companion-link-manual-test.md`](notex-companion-link-manual-test.md) covers `link` itself
+in depth (rotation, every refusal path) if you want to exercise that first. Leave `NOTEX_API_URL`
+unset here — the default already points at `bun run dev`.
 
 Restart your MCP host session (or re-run the raw-JSON-RPC recipe) so the server re-reads the
 config. Confirm the graph-only-mode error is gone: call `notex_list_questions` and expect an empty
