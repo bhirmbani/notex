@@ -23,6 +23,7 @@ import { useFiles } from '@/features/files/hooks'
 import { AddFileModal } from '@/features/files/AddFileModal'
 import { useCreateNote, useNotes } from '@/features/notes/hooks'
 import { useCreateMermaid, useMermaidDiagrams } from '@/features/mermaid/hooks'
+import { APP_ENV, COMMIT_SHA } from '@/lib/buildInfo'
 import { cn } from '@/lib/utils'
 
 type SidebarProps = {
@@ -454,6 +455,13 @@ export function Sidebar({ organizationId, projectId }: SidebarProps) {
         {activeProjectId && (
           <ProjectTree organizationId={organizationId} projectId={activeProjectId} />
         )}
+      </div>
+
+      <div
+        className="shrink-0 border-t px-3 py-2 font-mono text-[10px] text-muted-foreground"
+        title="Deployed commit"
+      >
+        {APP_ENV} · {COMMIT_SHA}
       </div>
     </aside>
   )

@@ -87,8 +87,28 @@ describe('applyDeployEnv', () => {
 
 describe('buildEnv', () => {
   it('supplies the origin Vite inlines into the client bundle', () => {
-    expect(buildEnv('dev')).toEqual({ VITE_APP_URL: 'https://notex-dev.bm.workers.dev' })
-    expect(buildEnv('prod')).toEqual({ VITE_APP_URL: 'https://notex.bm.workers.dev' })
+    expect(buildEnv('dev').VITE_APP_URL).toBe('https://notex-dev.bm.workers.dev')
+    expect(buildEnv('prod').VITE_APP_URL).toBe('https://notex.bm.workers.dev')
+  })
+
+  it('tags the build with the environment it was built for', () => {
+    expect(buildEnv('dev').VITE_APP_ENV).toBe('dev')
+    expect(buildEnv('prod').VITE_APP_ENV).toBe('prod')
+  })
+
+  it('resolves a commit sha for the deployed UI to show', () => {
+    expect(buildEnv('dev').VITE_COMMIT_SHA).toMatch(/^[0-9a-f]{7,40}$/)
+  })
+
+  it('prefers a CI-provided sha over local git history', () => {
+    const original = process.env.GITHUB_SHA
+    process.env.GITHUB_SHA = 'abcdef0123456789'
+    try {
+      expect(buildEnv('dev').VITE_COMMIT_SHA).toBe('abcdef0')
+    } finally {
+      if (original === undefined) delete process.env.GITHUB_SHA
+      else process.env.GITHUB_SHA = original
+    }
   })
 
   it('rejects an unknown environment', () => {
