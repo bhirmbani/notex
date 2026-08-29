@@ -848,6 +848,10 @@ describe("useQuestionGraphDraft", () => {
       // No Provider key this time — the second result never starts its own synthesis attempt.
       act(() => result.current.expand())
       await waitFor(() => expect(result.current.draftText).toBe("second evidence"))
+      // The second result is ineligible for synthesis (no provider) — isSynthesizing must clear
+      // immediately, not stay stuck true from the first (now-superseded) call that never got its
+      // own .finally() to run, since that call's version check bails out (TBR-110 regression).
+      expect(result.current.isSynthesizing).toBe(false)
 
       // The first run's synthesis call finally settles — it must not clobber the second,
       // unrelated result's draftText just because nothing newer replaced it.

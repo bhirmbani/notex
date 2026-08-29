@@ -113,6 +113,11 @@ export function useQuestionGraphDraft(
       // synthesis call from a now-superseded result is invalidated either way, not just when
       // this new result happens to trigger a synthesis attempt of its own.
       const version = ++synthesisVersion.current
+      // Reset before the eligibility check below, not just inside it — an ineligible result
+      // (no provider, lowConfidence) must still clear a stuck-true isSynthesizing left behind by
+      // an earlier in-flight call that this version bump just invalidated: that call's own
+      // .finally() bails out on the version mismatch and will never flip it back itself.
+      setIsSynthesizing(false)
 
       const provider = getActiveProviderKey()
       const context = data.context
