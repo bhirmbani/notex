@@ -70,5 +70,9 @@ _Planned (TBR-53 map)._ The plain-text block appended to a graph-drafted Answer'
 _Planned (TBR-87)._ The LLM step that turns a Question's raw text into pre-expanded `terms[]` before the companion's `query` op runs, closing the browser path's `degraded: { expansion: "none" }` gap (`companion-api.md` §4.4). Runs with the user's own Provider key, direct from the browser when the provider allows it, via a Notex-side proxy on transport failure. See ADR-0006.
 
 **Provider key**:
-_Planned (TBR-87)._ A user-supplied credential for a third-party LLM provider (Anthropic, or any OpenAI-compatible endpoint), used only for Vocabulary expansion. Stored client-side only (`localStorage`), never written to D1.
+_Planned (TBR-87)._ A user-supplied credential for a third-party LLM provider (Anthropic, or any OpenAI-compatible endpoint), used for Vocabulary expansion and Synthesis. Stored client-side only (`localStorage`), never written to D1.
 _Avoid_: API key (ambiguous with the Settings → API keys credential from TBR-65, which is Notex's own server-stored key authenticating the companion/MCP *to* Notex — always say "Provider key" for this one)
+
+**Synthesis**:
+_Planned (TBR-99)._ The LLM step that turns the companion's retrieved `context.markdown` into cited prose, seeded into the Question surface's Draft textarea in place of the raw evidence block. A second, distinct call from Vocabulary expansion — expansion widens the search terms *before* retrieval; synthesis writes the answer *after* it. Runs browser-direct with the same Provider key, per ADR-0007; unlike expansion it has no proxy fallback, so a transport failure degrades the same as any other synthesis failure.
+_Avoid_: conflating with Vocabulary expansion — different call, different failure banner, and synthesis firing is independent of whether expansion itself succeeded.
