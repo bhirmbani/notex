@@ -221,6 +221,11 @@ export function useQuestionGraphDraft(
     expand,
     result: lastResult,
     isPending: isExpanding || isSynthesizing || mutation.isPending,
+    // Exposed separately from the OR'd `isPending` above (TBR-110) — synthesis only starts
+    // after a companion result already exists, so a consumer gating a "first load" skeleton on
+    // `isPending && !result` can never see this window; it needs its own signal to show an
+    // in-progress state once a result is already on screen.
+    isSynthesizing,
     error: mutation.error,
     expansionBanner,
     synthesisBanner,

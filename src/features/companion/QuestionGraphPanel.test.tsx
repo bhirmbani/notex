@@ -344,6 +344,22 @@ describe("QuestionGraphPanel", () => {
     expect(screen.getByText(/Showing raw evidence — synthesis failed this time/)).toBeTruthy()
   })
 
+  it("shows a synthesizing indicator while isSynthesizing is true (TBR-110)", () => {
+    renderPanel({ isSynthesizing: true })
+    expect(screen.getByText(/Synthesizing/)).toBeTruthy()
+  })
+
+  it("omits the synthesizing indicator once isSynthesizing is false, even with a result already on screen", () => {
+    renderPanel({ isSynthesizing: false })
+    expect(screen.queryByText(/Synthesizing/)).toBeNull()
+  })
+
+  it("never shows the synthesizing indicator alongside the settled synthesis-failed banner", () => {
+    renderPanel({ isSynthesizing: false, synthesisBanner: "synthesisFailed" })
+    expect(screen.getByText(/Showing raw evidence — synthesis failed this time/)).toBeTruthy()
+    expect(screen.queryByText(/Synthesizing/)).toBeNull()
+  })
+
   it("shows the truncated banner only when the response sets it", () => {
     renderPanel({
       result: baseResult({ truncated: { reason: "maxNodes", omittedCount: 12 } }),
