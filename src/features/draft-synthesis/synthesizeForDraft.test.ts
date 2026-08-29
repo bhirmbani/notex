@@ -92,7 +92,7 @@ describe("synthesizeForDraft", () => {
     expect(SYNTHESIS_MAX_TOKENS).toBe(4096)
   })
 
-  it("uses its own ~60s timeout, independent of expansion's 5s budget", async () => {
+  it("uses its own ~120s timeout, independent of expansion's 5s budget", async () => {
     vi.useFakeTimers()
     vi.stubGlobal(
       "fetch",
@@ -105,11 +105,11 @@ describe("synthesizeForDraft", () => {
       })
     )
 
-    expect(SYNTHESIS_TIMEOUT_MS).toBe(60000)
+    expect(SYNTHESIS_TIMEOUT_MS).toBe(120000)
 
     const resultPromise = synthesizeForDraft("how does auth work?", CONTEXT, ANTHROPIC_PROVIDER)
 
-    await vi.advanceTimersByTimeAsync(50000)
+    await vi.advanceTimersByTimeAsync(110000)
     let settled = false
     void resultPromise.then(() => {
       settled = true
