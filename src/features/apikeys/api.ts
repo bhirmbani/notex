@@ -50,6 +50,7 @@ apiKeysApi.get('/api-keys', async (c) => {
         (key): ApiKeySummary => ({
           id: key.id,
           name: key.name ?? '',
+          start: key.start,
           createdAt: key.createdAt as unknown as string,
           lastUsedAt: (key.lastRequest as unknown as string | null) ?? null,
         }),
@@ -80,6 +81,7 @@ apiKeysApi.post('/api-keys', async (c) => {
     return c.json({
       id: created.id,
       name: created.name ?? name,
+      start: created.start,
       createdAt: created.createdAt as unknown as string,
       lastUsedAt: (created.lastRequest as unknown as string | null) ?? null,
       key: created.key,

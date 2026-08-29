@@ -141,7 +141,24 @@ describe('apikeys API', () => {
     expect(body.some((k) => k.name === 'someone-elses-key')).toBe(false)
     for (const key of body) {
       expect(key).not.toHaveProperty('key')
+      expect(typeof key.start).toBe('string')
     }
+  })
+
+  it('includes the start prefix on creation, alongside the plaintext value', async () => {
+    const res = await app().request(
+      '/api-keys',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: cookieHeader },
+        body: JSON.stringify({ name: 'start-on-create' }),
+      },
+      env,
+    )
+
+    const body = (await res.json()) as { key: string; start: string }
+    expect(typeof body.start).toBe('string')
+    expect(body.key.startsWith(body.start)).toBe(true)
   })
 
   it('revokes a key so it is rejected immediately afterward', async () => {

@@ -39,7 +39,12 @@ function ApiKeyRow({ apiKey }: { apiKey: ApiKeySummary }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b py-3 last:border-b-0">
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{apiKey.name}</p>
+        <p className="truncate text-sm font-medium">
+          {apiKey.name}
+          {apiKey.start && (
+            <span className="ml-2 font-mono text-xs text-muted-foreground">{apiKey.start}…</span>
+          )}
+        </p>
         <p className="text-xs text-muted-foreground">
           Created {formatDate(apiKey.createdAt)}
           {' · '}
