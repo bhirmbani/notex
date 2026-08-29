@@ -230,6 +230,7 @@ function ContextPage() {
           saveError={draft.saveError}
           saved={draft.saved}
           canRetrieve={draft.canDraft}
+          expansionBanner={draft.expansionBanner}
         />
       )}
 

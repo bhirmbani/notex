@@ -7,9 +7,14 @@ import { DEFAULT_DRAFT_NAME, useQuestionGraphDraft } from "./questionGraphDraft"
 import * as connectionState from "./connectionState"
 import * as client from "./client"
 import type { ReactNode } from "react"
+import type { ProviderConfig } from "@/features/provider-keys/types"
+import type { DraftExpansionOutcome } from "@/features/vocabulary-expansion/expandForDraft"
+import * as providerKeyStorage from "@/features/provider-keys/storage"
+import * as expandForDraftModule from "@/features/vocabulary-expansion/expandForDraft"
 
 afterEach(() => {
   vi.restoreAllMocks()
+  localStorage.clear()
 })
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -309,5 +314,172 @@ describe("useQuestionGraphDraft", () => {
 
     act(() => result.current.setDraftText("evidence body, more edits"))
     expect(result.current.saved).toBe(false)
+  })
+
+  // docs/specs/vocabulary-expansion.md §1, §5 — TBR-98.
+  describe("vocabulary expansion wiring", () => {
+    const ANTHROPIC_PROVIDER: ProviderConfig = {
+      id: "p1",
+      adapter: "anthropic",
+      apiKey: "sk-ant-test",
+      model: "claude-haiku-test",
+    }
+
+    it("with no Provider key configured, queries with no terms[] — byte-identical to today's degraded path (regression guard)", async () => {
+      connectAsConnected()
+      const querySpy = vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+        degraded: { expansion: "none" },
+      })
+      const expandSpy = vi.spyOn(expandForDraftModule, "expandForDraft")
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() => expect(result.current.result).toBeTruthy())
+      expect(querySpy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token, {
+        question: "how does auth work?",
+        include: ["subgraph", "context", "footer"],
+      })
+      expect(expandSpy).not.toHaveBeenCalled()
+      expect(result.current.expansionBanner).toBe("noProvider")
+    })
+
+    it("with a valid key and a successful expansion, queries with terms[] and clears the banner", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth", "session"],
+      })
+      const querySpy = vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() => expect(result.current.result).toBeTruthy())
+      expect(querySpy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token, {
+        question: "how does auth work?",
+        include: ["subgraph", "context", "footer"],
+        terms: ["auth", "session"],
+      })
+      expect(result.current.expansionBanner).toBeUndefined()
+    })
+
+    it("on expansion failure (transport or LLM-level), queries with no terms[] and surfaces 'expansion failed', never 'no provider'", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "failed",
+        message: "provider responded 500",
+      })
+      const querySpy = vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+        degraded: { expansion: "none" },
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() => expect(result.current.result).toBeTruthy())
+      expect(querySpy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token, {
+        question: "how does auth work?",
+        include: ["subgraph", "context", "footer"],
+      })
+      expect(result.current.expansionBanner).toBe("expansionFailed")
+    })
+
+    it("wires the same expansion flow into `expand`, alongside depth: 2", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      const querySpy = vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.expand())
+
+      await waitFor(() =>
+        expect(querySpy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token, {
+          question: "how does auth work?",
+          include: ["subgraph", "context", "footer"],
+          terms: ["auth"],
+          depth: 2,
+        })
+      )
+    })
+
+    it("ignores a superseded expansion attempt — a stale outcome must not override a newer call's banner or query", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+
+      let resolveStale!: (outcome: DraftExpansionOutcome) => void
+      const stalePromise = new Promise<DraftExpansionOutcome>((resolve) => {
+        resolveStale = resolve
+      })
+      vi.spyOn(expandForDraftModule, "expandForDraft")
+        .mockReturnValueOnce(stalePromise)
+        .mockResolvedValueOnce({ status: "success", terms: ["auth"] })
+
+      const querySpy = vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      // First call (`run`) is left in flight; the second (`expand`) resolves right away and
+      // wins — it's the newer, currently-relevant attempt.
+      act(() => result.current.run())
+      act(() => result.current.expand())
+
+      await waitFor(() => expect(querySpy).toHaveBeenCalledTimes(1))
+      expect(result.current.expansionBanner).toBeUndefined()
+
+      // The stale first call finally settles (as a failure) after the newer one already won —
+      // it must be a no-op: no second query, no banner flip, no isPending stuck true.
+      await act(async () => {
+        resolveStale({ status: "failed", message: "stale" })
+        await Promise.resolve()
+      })
+
+      expect(querySpy).toHaveBeenCalledTimes(1)
+      expect(result.current.expansionBanner).toBeUndefined()
+      await waitFor(() => expect(result.current.isPending).toBe(false))
+    })
   })
 })

@@ -6,13 +6,14 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { RiExternalLinkLine } from "@remixicon/react"
+import { Link } from "@tanstack/react-router"
 
 import { rankFiles } from "./rankFiles"
 import { groupEvidence } from "./groupEvidence"
 import { computeCanvasLayout } from "./canvasLayout"
 import { communityColor } from "./communityColor"
 import type { KeyboardEvent, ReactNode } from "react"
-import type { GraphVariant } from "./questionGraphDraft"
+import type { ExpansionBanner, GraphVariant } from "./questionGraphDraft"
 import type { EditorScheme } from "@/lib/editorScheme"
 import type { GraphEdge, GraphNode, OpResponse, QueryResult } from "notex-companion/client"
 import { cn } from "@/lib/utils"
@@ -39,6 +40,12 @@ type Props = {
   saved: boolean
   /** Gates the Expand control only — Save and variant switching never need the companion. */
   canRetrieve: boolean
+  /**
+   * Which of the two honesty banners to show (docs/specs/vocabulary-expansion.md §5) —
+   * `undefined` when the last query returned undegraded (an expansion actually produced
+   * `terms[]`), in which case neither banner renders.
+   */
+  expansionBanner?: ExpansionBanner
 }
 
 const SEGMENTS = ["files", "evidence", "draft", "canvas"] as const
@@ -63,6 +70,7 @@ export function QuestionGraphPanel({
   saveError,
   saved,
   canRetrieve,
+  expansionBanner,
 }: Props) {
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState(false)
@@ -100,9 +108,21 @@ export function QuestionGraphPanel({
   return (
     <div className="mb-6 rounded-xl border bg-card">
       <div className="space-y-2 border-b p-4">
-        {result.degraded && (
+        {expansionBanner === "noProvider" && (
           <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            Matched literally — your agent can do better.
+            Matched literally — configure a model provider to do better.{" "}
+            <Link
+              to="/dashboard/settings/provider-keys"
+              className="underline hover:text-foreground"
+            >
+              Set it up
+            </Link>
+            .
+          </p>
+        )}
+        {expansionBanner === "expansionFailed" && (
+          <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            Matched literally — vocabulary expansion failed this time.
           </p>
         )}
         {result.truncated && (
