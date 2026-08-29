@@ -2,10 +2,14 @@
 // provider adapters (docs/specs/vocabulary-expansion.md §1-2). Runs on both
 // the browser (direct call) and, unmodified, the Worker-side proxy — no
 // browser-only globals, only fetch/AbortController/setTimeout, which both
-// runtimes provide.
+// runtimes provide. Also the transport layer under Draft synthesis
+// (@/features/draft-synthesis, ADR-0007) — a second, distinct caller of the
+// same provider adapters, which is why a successful call returns raw text
+// rather than pre-parsed terms: term-splitting is expansion's own concern
+// (`parseTerms`, applied by expansion's callers), not this layer's.
 
-export type ExpansionResult =
-  | { status: "success"; terms: Array<string> }
+export type ProviderCallResult =
+  | { status: "success"; text: string }
   | { status: "transportFailure"; message: string }
   | { status: "llmFailure"; message: string }
 
@@ -32,7 +36,10 @@ export function buildExpansionPrompt(question: string): string {
   return `List, as a comma-separated line, the key search terms that best expand this question for a knowledge-graph lookup. Return only the terms, nothing else.\n\nQuestion: ${question}`
 }
 
-function parseTerms(text: string): Array<string> {
+// Expansion-specific parsing (comma/newline-separated terms), exported so expansion's own
+// callers (expandForDraft.ts, api.ts) apply it to the raw text `callProvider` returns — Draft
+// synthesis's callers use that raw text directly instead, since prose is not a term list.
+export function parseTerms(text: string): Array<string> {
   return text
     .split(/[,\n]/)
     .map((term) => term.trim())
@@ -55,7 +62,7 @@ export async function callProvider(
   init: RequestInit,
   extractText: (body: unknown) => string | null,
   timeoutMs: number = EXPANSION_TIMEOUT_MS
-): Promise<ExpansionResult> {
+): Promise<ProviderCallResult> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -97,7 +104,7 @@ export async function callProvider(
       return { status: "llmFailure", message: "unparseable provider response" }
     }
 
-    return { status: "success", terms: parseTerms(text) }
+    return { status: "success", text }
   } finally {
     clearTimeout(timeout)
   }

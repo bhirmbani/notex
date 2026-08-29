@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { callProvider } from "./shared"
+import { callProvider, parseTerms } from "./shared"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -16,7 +16,7 @@ function jsonResponse(body: unknown, init?: { status?: number }) {
 }
 
 describe("callProvider", () => {
-  it("returns success with parsed terms on a 2xx response", async () => {
+  it("returns success with the raw extracted text on a 2xx response — parsing is the caller's job", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse({ text: "alpha, beta, gamma" }))
@@ -30,7 +30,7 @@ describe("callProvider", () => {
 
     expect(result).toEqual({
       status: "success",
-      terms: ["alpha", "beta", "gamma"],
+      text: "alpha, beta, gamma",
     })
   })
 
@@ -214,5 +214,20 @@ describe("callProvider", () => {
       status: "llmFailure",
       message: "provider request timed out",
     })
+  })
+})
+
+describe("parseTerms", () => {
+  it("splits on commas and newlines, trimming and dropping empty segments", () => {
+    expect(parseTerms("alpha, beta,\ngamma ,  , delta")).toEqual([
+      "alpha",
+      "beta",
+      "gamma",
+      "delta",
+    ])
+  })
+
+  it("returns an empty array for blank input", () => {
+    expect(parseTerms("   \n  ")).toEqual([])
   })
 })

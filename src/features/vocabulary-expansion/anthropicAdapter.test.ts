@@ -33,7 +33,7 @@ describe("anthropicAdapter callExpansion", () => {
       "what is X?"
     )
 
-    expect(result).toEqual({ status: "success", terms: ["alpha", "beta"] })
+    expect(result).toEqual({ status: "success", text: "alpha, beta" })
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
     expect(url).toBe("https://api.anthropic.com/v1/messages")
@@ -83,6 +83,29 @@ describe("anthropicAdapter callExpansion", () => {
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
     const body = JSON.parse(init.body as string) as { messages: Array<{ content: string }> }
     expect(body.messages[0]?.content).toBe("a fully custom prompt, not a question")
+  })
+
+  it("defaults max_tokens to 256 (expansion's own budget) and honors a caller-supplied override", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ content: [{ text: "ok" }] }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await callExpansion(
+      { adapter: "anthropic", apiKey: "sk-ant-test", model: "claude-haiku-test" },
+      "prompt"
+    )
+    const [, defaultInit] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(defaultInit.body as string).max_tokens).toBe(256)
+
+    await callExpansion(
+      { adapter: "anthropic", apiKey: "sk-ant-test", model: "claude-haiku-test" },
+      "prompt",
+      15000,
+      1024
+    )
+    const [, overrideInit] = fetchSpy.mock.calls[1] as [string, RequestInit]
+    expect(JSON.parse(overrideInit.body as string).max_tokens).toBe(1024)
   })
 
   it("passes a caller-supplied timeout through to the underlying request", async () => {
