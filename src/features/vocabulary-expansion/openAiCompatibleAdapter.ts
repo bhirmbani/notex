@@ -42,6 +42,12 @@ export function callExpansion(
         // `maxTokens` (expansion's own call sites) must leave the request body exactly as it
         // was before this parameter existed (TBR-107).
         ...(maxTokens === undefined ? {} : { max_tokens: maxTokens }),
+        // OpenRouter-specific extension to the OpenAI-compatible shape, sent unconditionally
+        // (not gated on baseUrl/provider detection — this adapter stays generic). Stops a
+        // reasoning-capable model from burning the max_tokens budget on hidden thinking before
+        // ever emitting an answer (TBR-109/TBR-111); a non-OpenRouter provider is expected to
+        // ignore an unrecognized top-level field, per standard OpenAI-compatible API behavior.
+        reasoning: { effort: "none" },
       }),
     },
     extractText,
