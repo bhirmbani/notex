@@ -65,3 +65,10 @@ _Planned (TBR-53 map)._ The threshold below which the UI says "nothing convincin
 
 **Provenance footer**:
 _Planned (TBR-53 map)._ The plain-text block appended to a graph-drafted Answer's content: draft date, graph build date and hash, a truncation notice when it applies, and the checkout-relative source paths. It is content, not schema, and every write path renders it from one shared function.
+
+**Vocabulary expansion**:
+_Planned (TBR-87)._ The LLM step that turns a Question's raw text into pre-expanded `terms[]` before the companion's `query` op runs, closing the browser path's `degraded: { expansion: "none" }` gap (`companion-api.md` §4.4). Runs with the user's own Provider key, direct from the browser when the provider allows it, via a Notex-side proxy on transport failure. See ADR-0006.
+
+**Provider key**:
+_Planned (TBR-87)._ A user-supplied credential for a third-party LLM provider (Anthropic, or any OpenAI-compatible endpoint), used only for Vocabulary expansion. Stored client-side only (`localStorage`), never written to D1.
+_Avoid_: API key (ambiguous with the Settings → API keys credential from TBR-65, which is Notex's own server-stored key authenticating the companion/MCP *to* Notex — always say "Provider key" for this one)
