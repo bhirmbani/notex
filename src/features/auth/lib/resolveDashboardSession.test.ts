@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveDashboardSession } from './_layout'
-import type { createAuth } from '@/features/auth/lib/server'
+import { resolveDashboardSession } from './resolveDashboardSession'
+import type { createAuth } from './server'
 
 // Mirrors src/api/middleware/auth.test.ts: better-auth's APIError can be a
 // different bundled class than the one imported statically in a given
