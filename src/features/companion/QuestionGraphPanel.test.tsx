@@ -5,10 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { QuestionGraphPanel } from "./QuestionGraphPanel"
 import type { OpResponse, QueryResult } from "notex-companion/client"
 import type { GraphGenerationDTO } from "./persistenceTypes"
-import type { ProviderConfig } from "@/features/provider-keys/types"
 import { EDITOR_SCHEME_STORAGE_KEY } from "@/lib/editorScheme"
 import * as providerKeyStorage from "@/features/provider-keys/storage"
-import * as synthesizeNodeExplanationModule from "@/features/draft-synthesis/synthesizeNodeExplanation"
 
 // No route tree exists in an isolated component test — mock Link as a plain anchor, matching
 // QuestionGraphAction.test.tsx's precedent rather than mounting a real TanStack Router.
@@ -76,6 +74,7 @@ function renderPanel(overrides: Partial<Parameters<typeof QuestionGraphPanel>[0]
   const onDraftNameChange = vi.fn()
   const onSave = vi.fn()
   const onSelectVersion = vi.fn()
+  const onExplainNode = vi.fn()
   render(
     <QuestionGraphPanel
       result={baseResult()}
@@ -98,10 +97,23 @@ function renderPanel(overrides: Partial<Parameters<typeof QuestionGraphPanel>[0]
       saveError={null}
       saved={false}
       canRetrieve={true}
+      nodeExplanations={new Map()}
+      explainingNodeId={null}
+      failedNodeId={null}
+      unsavedNodeId={null}
+      onExplainNode={onExplainNode}
       {...overrides}
     />
   )
-  return { onVariantChange, onExpand, onDraftTextChange, onDraftNameChange, onSave, onSelectVersion }
+  return {
+    onVariantChange,
+    onExpand,
+    onDraftTextChange,
+    onDraftNameChange,
+    onSave,
+    onSelectVersion,
+    onExplainNode,
+  }
 }
 
 describe("QuestionGraphPanel", () => {
@@ -128,6 +140,11 @@ describe("QuestionGraphPanel", () => {
         saveError={null}
         saved={false}
         canRetrieve={true}
+        nodeExplanations={new Map()}
+        explainingNodeId={null}
+        failedNodeId={null}
+        unsavedNodeId={null}
+        onExplainNode={vi.fn()}
       />
     )
     expect(container.firstChild).toBeNull()
@@ -288,6 +305,11 @@ describe("QuestionGraphPanel", () => {
           saveError={null}
           saved={false}
           canRetrieve={true}
+          nodeExplanations={new Map()}
+          explainingNodeId={null}
+          failedNodeId={null}
+          unsavedNodeId={null}
+          onExplainNode={vi.fn()}
         />
       )
       fireEvent.click(screen.getByLabelText("Show authenticate in the graph"))
@@ -316,6 +338,11 @@ describe("QuestionGraphPanel", () => {
           saveError={null}
           saved={false}
           canRetrieve={true}
+          nodeExplanations={new Map()}
+          explainingNodeId={null}
+          failedNodeId={null}
+          unsavedNodeId={null}
+          onExplainNode={vi.fn()}
         />
       )
 
@@ -323,13 +350,7 @@ describe("QuestionGraphPanel", () => {
       expect(screen.getByText("Click a node to see its source and neighbours.")).toBeTruthy()
     })
 
-    describe("Explain action (TBR-114)", () => {
-      const ANTHROPIC_PROVIDER: ProviderConfig = {
-        id: "p1",
-        adapter: "anthropic",
-        apiKey: "sk-ant-test",
-        model: "claude-haiku-test",
-      }
+    describe("Explain action, cache-first (TBR-114, TBR-119)", () => {
       const EDGE = {
         source: "n1",
         target: "n2",
@@ -359,13 +380,29 @@ describe("QuestionGraphPanel", () => {
         expect(button.title).toBe("Configure a model provider to explain this node.")
       })
 
-      it("calls synthesizeNodeExplanation with the node, its neighbours, and degree, and renders the returned prose below the raw rows", async () => {
-        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
-        const explainSpy = vi
-          .spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation")
-          .mockResolvedValue({ status: "success", prose: "authenticate calls logout." })
-
+      it("renders a cached explanation instantly when nodeExplanations already has the selected node — no explain call", () => {
+        const onExplainNode = vi.fn()
         renderPanel({
+          variant: "canvas",
+          nodeExplanations: new Map([["n1", "authenticate calls logout."]]),
+          onExplainNode,
+        })
+        selectNodeA()
+
+        expect(screen.getByText("authenticate calls logout.")).toBeTruthy()
+        expect(onExplainNode).not.toHaveBeenCalled()
+        // Already-explained nodes offer "Regenerate", not "Explain".
+        expect(screen.getByRole("button", { name: "Regenerate" })).toBeTruthy()
+      })
+
+      it("calls onExplainNode with the node id and a context built from the node, its neighbours, and degree", () => {
+        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue({
+          id: "p1",
+          adapter: "anthropic",
+          apiKey: "sk-ant-test",
+          model: "claude-haiku-test",
+        })
+        const { onExplainNode } = renderPanel({
           variant: "canvas",
           result: baseResult({ subgraph: { nodes: [NODE_A, NODE_B], edges: [EDGE], seeds: ["n1"] } }),
         })
@@ -373,7 +410,8 @@ describe("QuestionGraphPanel", () => {
 
         fireEvent.click(screen.getByRole("button", { name: "Explain" }))
 
-        expect(explainSpy).toHaveBeenCalledWith(
+        expect(onExplainNode).toHaveBeenCalledWith(
+          "n1",
           expect.objectContaining({
             label: "authenticate",
             file: "api/middleware/auth.ts",
@@ -389,68 +427,52 @@ describe("QuestionGraphPanel", () => {
                 confidence: "EXTRACTED",
               }),
             ],
-          }),
-          ANTHROPIC_PROVIDER
+          })
         )
-        expect(await screen.findByText("authenticate calls logout.")).toBeTruthy()
-        // The raw evidence rows stay visible alongside the synthesized prose (additive, not a
-        // replacement).
-        expect(screen.getByLabelText("Open api/middleware/session.ts in editor")).toBeTruthy()
       })
 
-      it("shows a failure banner when synthesis fails, with the raw rows still visible", async () => {
-        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
-        vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockResolvedValue({
-          status: "failed",
-          message: "provider responded 500",
-        })
-
-        renderPanel({ variant: "canvas" })
+      it("shows 'Explaining…' and disables the button while the selected node is in flight", () => {
+        renderPanel({ variant: "canvas", explainingNodeId: "n1" })
         selectNodeA()
-        fireEvent.click(screen.getByRole("button", { name: "Explain" }))
 
-        expect(await screen.findByText(/synthesis failed/)).toBeTruthy()
+        const button = screen.getByRole<HTMLButtonElement>("button", { name: "Explaining…" })
+        expect(button.disabled).toBe(true)
+      })
+
+      it("shows a failure banner for the selected node when its last explain attempt failed, with the raw rows still visible", () => {
+        renderPanel({ variant: "canvas", failedNodeId: "n1" })
+        selectNodeA()
+
+        expect(screen.getByText(/synthesis failed/)).toBeTruthy()
         expect(screen.getByText("authenticate", { selector: "p" })).toBeTruthy()
       })
 
-      it("clears a previously synthesized explanation when a different node is selected", async () => {
-        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
-        vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockResolvedValue({
-          status: "success",
-          prose: "authenticate calls logout.",
+      it("shows a 'Not saved' note alongside the prose when the persistence write failed, without discarding the prose", () => {
+        renderPanel({
+          variant: "canvas",
+          nodeExplanations: new Map([["n1", "authenticate calls logout."]]),
+          unsavedNodeId: "n1",
         })
-
-        renderPanel({ variant: "canvas" })
         selectNodeA()
-        fireEvent.click(screen.getByRole("button", { name: "Explain" }))
-        expect(await screen.findByText("authenticate calls logout.")).toBeTruthy()
 
-        fireEvent.click(screen.getByLabelText("Show logout in the graph"))
-
-        expect(screen.queryByText("authenticate calls logout.")).toBeNull()
+        expect(screen.getByText("authenticate calls logout.")).toBeTruthy()
+        expect(screen.getByText("Not saved")).toBeTruthy()
       })
 
-      it("drops a stale in-flight explanation if the selection changes before it resolves", async () => {
-        vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
-        let resolveExplain: ((outcome: { status: "success"; prose: string }) => void) | undefined
-        vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockReturnValue(
-          new Promise((resolve) => {
-            resolveExplain = resolve
-          })
-        )
-
+      it("never shows a cached explanation, in-flight state, or failure banner for a node other than the one selected", () => {
         renderPanel({
           variant: "canvas",
           result: baseResult({ subgraph: { nodes: [NODE_A, NODE_B], edges: [EDGE], seeds: ["n1"] } }),
+          nodeExplanations: new Map([["n2", "logout ends the session."]]),
+          explainingNodeId: "n2",
+          failedNodeId: "n2",
         })
         selectNodeA()
-        fireEvent.click(screen.getByRole("button", { name: "Explain" }))
 
-        fireEvent.click(screen.getByLabelText("Show logout in the graph"))
-        resolveExplain?.({ status: "success", prose: "authenticate calls logout." })
-        await Promise.resolve()
-
-        expect(screen.queryByText("authenticate calls logout.")).toBeNull()
+        expect(screen.queryByText("logout ends the session.")).toBeNull()
+        expect(screen.queryByRole("button", { name: "Explaining…" })).toBeNull()
+        expect(screen.queryByText(/synthesis failed/)).toBeNull()
+        expect(screen.getByRole("button", { name: "Explain" })).toBeTruthy()
       })
     })
   })

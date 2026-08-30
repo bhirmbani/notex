@@ -21,6 +21,7 @@ import { InlineEditField } from "@/components/InlineEditField"
 import { QuestionGraphAction } from "@/features/companion/QuestionGraphAction"
 import { QuestionGraphPanel } from "@/features/companion/QuestionGraphPanel"
 import { useQuestionGraphDraft } from "@/features/companion/questionGraphDraft"
+import { useGraphNodeExplanations } from "@/features/companion/graphNodeExplanations"
 
 export const Route = createFileRoute(
   "/dashboard/_layout/o/$organizationId/p/$projectId/r/$repoId/c/$ctxId/"
@@ -135,6 +136,7 @@ function ContextPage() {
   const { data: files, isLoading } = useFiles(organizationId, ctxId)
   const updateCtx = useUpdateContext(organizationId, ctxId, repoId)
   const draft = useQuestionGraphDraft(repoId, ctx?.question, organizationId, ctxId)
+  const nodeExplanations = useGraphNodeExplanations(organizationId, ctxId, draft.result?.graph.graphHash)
   const [showAdd, setShowAdd] = useState(false)
 
   return (
@@ -238,6 +240,11 @@ function ContextPage() {
           expansionBanner={draft.expansionBanner}
           synthesisBanner={draft.synthesisBanner}
           isSynthesizing={draft.isSynthesizing}
+          nodeExplanations={nodeExplanations.explanations}
+          explainingNodeId={nodeExplanations.explainingNodeId}
+          failedNodeId={nodeExplanations.failedNodeId}
+          unsavedNodeId={nodeExplanations.unsavedNodeId}
+          onExplainNode={nodeExplanations.explainNode}
         />
       )}
 

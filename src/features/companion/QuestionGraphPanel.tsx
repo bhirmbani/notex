@@ -4,7 +4,7 @@
 // is precisely the trap graph-gui.md §2.5 warns about: a variant switch must never discard
 // an edit.
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { RiExternalLinkLine } from "@remixicon/react"
 import { Link } from "@tanstack/react-router"
 
@@ -21,7 +21,6 @@ import type { NodeExplanationContext } from "@/features/draft-synthesis/synthesi
 import { cn } from "@/lib/utils"
 import { buildEditorLink, getStoredEditorScheme } from "@/lib/editorScheme"
 import { getActiveProviderKey } from "@/features/provider-keys/storage"
-import { synthesizeNodeExplanation } from "@/features/draft-synthesis/synthesizeNodeExplanation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -76,6 +75,13 @@ type Props = {
    * two never render together.
    */
   isSynthesizing?: boolean
+  /** Cache-first node-explain state for the Canvas variant (TBR-119), owned by
+   * `useGraphNodeExplanations` at the route level — forwarded unchanged into `CanvasVariant`. */
+  nodeExplanations: Map<string, string>
+  explainingNodeId: string | null
+  failedNodeId: string | null
+  unsavedNodeId: string | null
+  onExplainNode: (nodeId: string, context: NodeExplanationContext) => void
 }
 
 const SEGMENTS = ["files", "evidence", "draft", "canvas"] as const
@@ -108,6 +114,11 @@ export function QuestionGraphPanel({
   expansionBanner,
   synthesisBanner,
   isSynthesizing,
+  nodeExplanations,
+  explainingNodeId,
+  failedNodeId,
+  unsavedNodeId,
+  onExplainNode,
 }: Props) {
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState(false)
@@ -307,6 +318,11 @@ export function QuestionGraphPanel({
                       seeds={result.subgraph.seeds}
                       checkoutPath={checkoutPath}
                       scheme={scheme}
+                      nodeExplanations={nodeExplanations}
+                      explainingNodeId={explainingNodeId}
+                      failedNodeId={failedNodeId}
+                      unsavedNodeId={unsavedNodeId}
+                      onExplainNode={onExplainNode}
                     />
                   )
                 default:
@@ -566,20 +582,15 @@ const CANVAS_WIDTH = 600
 const CANVAS_HEIGHT = 360
 
 /**
- * The Canvas variant's own "Explain" action state (TBR-114) — local to the selected node, not
- * lifted into `useQuestionGraphDraft` like Draft synthesis is, since it's ephemeral per-selection
- * UI state rather than something a save/variant-switch needs to preserve.
- */
-type ExplainState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "success"; prose: string }
-  | { status: "failed" }
-
-/**
  * The subgraph as a node-link diagram, community-coloured, click for neighbours
  * (graph-gui.md §2.4). Editor links live in the detail panel below the diagram, not on the
  * diagram itself — one per node would be unreadable at 60 nodes.
+ *
+ * The "Explain" action's own state (in flight, cached prose, failed, synthesized-but-unsaved)
+ * lives in `useGraphNodeExplanations` at the route level, not here (TBR-119) — this component
+ * only renders what those nodeId-keyed props say for whichever node is currently selected, which
+ * also means switching nodes/versions never risks showing a stale explanation: there is no
+ * per-selection state here left to go stale.
  */
 function CanvasVariant({
   nodes,
@@ -587,29 +598,27 @@ function CanvasVariant({
   seeds,
   checkoutPath,
   scheme,
+  nodeExplanations,
+  explainingNodeId,
+  failedNodeId,
+  unsavedNodeId,
+  onExplainNode,
 }: {
   nodes: Array<GraphNode>
   edges: Array<GraphEdge>
   seeds: Array<string>
   checkoutPath: string
   scheme: EditorScheme
+  nodeExplanations: Map<string, string>
+  explainingNodeId: string | null
+  failedNodeId: string | null
+  unsavedNodeId: string | null
+  onExplainNode: (nodeId: string, context: NodeExplanationContext) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // A new retrieval (Expand) hands down a new `nodes` array — any prior selection belongs
   // to the subgraph that's now gone, so it must not silently persist into the new one.
   useEffect(() => setSelectedId(null), [nodes])
-
-  const [explainState, setExplainState] = useState<ExplainState>({ status: "idle" })
-  // Bumped whenever the selection changes so a still-in-flight `synthesizeNodeExplanation` call
-  // for a now-deselected node can tell it's been superseded and skip applying its result —
-  // mirrors questionGraphDraft.ts's `synthesisVersion` ref for the same staleness hazard.
-  const explainVersion = useRef(0)
-  // Switching the selected node (or a new retrieval, which resets `selectedId` above) must never
-  // leave a previous node's explanation attached to the newly selected one (TBR-114).
-  useEffect(() => {
-    explainVersion.current += 1
-    setExplainState({ status: "idle" })
-  }, [selectedId])
 
   const layout = useMemo(
     () => computeCanvasLayout(nodes, edges, seeds, { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }),
@@ -651,19 +660,13 @@ function CanvasVariant({
         confidence,
       })),
     }
-    const version = ++explainVersion.current
-    setExplainState({ status: "loading" })
-    synthesizeNodeExplanation(context, provider).then((outcome) => {
-      // The selection changed while this call was in flight — its own reset already superseded
-      // whatever this call would apply.
-      if (explainVersion.current !== version) return
-      if (outcome.status === "success") {
-        setExplainState({ status: "success", prose: outcome.prose })
-      } else {
-        setExplainState({ status: "failed" })
-      }
-    })
+    onExplainNode(selected.id, context)
   }
+
+  const explainedProse = selected ? nodeExplanations.get(selected.id) : undefined
+  const isExplaining = !!selected && explainingNodeId === selected.id
+  const explainFailed = !!selected && failedNodeId === selected.id
+  const explanationUnsaved = !!selected && unsavedNodeId === selected.id
 
   const selectNode = (id: string) => setSelectedId(id)
   const handleNodeKeyDown = (id: string) => (e: KeyboardEvent) => {
@@ -755,19 +758,26 @@ function CanvasVariant({
               size="sm"
               variant="outline"
               onClick={handleExplain}
-              disabled={!provider || explainState.status === "loading"}
+              disabled={!provider || isExplaining}
               title={provider ? undefined : "Configure a model provider to explain this node."}
             >
-              {explainState.status === "loading" ? "Explaining…" : "Explain"}
+              {isExplaining ? "Explaining…" : explainedProse ? "Regenerate" : "Explain"}
             </Button>
-            {explainState.status === "failed" && (
+            {explainFailed && !explainedProse && (
               <p className="mt-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 Couldn&apos;t explain this node — synthesis failed. Raw evidence above is still
                 accurate.
               </p>
             )}
-            {explainState.status === "success" && (
-              <p className="mt-2 text-sm">{explainState.prose}</p>
+            {explainedProse && (
+              <>
+                <p className="mt-2 text-sm">{explainedProse}</p>
+                {explanationUnsaved && (
+                  <p role="alert" className="mt-1 text-[11px] text-destructive">
+                    Not saved
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
