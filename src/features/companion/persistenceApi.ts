@@ -10,6 +10,7 @@ import type { ApiAuthEnv } from '@/api/middleware/auth'
 import { getDb, schema } from '@/db'
 import { forbiddenResponse } from '@/api/middleware/auth'
 import { checkProjectOrganizationAccess } from '@/api/ownership'
+import { badRequestResponse, requireNonEmptyString } from '@/api/validation'
 import type {
   PatchGraphGenerationBody,
   PutGraphGenerationBody,
@@ -180,6 +181,8 @@ persistenceApi.put(
     const db = getDb(c.env.DB)
     const { organizationId, contextId, graphHash, nodeId } = c.req.param()
     const body = await c.req.json<PutNodeExplanationBody>()
+    const explanation = requireNonEmptyString(body.explanation)
+    if (explanation === null) return badRequestResponse('explanation must not be empty')
 
     const access = await checkProjectOrganizationAccess(db, { contextId }, organizationId, auth.user.id)
     if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
@@ -193,7 +196,7 @@ persistenceApi.put(
         contextId,
         graphHash,
         nodeId,
-        explanation: body.explanation,
+        explanation,
         createdAt: now,
         updatedAt: now,
       })
@@ -203,7 +206,7 @@ persistenceApi.put(
           schema.graphNodeExplanations.graphHash,
           schema.graphNodeExplanations.nodeId,
         ],
-        set: { explanation: body.explanation, updatedAt: now },
+        set: { explanation, updatedAt: now },
       })
       .returning()
 

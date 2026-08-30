@@ -403,6 +403,28 @@ describe('PUT /organizations/:organizationId/contexts/:contextId/graph-generatio
     expect(insertValues).not.toHaveBeenCalled()
   })
 
+  it('rejects an empty explanation with 400, before checking access', async () => {
+    const insertValues = vi.fn()
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
+      insert: () => ({ values: insertValues }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request(
+      '/organizations/org-1/contexts/ctx-1/graph-generations/hash-1/node-explanations/node-a',
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ explanation: '   ' }),
+      },
+      {},
+    )
+
+    expect(res.status).toBe(400)
+    expect(insertValues).not.toHaveBeenCalled()
+  })
+
   it('upserts atomically via onConflictDoUpdate scoped to contextId/graphHash/nodeId, without touching other rows', async () => {
     const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
     const repo = { id: 'repo-1', projectId: 'project-1' }

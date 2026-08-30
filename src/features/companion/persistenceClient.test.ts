@@ -171,4 +171,16 @@ describe("putNodeExplanation", () => {
       putNodeExplanation(ORG_ID, CONTEXT_ID, GRAPH_HASH, "node-a", "prose"),
     ).rejects.toThrow("HTTP 403")
   })
+
+  it("URL-encodes a nodeId containing reserved characters", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(nodeExplanation))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    await putNodeExplanation(ORG_ID, CONTEXT_ID, GRAPH_HASH, "node/with#reserved?chars", "prose")
+
+    const [url] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      `/api/v1/organizations/${ORG_ID}/contexts/${CONTEXT_ID}/graph-generations/${GRAPH_HASH}/node-explanations/node%2Fwith%23reserved%3Fchars`,
+    )
+  })
 })

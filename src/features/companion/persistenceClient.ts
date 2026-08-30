@@ -72,7 +72,7 @@ export function putNodeExplanation(
   explanation: string,
 ) {
   return fetchJson<NodeExplanationDTO>(
-    `${orgBase(organizationId)}/contexts/${contextId}/graph-generations/${graphHash}/node-explanations/${nodeId}`,
+    `${orgBase(organizationId)}/contexts/${contextId}/graph-generations/${graphHash}/node-explanations/${encodeURIComponent(nodeId)}`,
     { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ explanation }) },
   )
 }
