@@ -57,6 +57,13 @@
       "when": 1786862215602,
       "tag": "0007_add_apikey_table",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788057940687,
+      "tag": "0008_wealthy_may_parker",
+      "breakpoints": true
     }
   ]
 }
