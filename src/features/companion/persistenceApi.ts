@@ -56,6 +56,10 @@ persistenceApi.get(
   },
 )
 
+// Upserts via ON CONFLICT DO UPDATE on the (contextId, graphHash) unique index, rather than
+// a select-then-insert/update: two concurrent PUTs for the same graphHash (e.g. a debounced
+// autosave firing twice) would otherwise both see no existing row and race to insert,
+// tripping the unique constraint on the second one — mirrors grants/service.ts's setGrant.
 persistenceApi.put(
   '/organizations/:organizationId/contexts/:contextId/graph-generations/:graphHash',
   async (c) => {
@@ -69,14 +73,7 @@ persistenceApi.put(
     if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
     const now = new Date()
-    const [existing] = await db
-      .select({ id: schema.graphGenerations.id })
-      .from(schema.graphGenerations)
-      .where(and(eq(schema.graphGenerations.contextId, contextId), eq(schema.graphGenerations.graphHash, graphHash)))
-
     const values = {
-      contextId,
-      graphHash,
       builtAt: body.builtAt,
       headSha: body.headSha,
       nodeCount: body.nodeCount,
@@ -94,16 +91,14 @@ persistenceApi.put(
       updatedAt: now,
     }
 
-    if (existing) {
-      await db.update(schema.graphGenerations).set(values).where(eq(schema.graphGenerations.id, existing.id))
-    } else {
-      await db.insert(schema.graphGenerations).values({ id: crypto.randomUUID(), createdAt: now, ...values })
-    }
-
     const [row] = await db
-      .select()
-      .from(schema.graphGenerations)
-      .where(and(eq(schema.graphGenerations.contextId, contextId), eq(schema.graphGenerations.graphHash, graphHash)))
+      .insert(schema.graphGenerations)
+      .values({ id: crypto.randomUUID(), contextId, graphHash, createdAt: now, ...values })
+      .onConflictDoUpdate({
+        target: [schema.graphGenerations.contextId, schema.graphGenerations.graphHash],
+        set: values,
+      })
+      .returning()
 
     return c.json(toDTO(row!))
   },
@@ -121,21 +116,18 @@ persistenceApi.patch(
     if (access.status === 'not-found') return c.json({ error: { code: 'NOT_FOUND', message: 'Context not found' } }, 404)
     if (access.status === 'no-access' || access.level !== 'write') return forbiddenResponse()
 
-    const [existing] = await db
-      .select()
-      .from(schema.graphGenerations)
-      .where(and(eq(schema.graphGenerations.contextId, contextId), eq(schema.graphGenerations.graphHash, graphHash)))
-    if (!existing) return c.json({ error: { code: 'NOT_FOUND', message: 'Generation not found' } }, 404)
-
-    await db
+    const [row] = await db
       .update(schema.graphGenerations)
       .set({
         ...(body.draftText !== undefined && { draftText: body.draftText }),
         ...(body.draftName !== undefined && { draftName: body.draftName }),
         updatedAt: new Date(),
       })
-      .where(eq(schema.graphGenerations.id, existing.id))
+      .where(and(eq(schema.graphGenerations.contextId, contextId), eq(schema.graphGenerations.graphHash, graphHash)))
+      .returning()
 
-    return c.json(toDTO({ ...existing, ...body }))
+    if (!row) return c.json({ error: { code: 'NOT_FOUND', message: 'Generation not found' } }, 404)
+
+    return c.json(toDTO(row))
   },
 )

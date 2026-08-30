@@ -4,7 +4,7 @@ import { Hono } from 'hono'
 import { persistenceApi } from './persistenceApi'
 import type { ApiAuthEnv } from '@/api/middleware/auth'
 import type * as DbModule from '@/db'
-import { getDb } from '@/db'
+import { getDb, schema } from '@/db'
 
 vi.mock('@/db', async () => {
   const actual = await vi.importActual<typeof DbModule>('@/db')
@@ -157,7 +157,7 @@ describe('PUT /organizations/:organizationId/contexts/:contextId/graph-generatio
     expect(insertValues).not.toHaveBeenCalled()
   })
 
-  it('inserts a new row for a member with a write Grant when none exists yet, then reads it back', async () => {
+  it('upserts atomically via onConflictDoUpdate and returns the resulting row', async () => {
     const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
     const repo = { id: 'repo-1', projectId: 'project-1' }
     const project = { id: 'project-1', organizationId: 'org-1' }
@@ -175,9 +175,10 @@ describe('PUT /organizations/:organizationId/contexts/:contextId/graph-generatio
       updatedAt: 1000,
     }
     let call = 0
-    // ctx -> repo -> project -> membership -> grant -> existing-check(none) -> read-back
-    const results = [[ctx], [repo], [project], [membership], [grant], [], [row]]
-    const insertValues = vi.fn().mockResolvedValue(undefined)
+    // ownership resolution only: ctx -> repo -> project -> membership -> grant
+    const results = [[ctx], [repo], [project], [membership], [grant]]
+    const onConflictDoUpdate = vi.fn(() => ({ returning: () => Promise.resolve([row]) }))
+    const insertValues = vi.fn(() => ({ onConflictDoUpdate }))
     vi.mocked(getDb).mockReturnValue({
       select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
       insert: () => ({ values: insertValues }),
@@ -194,47 +195,13 @@ describe('PUT /organizations/:organizationId/contexts/:contextId/graph-generatio
     expect(insertValues).toHaveBeenCalledWith(
       expect.objectContaining({ contextId: 'ctx-1', graphHash: 'hash-1' }),
     )
+    expect(onConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: [schema.graphGenerations.contextId, schema.graphGenerations.graphHash],
+      }),
+    )
     const body = await res.json()
     expect(body.graphHash).toBe('hash-1')
-  })
-
-  it('overwrites the existing row for a repeated Regenerate on the same graphHash', async () => {
-    const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
-    const repo = { id: 'repo-1', projectId: 'project-1' }
-    const project = { id: 'project-1', organizationId: 'org-1' }
-    const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
-    const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'write' }
-    const existing = { id: 'gen-1' }
-    const row = {
-      id: 'gen-1',
-      contextId: 'ctx-1',
-      graphHash: 'hash-1',
-      ...putBody,
-      subgraph: JSON.stringify(putBody.subgraph),
-      context: JSON.stringify(putBody.context),
-      lowConfidenceTopScore: null,
-      createdAt: 1000,
-      updatedAt: 2000,
-    }
-    let call = 0
-    const results = [[ctx], [repo], [project], [membership], [grant], [existing], [row]]
-    const updateWhere = vi.fn().mockResolvedValue(undefined)
-    const updateSet = vi.fn(() => ({ where: updateWhere }))
-    vi.mocked(getDb).mockReturnValue({
-      select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
-      update: () => ({ set: updateSet }),
-    } as unknown as ReturnType<typeof getDb>)
-
-    const app = appWithAuth()
-    const res = await app.request('/organizations/org-1/contexts/ctx-1/graph-generations/hash-1', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(putBody),
-    }, {})
-
-    expect(res.status).toBe(200)
-    expect(updateSet).toHaveBeenCalled()
-    expect(updateWhere).toHaveBeenCalled()
   })
 })
 
@@ -246,9 +213,12 @@ describe('PATCH /organizations/:organizationId/contexts/:contextId/graph-generat
     const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
     const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'write' }
     let call = 0
-    const results = [[ctx], [repo], [project], [membership], [grant], []]
+    const results = [[ctx], [repo], [project], [membership], [grant]]
+    const updateWhere = vi.fn(() => ({ returning: () => Promise.resolve([]) }))
+    const updateSet = vi.fn(() => ({ where: updateWhere }))
     vi.mocked(getDb).mockReturnValue({
       select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
+      update: () => ({ set: updateSet }),
     } as unknown as ReturnType<typeof getDb>)
 
     const app = appWithAuth()
@@ -283,13 +253,13 @@ describe('PATCH /organizations/:organizationId/contexts/:contextId/graph-generat
     expect(res.status).toBe(403)
   })
 
-  it('patches draftText/draftName for a member with a write Grant', async () => {
+  it('patches draftText/draftName for a member with a write Grant, returning the fresh row', async () => {
     const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
     const repo = { id: 'repo-1', projectId: 'project-1' }
     const project = { id: 'project-1', organizationId: 'org-1' }
     const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
     const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'write' }
-    const existing = {
+    const updatedRow = {
       id: 'gen-1',
       contextId: 'ctx-1',
       graphHash: 'hash-1',
@@ -297,12 +267,13 @@ describe('PATCH /organizations/:organizationId/contexts/:contextId/graph-generat
       subgraph: JSON.stringify(putBody.subgraph),
       context: JSON.stringify(putBody.context),
       lowConfidenceTopScore: null,
+      draftText: 'edited draft',
       createdAt: 1000,
-      updatedAt: 1000,
+      updatedAt: 2000,
     }
     let call = 0
-    const results = [[ctx], [repo], [project], [membership], [grant], [existing]]
-    const updateWhere = vi.fn().mockResolvedValue(undefined)
+    const results = [[ctx], [repo], [project], [membership], [grant]]
+    const updateWhere = vi.fn(() => ({ returning: () => Promise.resolve([updatedRow]) }))
     const updateSet = vi.fn(() => ({ where: updateWhere }))
     vi.mocked(getDb).mockReturnValue({
       select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
@@ -322,5 +293,6 @@ describe('PATCH /organizations/:organizationId/contexts/:contextId/graph-generat
     )
     const body = await res.json()
     expect(body.draftText).toBe('edited draft')
+    expect(body.updatedAt).toBe(2000)
   })
 })
