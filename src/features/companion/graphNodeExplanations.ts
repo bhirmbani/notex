@@ -6,12 +6,12 @@
 // `CanvasVariant` — the same controlled-component discipline `questionGraphDraft.ts` already
 // applies to the Draft flow (TBR-118).
 //
-// Keying every transient signal by nodeId (rather than a selection-version ref, as the Canvas
-// variant's pre-TBR-119 local `explainState` used) makes staleness a non-issue for free: a
-// still-in-flight explain for a node the user has since deselected simply lands on that node's
-// own entry, never on whatever's currently selected.
+// Every transient signal is a nodeId-keyed Set, not a single selection-scoped value — explaining
+// two different nodes back to back (or concurrently) must not let one clobber the other's
+// in-flight/failed/unsaved indicator, which a single `string | null` cannot represent once more
+// than one node has ever been explained in a session.
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { fetchNodeExplanations, graphNodeExplanationKeys, putNodeExplanation } from "./persistenceClient"
@@ -20,7 +20,19 @@ import { getActiveProviderKey } from "@/features/provider-keys/storage"
 import type { NodeExplanationDTO } from "./persistenceTypes"
 import type { NodeExplanationContext } from "@/features/draft-synthesis/synthesizeNodeExplanation"
 
-const NO_GRAPH_HASH_KEY = ["graphNodeExplanations", "none"] as const
+const NO_GRAPH_HASH_KEY = [...graphNodeExplanationKeys.all, "none"] as const
+
+function without(set: Set<string>, nodeId: string): Set<string> {
+  if (!set.has(nodeId)) return set
+  const next = new Set(set)
+  next.delete(nodeId)
+  return next
+}
+
+function withNode(set: Set<string>, nodeId: string): Set<string> {
+  if (set.has(nodeId)) return set
+  return new Set(set).add(nodeId)
+}
 
 export function useGraphNodeExplanations(
   organizationId: string,
@@ -33,25 +45,42 @@ export function useGraphNodeExplanations(
     queryFn: () => fetchNodeExplanations(organizationId, contextId, graphHash!),
     enabled: !!graphHash,
   })
-  const explanations = new Map((query.data ?? []).map((e) => [e.nodeId, e.explanation]))
+  const explanations = useMemo(
+    () => new Map((query.data ?? []).map((e) => [e.nodeId, e.explanation])),
+    [query.data]
+  )
 
-  const [explainingNodeId, setExplainingNodeId] = useState<string | null>(null)
-  const [failedNodeId, setFailedNodeId] = useState<string | null>(null)
-  const [unsavedNodeId, setUnsavedNodeId] = useState<string | null>(null)
+  const [explainingNodeIds, setExplainingNodeIds] = useState<Set<string>>(new Set())
+  const [failedNodeIds, setFailedNodeIds] = useState<Set<string>>(new Set())
+  const [unsavedNodeIds, setUnsavedNodeIds] = useState<Set<string>>(new Set())
+
+  // The route reuses this hook instance across both a different Question (contextId) and a
+  // version switch on the same Question (graphHash) — TanStack Router/`shown` don't remount this
+  // component. A nodeId can recur across either boundary (graphify assigns ids per source
+  // entity, stable across regenerations of the same repo), so a leftover in-flight/failed/unsaved
+  // flag from a previous context or version must not resurface against an unrelated node that
+  // happens to share its id.
+  useEffect(() => {
+    setExplainingNodeIds(new Set())
+    setFailedNodeIds(new Set())
+    setUnsavedNodeIds(new Set())
+  }, [contextId, graphHash])
 
   const explainNode = (nodeId: string, context: NodeExplanationContext) => {
     const provider = getActiveProviderKey()
     if (!provider || !graphHash) return
     const hash = graphHash
 
-    setExplainingNodeId(nodeId)
-    setFailedNodeId((cur) => (cur === nodeId ? null : cur))
-    setUnsavedNodeId((cur) => (cur === nodeId ? null : cur))
+    setExplainingNodeIds((s) => withNode(s, nodeId))
+    // A fresh attempt supersedes whatever "did the last one fail" verdict was showing — but NOT
+    // the unsaved flag, which describes the prose still on screen (unchanged until this attempt
+    // itself produces new prose) rather than this attempt's own outcome.
+    setFailedNodeIds((s) => without(s, nodeId))
 
     synthesizeNodeExplanation(context, provider)
       .then((outcome) => {
         if (outcome.status !== "success") {
-          setFailedNodeId(nodeId)
+          setFailedNodeIds((s) => withNode(s, nodeId))
           return
         }
 
@@ -65,17 +94,24 @@ export function useGraphNodeExplanations(
         ])
 
         return putNodeExplanation(organizationId, contextId, hash, nodeId, outcome.prose)
-          .then(() => {
-            queryClient.invalidateQueries({ queryKey: key })
+          .then((saved) => {
+            // The PUT's own response is already the authoritative saved row — apply it directly
+            // rather than invalidating and paying for a second GET of data this response already
+            // has.
+            queryClient.setQueryData<Array<NodeExplanationDTO>>(key, (prev) => [
+              ...(prev ?? []).filter((e) => e.nodeId !== nodeId),
+              saved,
+            ])
+            setUnsavedNodeIds((s) => without(s, nodeId))
           })
           .catch(() => {
-            setUnsavedNodeId(nodeId)
+            setUnsavedNodeIds((s) => withNode(s, nodeId))
           })
       })
       .finally(() => {
-        setExplainingNodeId((cur) => (cur === nodeId ? null : cur))
+        setExplainingNodeIds((s) => without(s, nodeId))
       })
   }
 
-  return { explanations, explainingNodeId, failedNodeId, unsavedNodeId, explainNode }
+  return { explanations, explainingNodeIds, failedNodeIds, unsavedNodeIds, explainNode }
 }

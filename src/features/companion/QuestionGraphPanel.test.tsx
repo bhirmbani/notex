@@ -98,9 +98,9 @@ function renderPanel(overrides: Partial<Parameters<typeof QuestionGraphPanel>[0]
       saved={false}
       canRetrieve={true}
       nodeExplanations={new Map()}
-      explainingNodeId={null}
-      failedNodeId={null}
-      unsavedNodeId={null}
+      explainingNodeIds={new Set()}
+      failedNodeIds={new Set()}
+      unsavedNodeIds={new Set()}
       onExplainNode={onExplainNode}
       {...overrides}
     />
@@ -141,9 +141,9 @@ describe("QuestionGraphPanel", () => {
         saved={false}
         canRetrieve={true}
         nodeExplanations={new Map()}
-        explainingNodeId={null}
-        failedNodeId={null}
-        unsavedNodeId={null}
+        explainingNodeIds={new Set()}
+        failedNodeIds={new Set()}
+        unsavedNodeIds={new Set()}
         onExplainNode={vi.fn()}
       />
     )
@@ -306,9 +306,9 @@ describe("QuestionGraphPanel", () => {
           saved={false}
           canRetrieve={true}
           nodeExplanations={new Map()}
-          explainingNodeId={null}
-          failedNodeId={null}
-          unsavedNodeId={null}
+          explainingNodeIds={new Set()}
+          failedNodeIds={new Set()}
+          unsavedNodeIds={new Set()}
           onExplainNode={vi.fn()}
         />
       )
@@ -339,9 +339,9 @@ describe("QuestionGraphPanel", () => {
           saved={false}
           canRetrieve={true}
           nodeExplanations={new Map()}
-          explainingNodeId={null}
-          failedNodeId={null}
-          unsavedNodeId={null}
+          explainingNodeIds={new Set()}
+          failedNodeIds={new Set()}
+          unsavedNodeIds={new Set()}
           onExplainNode={vi.fn()}
         />
       )
@@ -432,7 +432,7 @@ describe("QuestionGraphPanel", () => {
       })
 
       it("shows 'Explaining…' and disables the button while the selected node is in flight", () => {
-        renderPanel({ variant: "canvas", explainingNodeId: "n1" })
+        renderPanel({ variant: "canvas", explainingNodeIds: new Set(["n1"]) })
         selectNodeA()
 
         const button = screen.getByRole<HTMLButtonElement>("button", { name: "Explaining…" })
@@ -440,18 +440,31 @@ describe("QuestionGraphPanel", () => {
       })
 
       it("shows a failure banner for the selected node when its last explain attempt failed, with the raw rows still visible", () => {
-        renderPanel({ variant: "canvas", failedNodeId: "n1" })
+        renderPanel({ variant: "canvas", failedNodeIds: new Set(["n1"]) })
         selectNodeA()
 
         expect(screen.getByText(/synthesis failed/)).toBeTruthy()
         expect(screen.getByText("authenticate", { selector: "p" })).toBeTruthy()
       })
 
+      it("shows the failure banner even when the node already has a cached explanation — a failed Regenerate must still surface an error", () => {
+        renderPanel({
+          variant: "canvas",
+          nodeExplanations: new Map([["n1", "authenticate calls logout."]]),
+          failedNodeIds: new Set(["n1"]),
+        })
+        selectNodeA()
+
+        expect(screen.getByText(/synthesis failed/)).toBeTruthy()
+        // The old prose stays visible alongside the failure — a failed Regenerate never discards it.
+        expect(screen.getByText("authenticate calls logout.")).toBeTruthy()
+      })
+
       it("shows a 'Not saved' note alongside the prose when the persistence write failed, without discarding the prose", () => {
         renderPanel({
           variant: "canvas",
           nodeExplanations: new Map([["n1", "authenticate calls logout."]]),
-          unsavedNodeId: "n1",
+          unsavedNodeIds: new Set(["n1"]),
         })
         selectNodeA()
 
@@ -464,8 +477,8 @@ describe("QuestionGraphPanel", () => {
           variant: "canvas",
           result: baseResult({ subgraph: { nodes: [NODE_A, NODE_B], edges: [EDGE], seeds: ["n1"] } }),
           nodeExplanations: new Map([["n2", "logout ends the session."]]),
-          explainingNodeId: "n2",
-          failedNodeId: "n2",
+          explainingNodeIds: new Set(["n2"]),
+          failedNodeIds: new Set(["n2"]),
         })
         selectNodeA()
 

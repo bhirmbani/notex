@@ -241,9 +241,9 @@ function ContextPage() {
           synthesisBanner={draft.synthesisBanner}
           isSynthesizing={draft.isSynthesizing}
           nodeExplanations={nodeExplanations.explanations}
-          explainingNodeId={nodeExplanations.explainingNodeId}
-          failedNodeId={nodeExplanations.failedNodeId}
-          unsavedNodeId={nodeExplanations.unsavedNodeId}
+          explainingNodeIds={nodeExplanations.explainingNodeIds}
+          failedNodeIds={nodeExplanations.failedNodeIds}
+          unsavedNodeIds={nodeExplanations.unsavedNodeIds}
           onExplainNode={nodeExplanations.explainNode}
         />
       )}

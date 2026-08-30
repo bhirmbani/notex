@@ -159,13 +159,13 @@ describe("useGraphNodeExplanations", () => {
       )
 
       act(() => result.current.explainNode("n1", CONTEXT))
-      expect(result.current.explainingNodeId).toBe("n1")
+      expect(result.current.explainingNodeIds.has("n1")).toBe(true)
 
       await act(async () => {
         resolveSynth?.({ status: "success", prose: "authenticate calls logout." })
         await Promise.resolve()
       })
-      await waitFor(() => expect(result.current.explainingNodeId).toBeNull())
+      await waitFor(() => expect(result.current.explainingNodeIds.has("n1")).toBe(false))
     })
 
     it("on synthesis success, writes the explanation and updates the map without waiting for a refetch", async () => {
@@ -220,7 +220,7 @@ describe("useGraphNodeExplanations", () => {
       expect(result.current.explanations.get("n2")).toBe("n2 explanation")
     })
 
-    it("marks the node as failed when synthesis itself fails, and clears any prior unsaved flag on retry", async () => {
+    it("marks the node as failed when synthesis itself fails", async () => {
       vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(PROVIDER)
       vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockResolvedValue({
         status: "failed",
@@ -236,7 +236,7 @@ describe("useGraphNodeExplanations", () => {
         result.current.explainNode("n1", CONTEXT)
         await Promise.resolve()
       })
-      await waitFor(() => expect(result.current.failedNodeId).toBe("n1"))
+      await waitFor(() => expect(result.current.failedNodeIds.has("n1")).toBe(true))
       expect(result.current.explanations.get("n1")).toBeUndefined()
     })
 
@@ -260,8 +260,112 @@ describe("useGraphNodeExplanations", () => {
         await Promise.resolve()
       })
 
-      await waitFor(() => expect(result.current.unsavedNodeId).toBe("n1"))
+      await waitFor(() => expect(result.current.unsavedNodeIds.has("n1")).toBe(true))
       expect(result.current.explanations.get("n1")).toBe("authenticate calls logout.")
+    })
+
+    it("a retry that fails at synthesis never clobbers a prior 'unsaved' flag for that node's still-displayed prose", async () => {
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(PROVIDER)
+      const synthSpy = vi.spyOn(
+        synthesizeNodeExplanationModule,
+        "synthesizeNodeExplanation"
+      )
+      backend.failNextPut()
+      synthSpy.mockResolvedValueOnce({ status: "success", prose: "first attempt prose." })
+      const { result } = renderHook(
+        () => useGraphNodeExplanations("org1", "ctx1", "hash-a"),
+        { wrapper }
+      )
+      await waitFor(() => expect(backend.fetchMock).toHaveBeenCalledTimes(1))
+
+      await act(async () => {
+        result.current.explainNode("n1", CONTEXT)
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await waitFor(() => expect(result.current.unsavedNodeIds.has("n1")).toBe(true))
+
+      synthSpy.mockResolvedValueOnce({ status: "failed", message: "provider responded 500" })
+      await act(async () => {
+        result.current.explainNode("n1", CONTEXT)
+        await Promise.resolve()
+      })
+
+      await waitFor(() => expect(result.current.failedNodeIds.has("n1")).toBe(true))
+      // The retry never produced new prose, so the old (still-unpersisted) prose and its
+      // "unsaved" flag must both still describe what's on screen.
+      expect(result.current.unsavedNodeIds.has("n1")).toBe(true)
+      expect(result.current.explanations.get("n1")).toBe("first attempt prose.")
+    })
+
+    it("explaining two different nodes concurrently tracks each one's in-flight/failed state independently", async () => {
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(PROVIDER)
+      let resolveN1: ((o: { status: "failed"; message: string }) => void) | undefined
+      let resolveN2: ((o: { status: "success"; prose: string }) => void) | undefined
+      vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockImplementation(
+        (context) =>
+          new Promise((resolve) => {
+            if (context.label === "authenticate") resolveN1 = resolve as never
+            else resolveN2 = resolve as never
+          })
+      )
+      const { result } = renderHook(
+        () => useGraphNodeExplanations("org1", "ctx1", "hash-a"),
+        { wrapper }
+      )
+      await waitFor(() => expect(backend.fetchMock).toHaveBeenCalledTimes(1))
+
+      act(() => {
+        result.current.explainNode("n1", CONTEXT)
+        result.current.explainNode("n2", { ...CONTEXT, label: "logout" })
+      })
+      expect(result.current.explainingNodeIds.has("n1")).toBe(true)
+      expect(result.current.explainingNodeIds.has("n2")).toBe(true)
+
+      await act(async () => {
+        resolveN1?.({ status: "failed", message: "boom" })
+        await Promise.resolve()
+      })
+      // n1 failing must not clear n2's still-in-flight state, and must not mark n2 as failed.
+      expect(result.current.failedNodeIds.has("n1")).toBe(true)
+      expect(result.current.failedNodeIds.has("n2")).toBe(false)
+      expect(result.current.explainingNodeIds.has("n2")).toBe(true)
+
+      await act(async () => {
+        resolveN2?.({ status: "success", prose: "logout ends the session." })
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await waitFor(() =>
+        expect(result.current.explanations.get("n2")).toBe("logout ends the session.")
+      )
+      // n1's failure must still be visible — n2 resolving doesn't touch it.
+      expect(result.current.failedNodeIds.has("n1")).toBe(true)
+    })
+
+    it("clears every in-flight/failed/unsaved flag when the graphHash (version switch) changes", async () => {
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(PROVIDER)
+      vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockResolvedValue({
+        status: "failed",
+        message: "boom",
+      })
+      const { result, rerender } = renderHook(
+        ({ graphHash }: { graphHash: string }) =>
+          useGraphNodeExplanations("org1", "ctx1", graphHash),
+        { wrapper, initialProps: { graphHash: "hash-a" } }
+      )
+      await waitFor(() => expect(backend.fetchMock).toHaveBeenCalledTimes(1))
+
+      await act(async () => {
+        result.current.explainNode("n1", CONTEXT)
+        await Promise.resolve()
+      })
+      await waitFor(() => expect(result.current.failedNodeIds.has("n1")).toBe(true))
+
+      rerender({ graphHash: "hash-b" })
+      expect(result.current.failedNodeIds.has("n1")).toBe(false)
     })
   })
 })

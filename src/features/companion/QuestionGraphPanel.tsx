@@ -78,9 +78,9 @@ type Props = {
   /** Cache-first node-explain state for the Canvas variant (TBR-119), owned by
    * `useGraphNodeExplanations` at the route level — forwarded unchanged into `CanvasVariant`. */
   nodeExplanations: Map<string, string>
-  explainingNodeId: string | null
-  failedNodeId: string | null
-  unsavedNodeId: string | null
+  explainingNodeIds: Set<string>
+  failedNodeIds: Set<string>
+  unsavedNodeIds: Set<string>
   onExplainNode: (nodeId: string, context: NodeExplanationContext) => void
 }
 
@@ -115,9 +115,9 @@ export function QuestionGraphPanel({
   synthesisBanner,
   isSynthesizing,
   nodeExplanations,
-  explainingNodeId,
-  failedNodeId,
-  unsavedNodeId,
+  explainingNodeIds,
+  failedNodeIds,
+  unsavedNodeIds,
   onExplainNode,
 }: Props) {
   const [copied, setCopied] = useState(false)
@@ -319,9 +319,9 @@ export function QuestionGraphPanel({
                       checkoutPath={checkoutPath}
                       scheme={scheme}
                       nodeExplanations={nodeExplanations}
-                      explainingNodeId={explainingNodeId}
-                      failedNodeId={failedNodeId}
-                      unsavedNodeId={unsavedNodeId}
+                      explainingNodeIds={explainingNodeIds}
+                      failedNodeIds={failedNodeIds}
+                      unsavedNodeIds={unsavedNodeIds}
                       onExplainNode={onExplainNode}
                     />
                   )
@@ -599,9 +599,9 @@ function CanvasVariant({
   checkoutPath,
   scheme,
   nodeExplanations,
-  explainingNodeId,
-  failedNodeId,
-  unsavedNodeId,
+  explainingNodeIds,
+  failedNodeIds,
+  unsavedNodeIds,
   onExplainNode,
 }: {
   nodes: Array<GraphNode>
@@ -610,9 +610,9 @@ function CanvasVariant({
   checkoutPath: string
   scheme: EditorScheme
   nodeExplanations: Map<string, string>
-  explainingNodeId: string | null
-  failedNodeId: string | null
-  unsavedNodeId: string | null
+  explainingNodeIds: Set<string>
+  failedNodeIds: Set<string>
+  unsavedNodeIds: Set<string>
   onExplainNode: (nodeId: string, context: NodeExplanationContext) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -664,9 +664,9 @@ function CanvasVariant({
   }
 
   const explainedProse = selected ? nodeExplanations.get(selected.id) : undefined
-  const isExplaining = !!selected && explainingNodeId === selected.id
-  const explainFailed = !!selected && failedNodeId === selected.id
-  const explanationUnsaved = !!selected && unsavedNodeId === selected.id
+  const isExplaining = !!selected && explainingNodeIds.has(selected.id)
+  const explainFailed = !!selected && failedNodeIds.has(selected.id)
+  const explanationUnsaved = !!selected && unsavedNodeIds.has(selected.id)
 
   const selectNode = (id: string) => setSelectedId(id)
   const handleNodeKeyDown = (id: string) => (e: KeyboardEvent) => {
@@ -763,7 +763,7 @@ function CanvasVariant({
             >
               {isExplaining ? "Explaining…" : explainedProse ? "Regenerate" : "Explain"}
             </Button>
-            {explainFailed && !explainedProse && (
+            {explainFailed && (
               <p className="mt-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 Couldn&apos;t explain this node — synthesis failed. Raw evidence above is still
                 accurate.
