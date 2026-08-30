@@ -240,6 +240,55 @@ describe("useGraphNodeExplanations", () => {
       expect(result.current.explanations.get("n1")).toBeUndefined()
     })
 
+    it("retains the specific failure message from a failed synthesis call", async () => {
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(PROVIDER)
+      vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockResolvedValue({
+        status: "failed",
+        message: "explanation cites a source outside the node and its neighbours",
+      })
+      const { result } = renderHook(
+        () => useGraphNodeExplanations("org1", "ctx1", "hash-a"),
+        { wrapper }
+      )
+      await waitFor(() => expect(backend.fetchMock).toHaveBeenCalledTimes(1))
+
+      await act(async () => {
+        result.current.explainNode("n1", CONTEXT)
+        await Promise.resolve()
+      })
+      await waitFor(() =>
+        expect(result.current.failureMessages.get("n1")).toBe(
+          "explanation cites a source outside the node and its neighbours"
+        )
+      )
+    })
+
+    it("clears the previous failure message once a retry succeeds", async () => {
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(PROVIDER)
+      const synthSpy = vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation")
+      synthSpy.mockResolvedValueOnce({ status: "failed", message: "provider responded 500" })
+      const { result } = renderHook(
+        () => useGraphNodeExplanations("org1", "ctx1", "hash-a"),
+        { wrapper }
+      )
+      await waitFor(() => expect(backend.fetchMock).toHaveBeenCalledTimes(1))
+
+      await act(async () => {
+        result.current.explainNode("n1", CONTEXT)
+        await Promise.resolve()
+      })
+      await waitFor(() => expect(result.current.failureMessages.get("n1")).toBe("provider responded 500"))
+
+      synthSpy.mockResolvedValueOnce({ status: "success", prose: "authenticate calls logout." })
+      await act(async () => {
+        result.current.explainNode("n1", CONTEXT)
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await waitFor(() => expect(result.current.failedNodeIds.has("n1")).toBe(false))
+      expect(result.current.failureMessages.has("n1")).toBe(false)
+    })
+
     it("keeps the synthesized prose visible and flags it unsaved when the persistence write fails", async () => {
       vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(PROVIDER)
       vi.spyOn(synthesizeNodeExplanationModule, "synthesizeNodeExplanation").mockResolvedValue({
@@ -366,6 +415,7 @@ describe("useGraphNodeExplanations", () => {
 
       rerender({ graphHash: "hash-b" })
       expect(result.current.failedNodeIds.has("n1")).toBe(false)
+      expect(result.current.failureMessages.has("n1")).toBe(false)
     })
   })
 })

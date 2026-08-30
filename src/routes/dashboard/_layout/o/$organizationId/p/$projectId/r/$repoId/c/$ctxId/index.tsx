@@ -239,11 +239,13 @@ function ContextPage() {
           canRetrieve={draft.canDraft}
           expansionBanner={draft.expansionBanner}
           synthesisBanner={draft.synthesisBanner}
+          synthesisFailureMessage={draft.synthesisFailureMessage}
           isSynthesizing={draft.isSynthesizing}
           nodeExplanations={nodeExplanations.explanations}
           explainingNodeIds={nodeExplanations.explainingNodeIds}
           failedNodeIds={nodeExplanations.failedNodeIds}
           unsavedNodeIds={nodeExplanations.unsavedNodeIds}
+          explainFailureMessages={nodeExplanations.failureMessages}
           onExplainNode={nodeExplanations.explainNode}
         />
       )}

@@ -34,6 +34,17 @@ function withNode(set: Set<string>, nodeId: string): Set<string> {
   return new Set(set).add(nodeId)
 }
 
+function withoutKey(map: Map<string, string>, nodeId: string): Map<string, string> {
+  if (!map.has(nodeId)) return map
+  const next = new Map(map)
+  next.delete(nodeId)
+  return next
+}
+
+function withEntry(map: Map<string, string>, nodeId: string, value: string): Map<string, string> {
+  return new Map(map).set(nodeId, value)
+}
+
 export function useGraphNodeExplanations(
   organizationId: string,
   contextId: string,
@@ -53,6 +64,9 @@ export function useGraphNodeExplanations(
   const [explainingNodeIds, setExplainingNodeIds] = useState<Set<string>>(new Set())
   const [failedNodeIds, setFailedNodeIds] = useState<Set<string>>(new Set())
   const [unsavedNodeIds, setUnsavedNodeIds] = useState<Set<string>>(new Set())
+  // The specific reason the last attempt failed (e.g. "provider responded 500", or a citation
+  // rejection) — kept alongside failedNodeIds, which only says *that* it failed, not *why*.
+  const [failureMessages, setFailureMessages] = useState<Map<string, string>>(new Map())
 
   // The route reuses this hook instance across both a different Question (contextId) and a
   // version switch on the same Question (graphHash) — TanStack Router/`shown` don't remount this
@@ -64,6 +78,7 @@ export function useGraphNodeExplanations(
     setExplainingNodeIds(new Set())
     setFailedNodeIds(new Set())
     setUnsavedNodeIds(new Set())
+    setFailureMessages(new Map())
   }, [contextId, graphHash])
 
   const explainNode = (nodeId: string, context: NodeExplanationContext) => {
@@ -76,11 +91,13 @@ export function useGraphNodeExplanations(
     // the unsaved flag, which describes the prose still on screen (unchanged until this attempt
     // itself produces new prose) rather than this attempt's own outcome.
     setFailedNodeIds((s) => without(s, nodeId))
+    setFailureMessages((m) => withoutKey(m, nodeId))
 
     synthesizeNodeExplanation(context, provider)
       .then((outcome) => {
         if (outcome.status !== "success") {
           setFailedNodeIds((s) => withNode(s, nodeId))
+          setFailureMessages((m) => withEntry(m, nodeId, outcome.message))
           return
         }
 
@@ -113,5 +130,5 @@ export function useGraphNodeExplanations(
       })
   }
 
-  return { explanations, explainingNodeIds, failedNodeIds, unsavedNodeIds, explainNode }
+  return { explanations, explainingNodeIds, failedNodeIds, unsavedNodeIds, failureMessages, explainNode }
 }

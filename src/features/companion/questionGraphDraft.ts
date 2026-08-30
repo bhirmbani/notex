@@ -127,6 +127,13 @@ export function useQuestionGraphDraft(
   const [expansionBanner, setExpansionBanner] = useState<ExpansionBanner | undefined>(undefined)
   const [isExpanding, setIsExpanding] = useState(false)
   const [synthesisBanner, setSynthesisBanner] = useState<SynthesisBanner | undefined>(undefined)
+  // The specific reason the last synthesis attempt failed — transient, session-only (not part of
+  // the persisted `synthesisBanner`/`putGraphGeneration` payload, which stays a plain boolean
+  // signal). Undefined after a reload with no live-session failure, in which case the banner
+  // falls back to its existing generic text.
+  const [synthesisFailureMessage, setSynthesisFailureMessage] = useState<string | undefined>(
+    undefined
+  )
   const [isSynthesizing, setIsSynthesizing] = useState(false)
   const [autosaveState, setAutosaveState] = useState<AutosaveState>("idle")
   // Persist-in-flight flag for the trailing PUT a landed regenerate result appends — folded into
@@ -196,6 +203,7 @@ export function useQuestionGraphDraft(
     setSaved(false)
     setExpansionBanner(undefined)
     setSynthesisBanner(undefined)
+    setSynthesisFailureMessage(undefined)
     setAutosaveState("idle")
     setIsPersisting(false)
     setLiveTruncated(undefined)
@@ -213,6 +221,12 @@ export function useQuestionGraphDraft(
   // edit.
   useEffect(() => {
     if (!shown) return
+    // This effect also re-fires when a regenerate's own persist round-trips (the invalidated
+    // generations refetch resolves to the same graphHash trigger 2 already set as `active`) —
+    // not just on a genuine version switch. Only a real switch to a *different* version should
+    // drop the live-session failure message; otherwise this would clobber the message trigger 2
+    // just set, the instant its own persist finishes.
+    const isVersionSwitch = shown.graphHash !== activeGraphHash.current
     draftTextRef.current = shown.draftText
     draftNameRef.current = shown.draftName
     activeGraphHash.current = shown.graphHash
@@ -221,6 +235,9 @@ export function useQuestionGraphDraft(
     setLocalDraftName(shown.draftName)
     setExpansionBanner(shown.expansionBanner ?? undefined)
     setSynthesisBanner(shown.synthesisBanner ?? undefined)
+    // A persisted generation never carries the live-session failure message either — same
+    // "falls back to the generic banner text" story as the traversal-cap notice below.
+    if (isVersionSwitch) setSynthesisFailureMessage(undefined)
     setAutosaveState("idle")
     // A persisted generation never carries its original traversal-cap notice — only a *live*
     // landed result (still matching this graphHash) does, tracked below.
@@ -322,6 +339,7 @@ export function useQuestionGraphDraft(
     resultVersion.current += 1
     setSaved(false)
     setSynthesisBanner(undefined)
+    setSynthesisFailureMessage(undefined)
     setAutosaveState("idle")
     draftTextRef.current = rawDraftText
     setLocalDraftText(rawDraftText)
@@ -391,6 +409,7 @@ export function useQuestionGraphDraft(
             persistGeneration(outcome.prose, undefined)
           } else {
             setSynthesisBanner("synthesisFailed")
+            setSynthesisFailureMessage(outcome.message)
             persistGeneration(rawDraftText, "synthesisFailed")
           }
         })
@@ -477,6 +496,7 @@ export function useQuestionGraphDraft(
     error: mutation.error,
     expansionBanner,
     synthesisBanner,
+    synthesisFailureMessage,
     draftText: localDraftText,
     setDraftText,
     draftName: localDraftName,
