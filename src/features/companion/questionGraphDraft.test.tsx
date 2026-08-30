@@ -995,6 +995,74 @@ describe("useQuestionGraphDraft", () => {
       expect(result.current.draftText).toBe("raw evidence body")
     })
 
+    it("retains the specific failure message from a failed synthesis call", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: { graphHash: "hash-a", builtAt: "2026-08-30T00:00:00.000Z" } as never,
+        subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+        context: { markdown: "raw evidence body", sources: [] },
+      })
+      vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft").mockResolvedValue({
+        status: "failed",
+        message: "answer cites a source outside the retrieved evidence",
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() =>
+        expect(result.current.synthesisFailureMessage).toBe(
+          "answer cites a source outside the retrieved evidence"
+        )
+      )
+    })
+
+    it("clears a stale failure message once a fresh regenerate lands a new result", async () => {
+      connectAsConnected()
+      vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)
+      vi.spyOn(expandForDraftModule, "expandForDraft").mockResolvedValue({
+        status: "success",
+        terms: ["auth"],
+      })
+      vi.spyOn(client, "query")
+        .mockResolvedValueOnce({
+          graph: { graphHash: "hash-a", builtAt: "2026-08-30T00:00:00.000Z" } as never,
+          subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+          context: { markdown: "raw evidence body", sources: [] },
+        })
+        .mockResolvedValueOnce({
+          graph: { graphHash: "hash-a", builtAt: "2026-08-30T00:01:00.000Z" } as never,
+          subgraph: { nodes: [], edges: [], seeds: ["n1"] },
+          context: { markdown: "fresh evidence body", sources: [] },
+        })
+      const synthesizeSpy = vi.spyOn(synthesizeForDraftModule, "synthesizeForDraft")
+      synthesizeSpy.mockResolvedValueOnce({ status: "failed", message: "provider timed out" })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+      await waitFor(() => expect(result.current.synthesisFailureMessage).toBe("provider timed out"))
+
+      synthesizeSpy.mockResolvedValueOnce({ status: "success", prose: "cited answer." })
+      act(() => result.current.run())
+      await waitFor(() => expect(result.current.draftText).toBe("cited answer."))
+      expect(result.current.synthesisFailureMessage).toBeUndefined()
+    })
+
     it("exposes isSynthesizing while the call is in flight and clears it once it settles (TBR-110)", async () => {
       connectAsConnected()
       vi.spyOn(providerKeyStorage, "getActiveProviderKey").mockReturnValue(ANTHROPIC_PROVIDER)

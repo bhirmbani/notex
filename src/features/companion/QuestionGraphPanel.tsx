@@ -67,6 +67,10 @@ type Props = {
    * `expansionBanner`: both can be set at once.
    */
   synthesisBanner?: SynthesisBanner
+  /** The specific reason the last synthesis attempt failed (transient, session-only — see
+   * `useQuestionGraphDraft`'s `synthesisFailureMessage`) — falls back to `synthesisBanner`'s
+   * generic text when undefined (e.g. after a reload with no live-session failure). */
+  synthesisFailureMessage?: string
   /**
    * True while a synthesis call is in flight (TBR-110). Synthesis only starts once a companion
    * `query` result already exists, so the top-of-panel `isPending && !result` skeleton can never
@@ -81,6 +85,7 @@ type Props = {
   explainingNodeIds: Set<string>
   failedNodeIds: Set<string>
   unsavedNodeIds: Set<string>
+  explainFailureMessages: Map<string, string>
   onExplainNode: (nodeId: string, context: NodeExplanationContext) => void
 }
 
@@ -88,6 +93,16 @@ const SEGMENTS = ["files", "evidence", "draft", "canvas"] as const
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled GraphVariant: ${JSON.stringify(value)}`)
+}
+
+// A synthesis/explain failure message is uncontrolled text — a raw fetch() rejection message on
+// a transport failure (e.g. Firefox's "NetworkError when attempting to fetch resource.", already
+// capitalized and already ending in a period) rather than a curated string. Rendered as its own
+// parenthetical rather than spliced into a sentence continuation, so its own
+// capitalization/punctuation can never clash with the surrounding sentence; the trailing period
+// strip only avoids a redundant "..)." right before the parenthesis closes.
+function formatFailureReason(message: string): string {
+  return message.replace(/\.+$/, "")
 }
 
 export function QuestionGraphPanel({
@@ -113,11 +128,13 @@ export function QuestionGraphPanel({
   canRetrieve,
   expansionBanner,
   synthesisBanner,
+  synthesisFailureMessage,
   isSynthesizing,
   nodeExplanations,
   explainingNodeIds,
   failedNodeIds,
   unsavedNodeIds,
+  explainFailureMessages,
   onExplainNode,
 }: Props) {
   const [copied, setCopied] = useState(false)
@@ -180,7 +197,11 @@ export function QuestionGraphPanel({
         )}
         {synthesisBanner === "synthesisFailed" && (
           <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            Showing raw evidence — synthesis failed this time.
+            Showing raw evidence — synthesis failed
+            {synthesisFailureMessage
+              ? ` (${formatFailureReason(synthesisFailureMessage)})`
+              : " this time"}
+            .
           </p>
         )}
         {isSynthesizing && (
@@ -322,6 +343,7 @@ export function QuestionGraphPanel({
                       explainingNodeIds={explainingNodeIds}
                       failedNodeIds={failedNodeIds}
                       unsavedNodeIds={unsavedNodeIds}
+                      failureMessages={explainFailureMessages}
                       onExplainNode={onExplainNode}
                     />
                   )
@@ -602,6 +624,7 @@ function CanvasVariant({
   explainingNodeIds,
   failedNodeIds,
   unsavedNodeIds,
+  failureMessages,
   onExplainNode,
 }: {
   nodes: Array<GraphNode>
@@ -613,6 +636,7 @@ function CanvasVariant({
   explainingNodeIds: Set<string>
   failedNodeIds: Set<string>
   unsavedNodeIds: Set<string>
+  failureMessages: Map<string, string>
   onExplainNode: (nodeId: string, context: NodeExplanationContext) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -666,6 +690,7 @@ function CanvasVariant({
   const explainedProse = selected ? nodeExplanations.get(selected.id) : undefined
   const isExplaining = !!selected && explainingNodeIds.has(selected.id)
   const explainFailed = !!selected && failedNodeIds.has(selected.id)
+  const explainFailureMessage = selected ? failureMessages.get(selected.id) : undefined
   const explanationUnsaved = !!selected && unsavedNodeIds.has(selected.id)
 
   const selectNode = (id: string) => setSelectedId(id)
@@ -765,8 +790,9 @@ function CanvasVariant({
             </Button>
             {explainFailed && (
               <p className="mt-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                Couldn&apos;t explain this node — synthesis failed. Raw evidence above is still
-                accurate.
+                Couldn&apos;t explain this node — synthesis failed
+                {explainFailureMessage ? ` (${formatFailureReason(explainFailureMessage)})` : ""}.
+                Raw evidence above is still accurate.
               </p>
             )}
             {explainedProse && (

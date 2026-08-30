@@ -101,6 +101,7 @@ function renderPanel(overrides: Partial<Parameters<typeof QuestionGraphPanel>[0]
       explainingNodeIds={new Set()}
       failedNodeIds={new Set()}
       unsavedNodeIds={new Set()}
+      explainFailureMessages={new Map()}
       onExplainNode={onExplainNode}
       {...overrides}
     />
@@ -144,6 +145,7 @@ describe("QuestionGraphPanel", () => {
         explainingNodeIds={new Set()}
         failedNodeIds={new Set()}
         unsavedNodeIds={new Set()}
+        explainFailureMessages={new Map()}
         onExplainNode={vi.fn()}
       />
     )
@@ -309,6 +311,7 @@ describe("QuestionGraphPanel", () => {
           explainingNodeIds={new Set()}
           failedNodeIds={new Set()}
           unsavedNodeIds={new Set()}
+          explainFailureMessages={new Map()}
           onExplainNode={vi.fn()}
         />
       )
@@ -342,6 +345,7 @@ describe("QuestionGraphPanel", () => {
           explainingNodeIds={new Set()}
           failedNodeIds={new Set()}
           unsavedNodeIds={new Set()}
+          explainFailureMessages={new Map()}
           onExplainNode={vi.fn()}
         />
       )
@@ -447,6 +451,23 @@ describe("QuestionGraphPanel", () => {
         expect(screen.getByText("authenticate", { selector: "p" })).toBeTruthy()
       })
 
+      it("shows the specific explain failure message when available, instead of the generic text", () => {
+        renderPanel({
+          variant: "canvas",
+          failedNodeIds: new Set(["n1"]),
+          explainFailureMessages: new Map([
+            ["n1", "explanation cites a source outside the node and its neighbours"],
+          ]),
+        })
+        selectNodeA()
+
+        expect(
+          screen.getByText(
+            "Couldn't explain this node — synthesis failed (explanation cites a source outside the node and its neighbours). Raw evidence above is still accurate."
+          )
+        ).toBeTruthy()
+      })
+
       it("shows the failure banner even when the node already has a cached explanation — a failed Regenerate must still surface an error", () => {
         renderPanel({
           variant: "canvas",
@@ -521,6 +542,31 @@ describe("QuestionGraphPanel", () => {
   it("shows the 'synthesis failed' banner when set", () => {
     renderPanel({ synthesisBanner: "synthesisFailed" })
     expect(screen.getByText(/Showing raw evidence — synthesis failed this time/)).toBeTruthy()
+  })
+
+  it("shows the specific synthesis failure message when available, instead of the generic text", () => {
+    renderPanel({
+      synthesisBanner: "synthesisFailed",
+      synthesisFailureMessage: "answer cites a source outside the retrieved evidence",
+    })
+    expect(
+      screen.getByText(
+        "Showing raw evidence — synthesis failed (answer cites a source outside the retrieved evidence)."
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/synthesis failed this time/)).toBeNull()
+  })
+
+  it("strips a message's own trailing period so it doesn't collide with the closing parenthesis", () => {
+    renderPanel({
+      synthesisBanner: "synthesisFailed",
+      synthesisFailureMessage: "NetworkError when attempting to fetch resource.",
+    })
+    expect(
+      screen.getByText(
+        "Showing raw evidence — synthesis failed (NetworkError when attempting to fetch resource)."
+      )
+    ).toBeTruthy()
   })
 
   it("omits the synthesis banner when it doesn't apply", () => {
