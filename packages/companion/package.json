@@ -1,6 +1,6 @@
 {
   "name": "notex-companion",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Local retrieval companion for Notex — reads a checkout's graphify-out/graph.json and serves deterministic search/query/path/node lookups over loopback HTTP and MCP stdio. No LLM, no graph building, no network beyond 127.0.0.1.",
   "keywords": ["notex", "graphify", "mcp", "code-graph"],
   "license": "MIT",
