@@ -5,6 +5,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '')
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read file'))
+    reader.readAsDataURL(file)
+  })
+}
+
 export function AddFileModal({
   organizationId,
   contextId,
@@ -18,35 +27,41 @@ export function AddFileModal({
   const [name, setName] = useState('')
   const [content, setContent] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const create = useCreateFile(organizationId, contextId)
 
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !content.trim()) return
-    await create.mutateAsync({ name: name.trim(), contentType: 'text', content })
-    onClose()
+    setError(null)
+    try {
+      await create.mutateAsync({ name: name.trim(), contentType: 'text', content })
+      onClose()
+    } catch {
+      setError('Could not save the file. Please try again.')
+    }
   }
 
-  // Not async: the upload is awaited inside the FileReader's onload callback,
-  // so this handler itself has nothing to await.
-  const handleUploadSubmit = (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const file = fileRef.current?.files?.[0]
     if (!file) return
+    setError(null)
     setUploading(true)
-    const reader = new FileReader()
-    reader.onload = async () => {
-      const base64 = (reader.result as string).split(',')[1] ?? ''
+    try {
+      const base64 = await readFileAsBase64(file)
       await create.mutateAsync({
         name: name.trim() || file.name,
         contentType: 'upload',
         content: base64,
       })
-      setUploading(false)
       onClose()
+    } catch {
+      setError('Could not upload the file. Please try again.')
+    } finally {
+      setUploading(false)
     }
-    reader.readAsDataURL(file)
   }
 
   return (
@@ -78,6 +93,12 @@ export function AddFileModal({
             Upload
           </button>
         </div>
+
+        {error && (
+          <p role="alert" className="mb-4 text-sm text-destructive">
+            {error}
+          </p>
+        )}
 
         {tab === 'text' ? (
           <form onSubmit={handleTextSubmit} className="space-y-4">
