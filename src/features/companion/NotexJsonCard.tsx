@@ -6,6 +6,7 @@ import { useState } from "react"
 import { RiCheckLine, RiFileCopyLine } from "@remixicon/react"
 import { Link } from "@tanstack/react-router"
 
+import { useCopy } from "./useCopy"
 import { Button } from "@/components/ui/button"
 
 export type NotexJsonIds = {
@@ -25,23 +26,6 @@ export function buildNotexJsonSnippet(ids: NotexJsonIds): string {
     null,
     2
   )
-}
-
-function useCopy() {
-  const [copied, setCopied] = useState(false)
-  const [error, setError] = useState(false)
-
-  const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setError(false)
-    } catch {
-      setError(true)
-    }
-  }
-
-  return { copied, error, copy }
 }
 
 function IdRow({ label, value }: { label: string; value: string }) {

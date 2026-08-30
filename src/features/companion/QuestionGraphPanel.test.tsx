@@ -662,6 +662,51 @@ describe("QuestionGraphPanel", () => {
     ).toBeTruthy()
   })
 
+  // TBR-131: a second, separately-labeled action — the plain "Copy for your agent" button above
+  // must stay evidence-only (packages/companion/src/context.ts's own contract), so the save
+  // instruction is appended only here, client-side, never inside buildContext/context.markdown.
+  describe("'Copy with save instructions' (TBR-131)", () => {
+    it("copies the original evidence markdown plus an appended save-instruction block", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.assign(navigator, { clipboard: { writeText } })
+
+      renderPanel()
+      fireEvent.click(screen.getByRole("button", { name: "Copy with save instructions" }))
+
+      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+      const copied = writeText.mock.calls[0]?.[0] as string
+      expect(copied.startsWith("# question\n\nevidence")).toBe(true)
+      expect(copied).toContain("notex_save_answer")
+      // The pasted evidence's node ids belong to a different (browser-side) session — the
+      // instruction must tell the agent not to treat them as usable sourceNodeIds directly.
+      expect(copied).toMatch(/own (tool calls|session)/i)
+    })
+
+    it("does not alter the plain 'Copy for your agent' button's own payload", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.assign(navigator, { clipboard: { writeText } })
+
+      renderPanel()
+      fireEvent.click(screen.getByRole("button", { name: "Copy for your agent" }))
+
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith("# question\n\nevidence"))
+    })
+
+    it("shows its own clipboard error message when the copy fails, independent of the other button", async () => {
+      const writeText = vi.fn().mockRejectedValue(new Error("denied"))
+      Object.assign(navigator, { clipboard: { writeText } })
+
+      renderPanel()
+      fireEvent.click(screen.getByRole("button", { name: "Copy with save instructions" }))
+
+      expect(
+        await screen.findByText(
+          "Could not copy to your clipboard. Try again, or check your browser's clipboard permission."
+        )
+      ).toBeTruthy()
+    })
+  })
+
   describe("version switcher, stale banner, autosave indicator (TBR-118, TBR-124)", () => {
     function generation(overrides: Partial<GraphGenerationDTO> = {}): GraphGenerationDTO {
       return {
