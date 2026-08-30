@@ -7,7 +7,7 @@
   ],
   "packageManager": "bun@1.3.14",
   "scripts": {
-    "postinstall": "command -v bun >/dev/null 2>&1 || { echo 'notex requires bun (see \"packageManager\" in package.json) to build packages/companion — install it from https://bun.sh' >&2; exit 1; }; cd packages/companion && bun run build",
+    "postinstall": "git config core.hooksPath .githooks; command -v bun >/dev/null 2>&1 || { echo 'notex requires bun (see \"packageManager\" in package.json) to build packages/companion — install it from https://bun.sh' >&2; exit 1; }; cd packages/companion && bun run build",
     "dev": "node scripts/dev.mjs",
     "dev:cf": "wrangler dev --config wrangler.dev.jsonc",
     "build": "vite build",

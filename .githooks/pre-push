@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Catches build/deploy breakage before it reaches a shared branch — see TBR-126.
+# --dry-run: builds and validates the wrangler config, does not ship anything.
+set -e
+
+echo "pre-push: bun run deploy:dev -- --dry-run"
+bun run deploy:dev -- --dry-run
