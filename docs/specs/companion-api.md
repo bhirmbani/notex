@@ -296,12 +296,26 @@ When a cap bites, the response says so via `truncated` — a silently truncated 
 confidently wrong drafted Answer. **Induced-edge completion runs after the cap, not before**;
 skipping it silently drops seed↔seed edges (TBR-55).
 
-**The seed-score floor (added by TBR-59, on TBR-58's evidence).** When no seed clears an exact
-token match, the companion still returns its best guesses but sets `lowConfidence: { topScore }`,
-and the UI says *"nothing convincing matched"* instead of rendering a subgraph. This sharpens
+**The seed-score floor (added by TBR-59, on TBR-58's evidence; widened by TBR-130).** When no seed
+clears the floor, the companion still returns its best guesses but sets `lowConfidence: { topScore
+}`, and the UI says *"nothing convincing matched"* instead of rendering a subgraph. This sharpens
 trap 2: literal matching does **not** fail by returning nothing, it fails by returning **plausible
 wrong seeds** — roughly a third of naturally-phrased questions on real data. Silence would be a
 benign failure; confident mismatching is the one that produces a wrong Answer a human signs.
+
+The floor clears on a whole-label or whole-token match, **or** on a corroborated prefix/
+abbreviation match — at least two *independent* query terms each fuzzy-prefixing the *same label
+token* (e.g. an LLM-expanded "authentication" and "authorization" both fuzzy-matching this
+codebase's own "auth" token). A *single* fuzzy-prefix hit alone never clears it, and neither does:
+padding it with unrelated strong signals (an exact path-token match on a totally unrelated term is
+a directory/filename coincidence, not corroborating evidence); a duplicated query term (no
+uniqueness guarantee on `terms[]`); or two terms landing on *different* tokens of the same compound
+label ("cartographer" fuzzy-matching "cart" and, separately, "widgetorium" fuzzy-matching "widget"
+in a "cartWidget" label are two independent coincidences, not one corroborated relationship). Only
+a second term backing the exact same token counts. One short coincidental prefix collision (a term
+"cartography" fuzzy-matching an unrelated token "cart") is exactly the kind of plausible-wrong-seed
+this floor exists to catch, and a second independent term making the identical coincidence is
+precisely what's unlikely.
 
 ### 4.5 `path` — `POST /v1/path`
 

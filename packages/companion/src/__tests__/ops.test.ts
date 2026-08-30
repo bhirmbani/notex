@@ -144,7 +144,9 @@ describe("query", () => {
   })
 
   it("sets lowConfidence with the top score when no seed clears an exact token match", () => {
-    const res = query(index, { terms: ["sessio"], question: "sessio" })
+    // "ssion" is a substring of "session" but not a prefix in either direction (TBR-130 treats a
+    // strong prefix/abbreviation relationship as exact — a mid-token substring stays weak).
+    const res = query(index, { terms: ["ssion"], question: "ssion" })
     expect(res.lowConfidence).toBeDefined()
     expect(res.lowConfidence?.topScore).toBeGreaterThan(0)
   })

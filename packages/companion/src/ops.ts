@@ -118,7 +118,7 @@ export type QueryResult = {
   context?: { markdown: string; sources: Array<{ file: string; location: string }> }
   /** See companion-api.md §4.8 / notex-mcp-server.md §5 — same buildFooter as the write paths. */
   footer?: string
-  /** Set when no seed cleared the seed-score floor — an exact label or label-token match. */
+  /** Set when no seed cleared the seed-score floor — see ScoredNode's `exact` (scoring.ts). */
   lowConfidence?: { topScore: number }
 }
 
