@@ -213,9 +213,14 @@ function ContextPage() {
         </div>
       </div>
 
-      {(draft.result || draft.isPending || draft.error) && (
+      {(draft.result || draft.hasGeneration || draft.isPending || draft.error) && (
         <QuestionGraphPanel
           result={draft.result}
+          generations={draft.generations}
+          selectedGraphHash={draft.selectedGraphHash}
+          onSelectVersion={draft.selectVersion}
+          isStale={draft.isStale}
+          autosaveState={draft.autosaveState}
           isPending={draft.isPending}
           error={draft.error}
           variant={draft.variant}

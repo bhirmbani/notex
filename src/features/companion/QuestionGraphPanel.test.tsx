@@ -4,10 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 
 import { QuestionGraphPanel } from "./QuestionGraphPanel"
 import type { OpResponse, QueryResult } from "notex-companion/client"
+import type { GraphGenerationDTO } from "./persistenceTypes"
+import type { ProviderConfig } from "@/features/provider-keys/types"
 import { EDITOR_SCHEME_STORAGE_KEY } from "@/lib/editorScheme"
 import * as providerKeyStorage from "@/features/provider-keys/storage"
 import * as synthesizeNodeExplanationModule from "@/features/draft-synthesis/synthesizeNodeExplanation"
-import type { ProviderConfig } from "@/features/provider-keys/types"
 
 // No route tree exists in an isolated component test — mock Link as a plain anchor, matching
 // QuestionGraphAction.test.tsx's precedent rather than mounting a real TanStack Router.
@@ -74,9 +75,15 @@ function renderPanel(overrides: Partial<Parameters<typeof QuestionGraphPanel>[0]
   const onDraftTextChange = vi.fn()
   const onDraftNameChange = vi.fn()
   const onSave = vi.fn()
+  const onSelectVersion = vi.fn()
   render(
     <QuestionGraphPanel
       result={baseResult()}
+      generations={[]}
+      selectedGraphHash={null}
+      onSelectVersion={onSelectVersion}
+      isStale={false}
+      autosaveState="idle"
       isPending={false}
       error={null}
       variant="files"
@@ -94,7 +101,7 @@ function renderPanel(overrides: Partial<Parameters<typeof QuestionGraphPanel>[0]
       {...overrides}
     />
   )
-  return { onVariantChange, onExpand, onDraftTextChange, onDraftNameChange, onSave }
+  return { onVariantChange, onExpand, onDraftTextChange, onDraftNameChange, onSave, onSelectVersion }
 }
 
 describe("QuestionGraphPanel", () => {
@@ -102,6 +109,11 @@ describe("QuestionGraphPanel", () => {
     const { container } = render(
       <QuestionGraphPanel
         result={undefined}
+        generations={[]}
+        selectedGraphHash={null}
+        onSelectVersion={vi.fn()}
+        isStale={false}
+        autosaveState="idle"
         isPending={false}
         error={null}
         variant="files"
@@ -257,6 +269,11 @@ describe("QuestionGraphPanel", () => {
       const { rerender } = render(
         <QuestionGraphPanel
           result={baseResult()}
+          generations={[]}
+          selectedGraphHash={null}
+          onSelectVersion={vi.fn()}
+          isStale={false}
+          autosaveState="idle"
           isPending={false}
           error={null}
           variant="canvas"
@@ -280,6 +297,11 @@ describe("QuestionGraphPanel", () => {
       rerender(
         <QuestionGraphPanel
           result={baseResult({ subgraph: { nodes: [OTHER_NODE], edges: [], seeds: ["n3"] } })}
+          generations={[]}
+          selectedGraphHash={null}
+          onSelectVersion={vi.fn()}
+          isStale={false}
+          autosaveState="idle"
           isPending={false}
           error={null}
           variant="canvas"
@@ -557,6 +579,82 @@ describe("QuestionGraphPanel", () => {
         "Could not copy to your clipboard. Try again, or check your browser's clipboard permission."
       )
     ).toBeTruthy()
+  })
+
+  describe("version switcher, stale banner, autosave indicator (TBR-118, TBR-124)", () => {
+    function generation(overrides: Partial<GraphGenerationDTO> = {}): GraphGenerationDTO {
+      return {
+        graphHash: "abcdef0123456789",
+        builtAt: "2026-08-30T00:00:00.000Z",
+        headSha: null,
+        nodeCount: 2,
+        edgeCount: 0,
+        communityCount: 1,
+        questionAtGeneration: "how does auth work?",
+        subgraph: { nodes: [], edges: [], seeds: [] },
+        context: null,
+        footer: null,
+        lowConfidence: null,
+        draftText: "",
+        draftName: "Graph draft",
+        expansionBanner: null,
+        synthesisBanner: null,
+        createdAt: 0,
+        updatedAt: 0,
+        ...overrides,
+      }
+    }
+    const GENERATIONS = [
+      generation({ graphHash: "abcdef0123456789", builtAt: "2026-08-30T00:00:00.000Z" }),
+      generation({ graphHash: "0123456789abcdef", builtAt: "2026-08-15T00:00:00.000Z" }),
+    ]
+
+    it("renders every generation in the version switcher and calls onSelectVersion on pick", () => {
+      const { onSelectVersion } = renderPanel({ generations: GENERATIONS })
+      const select = screen.getByLabelText<HTMLSelectElement>("Graph version")
+      expect(select.querySelectorAll("option").length).toBe(2)
+
+      fireEvent.change(select, { target: { value: "0123456789abcdef" } })
+      expect(onSelectVersion).toHaveBeenCalledWith("0123456789abcdef")
+    })
+
+    it("omits the version switcher when there are no persisted generations", () => {
+      renderPanel({ generations: [] })
+      expect(screen.queryByLabelText("Graph version")).toBeNull()
+    })
+
+    it("shows the stale banner when isStale is true", () => {
+      renderPanel({ isStale: true })
+      expect(
+        screen.getByText(/The graph has changed since this was drafted/)
+      ).toBeTruthy()
+    })
+
+    it("omits the stale banner when isStale is false", () => {
+      renderPanel({ isStale: false })
+      expect(screen.queryByText(/The graph has changed since this was drafted/)).toBeNull()
+    })
+
+    it("shows 'Saving…' while autosaveState is pending", () => {
+      renderPanel({ variant: "draft", autosaveState: "pending" })
+      expect(screen.getByText("Saving…")).toBeTruthy()
+    })
+
+    it("shows 'Not saved' when autosaveState is failed", () => {
+      renderPanel({ variant: "draft", autosaveState: "failed" })
+      expect(screen.getByText("Not saved")).toBeTruthy()
+    })
+
+    it("shows no autosave indicator when idle or saved", () => {
+      renderPanel({ variant: "draft", autosaveState: "idle" })
+      expect(screen.queryByText("Saving…")).toBeNull()
+      expect(screen.queryByText("Not saved")).toBeNull()
+
+      cleanup()
+      renderPanel({ variant: "draft", autosaveState: "saved" })
+      expect(screen.queryByText("Saving…")).toBeNull()
+      expect(screen.queryByText("Not saved")).toBeNull()
+    })
   })
 
   it("builds an editor link from checkoutPath + sourceFile honouring the stored scheme", () => {

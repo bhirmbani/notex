@@ -13,14 +13,15 @@ import { groupEvidence } from "./groupEvidence"
 import { computeCanvasLayout } from "./canvasLayout"
 import { communityColor } from "./communityColor"
 import type { KeyboardEvent, ReactNode } from "react"
-import type { ExpansionBanner, GraphVariant, SynthesisBanner } from "./questionGraphDraft"
+import type { AutosaveState, ExpansionBanner, GraphVariant, SynthesisBanner } from "./questionGraphDraft"
+import type { GraphGenerationDTO } from "./persistenceTypes"
 import type { EditorScheme } from "@/lib/editorScheme"
 import type { GraphEdge, GraphNode, OpResponse, QueryResult } from "notex-companion/client"
+import type { NodeExplanationContext } from "@/features/draft-synthesis/synthesizeNodeExplanation"
 import { cn } from "@/lib/utils"
 import { buildEditorLink, getStoredEditorScheme } from "@/lib/editorScheme"
 import { getActiveProviderKey } from "@/features/provider-keys/storage"
 import { synthesizeNodeExplanation } from "@/features/draft-synthesis/synthesizeNodeExplanation"
-import type { NodeExplanationContext } from "@/features/draft-synthesis/synthesizeNodeExplanation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,6 +29,17 @@ import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
   result: OpResponse<QueryResult> | undefined
+  /** Every persisted generation for this Question (TBR-118), newest `builtAt` first. */
+  generations: Array<GraphGenerationDTO>
+  /** `null` means "follow latest" — the version switcher's own selection, not necessarily
+   * `result`'s `graphHash` (the hook falls back to the newest generation when the selected one
+   * no longer exists). */
+  selectedGraphHash: string | null
+  onSelectVersion: (graphHash: string) => void
+  /** True when the companion's live graph has moved past the `graphHash` currently shown. */
+  isStale: boolean
+  /** The Draft textarea/name's debounced-persist state (TBR-118). */
+  autosaveState: AutosaveState
   isPending: boolean
   error: Error | null
   variant: GraphVariant
@@ -74,6 +86,11 @@ function assertNever(value: never): never {
 
 export function QuestionGraphPanel({
   result,
+  generations,
+  selectedGraphHash,
+  onSelectVersion,
+  isStale,
+  autosaveState,
   isPending,
   error,
   variant,
@@ -128,6 +145,11 @@ export function QuestionGraphPanel({
   return (
     <div className="mb-6 rounded-xl border bg-card">
       <div className="space-y-2 border-b p-4">
+        {isStale && (
+          <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            The graph has changed since this was drafted — Regenerate to refresh.
+          </p>
+        )}
         {expansionBanner === "noProvider" && (
           <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
             Matched literally — configure a model provider to do better.{" "}
@@ -165,10 +187,29 @@ export function QuestionGraphPanel({
             related nodes may be missing.
           </p>
         )}
-        <p className="font-mono text-[11px] text-muted-foreground">
-          graph built {builtDate} · {result.graph.nodeCount} nodes · {result.graph.graphHash}
-          {result.graph.headSha ? ` · at ${result.graph.headSha.slice(0, 7)}` : ""}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-mono text-[11px] text-muted-foreground">
+            graph built {builtDate} · {result.graph.nodeCount} nodes · {result.graph.graphHash}
+            {result.graph.headSha ? ` · at ${result.graph.headSha.slice(0, 7)}` : ""}
+          </p>
+          {generations.length > 0 && (
+            <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+              Version
+              <select
+                aria-label="Graph version"
+                value={selectedGraphHash ?? generations[0]?.graphHash ?? ""}
+                onChange={(e) => onSelectVersion(e.target.value)}
+                className="rounded border bg-background px-1.5 py-0.5 font-mono text-[11px]"
+              >
+                {generations.map((g) => (
+                  <option key={g.graphHash} value={g.graphHash}>
+                    {g.builtAt.slice(0, 10)} · {g.graphHash}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
       </div>
 
       {result.lowConfidence ? (
@@ -255,6 +296,7 @@ export function QuestionGraphPanel({
                       isSaving={isSaving}
                       saveError={saveError}
                       saved={saved}
+                      autosaveState={autosaveState}
                     />
                   )
                 case "canvas":
@@ -455,6 +497,7 @@ function DraftVariant({
   isSaving,
   saveError,
   saved,
+  autosaveState,
 }: {
   value: string
   onChange: (value: string) => void
@@ -465,6 +508,7 @@ function DraftVariant({
   isSaving: boolean
   saveError: Error | null
   saved: boolean
+  autosaveState: AutosaveState
 }) {
   return (
     <div className="space-y-3">
@@ -477,7 +521,17 @@ function DraftVariant({
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="graph-draft-text">Draft answer</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="graph-draft-text">Draft answer</Label>
+          {autosaveState === "pending" && (
+            <span className="text-[11px] text-muted-foreground">Saving…</span>
+          )}
+          {autosaveState === "failed" && (
+            <span role="alert" className="text-[11px] text-destructive">
+              Not saved
+            </span>
+          )}
+        </div>
         <Textarea
           id="graph-draft-text"
           value={value}
