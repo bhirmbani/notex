@@ -1,7 +1,14 @@
 #!/usr/bin/env sh
 # Catches build/deploy breakage before it reaches a shared branch — see TBR-126.
 # --dry-run: builds and validates the wrangler config, does not ship anything.
+# Takes a while (a full vite build + wrangler bundling) — skip with `git push --no-verify`.
 set -e
+
+command -v bun >/dev/null 2>&1 || {
+  echo 'pre-push: bun not found on PATH, skipping the deploy:dev dry-run check.' >&2
+  echo 'Install bun (https://bun.sh) so this hook can catch build breakage before it reaches origin.' >&2
+  exit 0
+}
 
 echo "pre-push: bun run deploy:dev -- --dry-run"
 bun run deploy:dev -- --dry-run
