@@ -8,42 +8,36 @@ import {
 } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
-import { APIError } from 'better-auth'
 import { useState } from 'react'
 import { RiCpuLine, RiKey2Line } from '@remixicon/react'
 
-import type { AuthBindings } from '@/features/auth/lib/server'
+import type { AuthBindings, createAuth } from '@/features/auth/lib/server'
 import type { DashboardSession } from '@/features/auth/lib/validation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Sidebar } from '@/components/Sidebar'
 import { OrgSwitcher } from '@/components/OrgSwitcher'
+import { isBetterAuthApiError } from '@/api/middleware/auth'
 import { signOutCurrentSession } from '@/features/auth/lib/client'
-import { createAuth } from '@/features/auth/lib/server'
+import { createAuth as createAuthInstance } from '@/features/auth/lib/server'
 import { isDashboardSession } from '@/features/auth/lib/validation'
 
-const getDashboardSession = createServerFn({ method: 'GET' }).handler(async () => {
-  const env = (globalThis as Record<string, unknown>).__env__ as
-    | Partial<AuthBindings>
-    | undefined
-
-  if (!env?.DB) {
-    return null
-  }
-
-  const request = getRequest()
-  const auth = createAuth(env as AuthBindings)
-
-  // The apiKey plugin throws (rather than returning null) when a request
-  // carries an invalid/expired/revoked/rate-limited `x-api-key` header —
-  // unlike a missing or malformed session cookie, which getSession resolves
-  // to null. Treat it the same as "no session" here.
+// The apiKey plugin throws (rather than returning null) when a request
+// carries an invalid/expired/revoked/rate-limited `x-api-key` header —
+// unlike a missing or malformed session cookie, which getSession resolves
+// to null. Treat it the same as "no session" here. better-auth's APIError
+// can be a different bundled class than one imported statically in this
+// file (Nitro splits `@/features/auth/lib/server` into its own chunk, each
+// with its own copy of 'better-auth'), so detect it by shape via
+// isBetterAuthApiError rather than by `instanceof`.
+export async function resolveDashboardSession(
+  auth: ReturnType<typeof createAuth>,
+  headers: Headers,
+): Promise<DashboardSession | null> {
   let session: Awaited<ReturnType<typeof auth.api.getSession>>
   try {
-    session = await auth.api.getSession({
-      headers: request.headers,
-    })
+    session = await auth.api.getSession({ headers })
   } catch (error) {
-    if (!(error instanceof APIError)) {
+    if (!isBetterAuthApiError(error)) {
       throw error
     }
     return null
@@ -60,6 +54,21 @@ const getDashboardSession = createServerFn({ method: 'GET' }).handler(async () =
       email: typeof session.user.email === 'string' ? session.user.email : undefined,
     },
   } satisfies DashboardSession
+}
+
+const getDashboardSession = createServerFn({ method: 'GET' }).handler(async () => {
+  const env = (globalThis as Record<string, unknown>).__env__ as
+    | Partial<AuthBindings>
+    | undefined
+
+  if (!env?.DB) {
+    return null
+  }
+
+  const request = getRequest()
+  const auth = createAuthInstance(env as AuthBindings)
+
+  return resolveDashboardSession(auth, request.headers)
 })
 
 export const Route = createFileRoute('/dashboard/_layout')({
