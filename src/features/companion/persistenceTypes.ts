@@ -30,3 +30,14 @@ export type PatchGraphGenerationBody = {
   draftText?: string
   draftName?: string
 }
+
+export type NodeExplanationDTO = {
+  nodeId: string
+  explanation: string
+  createdAt: number
+  updatedAt: number
+}
+
+export type PutNodeExplanationBody = {
+  explanation: string
+}

@@ -296,3 +296,185 @@ describe('PATCH /organizations/:organizationId/contexts/:contextId/graph-generat
     expect(body.updatedAt).toBe(2000)
   })
 })
+
+describe('GET /organizations/:organizationId/contexts/:contextId/graph-generations/:graphHash/node-explanations', () => {
+  it('returns 404 for an unknown context', async () => {
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request(
+      '/organizations/org-1/contexts/ctx-missing/graph-generations/hash-1/node-explanations',
+      {},
+      {},
+    )
+
+    expect(res.status).toBe(404)
+  })
+
+  it('lists node explanations scoped to the contextId/graphHash pair', async () => {
+    const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
+    const repo = { id: 'repo-1', projectId: 'project-1' }
+    const project = { id: 'project-1', organizationId: 'org-1' }
+    const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
+    const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'read' }
+    const row = {
+      id: 'exp-1',
+      contextId: 'ctx-1',
+      graphHash: 'hash-1',
+      nodeId: 'node-a',
+      explanation: 'This node represents...',
+      createdAt: 1000,
+      updatedAt: 1000,
+    }
+    let call = 0
+    const results = [[ctx], [repo], [project], [membership], [grant], [row]]
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request(
+      '/organizations/org-1/contexts/ctx-1/graph-generations/hash-1/node-explanations',
+      {},
+      {},
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toEqual([
+      { nodeId: 'node-a', explanation: 'This node represents...', createdAt: 1000, updatedAt: 1000 },
+    ])
+  })
+})
+
+describe('PUT /organizations/:organizationId/contexts/:contextId/graph-generations/:graphHash/node-explanations/:nodeId', () => {
+  it('rejects a caller with no membership in the organization', async () => {
+    const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
+    const repo = { id: 'repo-1', projectId: 'project-1' }
+    const project = { id: 'project-1', organizationId: 'org-1' }
+    let call = 0
+    const results = [[ctx], [repo], [project], []]
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request(
+      '/organizations/org-1/contexts/ctx-1/graph-generations/hash-1/node-explanations/node-a',
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ explanation: 'prose' }),
+      },
+      {},
+    )
+
+    expect(res.status).toBe(403)
+  })
+
+  it('rejects a member with only a read Grant on the project', async () => {
+    const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
+    const repo = { id: 'repo-1', projectId: 'project-1' }
+    const project = { id: 'project-1', organizationId: 'org-1' }
+    const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
+    const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'read' }
+    let call = 0
+    const results = [[ctx], [repo], [project], [membership], [grant]]
+    const insertValues = vi.fn()
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
+      insert: () => ({ values: insertValues }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request(
+      '/organizations/org-1/contexts/ctx-1/graph-generations/hash-1/node-explanations/node-a',
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ explanation: 'prose' }),
+      },
+      {},
+    )
+
+    expect(res.status).toBe(403)
+    expect(insertValues).not.toHaveBeenCalled()
+  })
+
+  it('rejects an empty explanation with 400, before checking access', async () => {
+    const insertValues = vi.fn()
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
+      insert: () => ({ values: insertValues }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request(
+      '/organizations/org-1/contexts/ctx-1/graph-generations/hash-1/node-explanations/node-a',
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ explanation: '   ' }),
+      },
+      {},
+    )
+
+    expect(res.status).toBe(400)
+    expect(insertValues).not.toHaveBeenCalled()
+  })
+
+  it('upserts atomically via onConflictDoUpdate scoped to contextId/graphHash/nodeId, without touching other rows', async () => {
+    const ctx = { id: 'ctx-1', repositoryId: 'repo-1' }
+    const repo = { id: 'repo-1', projectId: 'project-1' }
+    const project = { id: 'project-1', organizationId: 'org-1' }
+    const membership = { id: 'membership-1', organizationId: 'org-1', userId: 'user-1', role: 'member' }
+    const grant = { id: 'grant-1', membershipId: 'membership-1', projectId: 'project-1', level: 'write' }
+    const row = {
+      id: 'exp-1',
+      contextId: 'ctx-1',
+      graphHash: 'hash-1',
+      nodeId: 'node-a',
+      explanation: 'Updated prose',
+      createdAt: 1000,
+      updatedAt: 2000,
+    }
+    let call = 0
+    const results = [[ctx], [repo], [project], [membership], [grant]]
+    const onConflictDoUpdate = vi.fn(() => ({ returning: () => Promise.resolve([row]) }))
+    const insertValues = vi.fn(() => ({ onConflictDoUpdate }))
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => Promise.resolve(results[call++]) }) }),
+      insert: () => ({ values: insertValues }),
+    } as unknown as ReturnType<typeof getDb>)
+
+    const app = appWithAuth()
+    const res = await app.request(
+      '/organizations/org-1/contexts/ctx-1/graph-generations/hash-1/node-explanations/node-a',
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ explanation: 'Updated prose' }),
+      },
+      {},
+    )
+
+    expect(res.status).toBe(200)
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ contextId: 'ctx-1', graphHash: 'hash-1', nodeId: 'node-a' }),
+    )
+    expect(onConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: [
+          schema.graphNodeExplanations.contextId,
+          schema.graphNodeExplanations.graphHash,
+          schema.graphNodeExplanations.nodeId,
+        ],
+        set: expect.objectContaining({ explanation: 'Updated prose' }),
+      }),
+    )
+    const body = await res.json()
+    expect(body).toEqual({ nodeId: 'node-a', explanation: 'Updated prose', createdAt: 1000, updatedAt: 2000 })
+  })
+})
