@@ -321,6 +321,30 @@ export const graphGenerations = sqliteTable(
   }),
 )
 
+export const graphNodeExplanations = sqliteTable(
+  'graph_node_explanations',
+  {
+    id: text('id').primaryKey(),
+    contextId: text('context_id')
+      .notNull()
+      .references(() => contexts.id, { onDelete: 'cascade' }),
+    graphHash: text('graph_hash').notNull(),
+    nodeId: text('node_id').notNull(),
+    explanation: text('explanation').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => ({
+    contextGraphHashNodeUnique: uniqueIndex(
+      'graph_node_explanations_context_graph_hash_node_unique',
+    ).on(table.contextId, table.graphHash, table.nodeId),
+    contextGraphHashIdx: index('graph_node_explanations_context_graph_hash_idx').on(
+      table.contextId,
+      table.graphHash,
+    ),
+  }),
+)
+
 // ── Schema Export ───────────────────────────────────────────────────
 
 export const schema = {
@@ -341,4 +365,5 @@ export const schema = {
   mermaidDiagrams,
   entityLinks,
   graphGenerations,
+  graphNodeExplanations,
 }
