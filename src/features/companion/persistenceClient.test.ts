@@ -3,11 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   fetchGraphGenerations,
+  fetchNodeExplanations,
   graphGenerationKeys,
+  graphNodeExplanationKeys,
   patchGraphGeneration,
   putGraphGeneration,
+  putNodeExplanation,
 } from "./persistenceClient"
-import type { GraphGenerationDTO } from "./persistenceTypes"
+import type { GraphGenerationDTO, NodeExplanationDTO } from "./persistenceTypes"
 
 const ORG_ID = "org-1"
 const CONTEXT_ID = "ctx-1"
@@ -105,5 +108,67 @@ describe("patchGraphGeneration", () => {
     await expect(
       patchGraphGeneration(ORG_ID, CONTEXT_ID, GRAPH_HASH, { draftText: "edited" }),
     ).rejects.toThrow("HTTP 404")
+  })
+})
+
+const nodeExplanation: NodeExplanationDTO = {
+  nodeId: "node-a",
+  explanation: "This node represents...",
+  createdAt: 1000,
+  updatedAt: 1000,
+}
+
+describe("graphNodeExplanationKeys", () => {
+  it("scopes the list key by contextId and graphHash", () => {
+    expect(graphNodeExplanationKeys.list(CONTEXT_ID, GRAPH_HASH)).toEqual([
+      "graphNodeExplanations",
+      "list",
+      CONTEXT_ID,
+      GRAPH_HASH,
+    ])
+  })
+})
+
+describe("fetchNodeExplanations", () => {
+  it("GETs the node-explanations list route for a graphHash", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse([nodeExplanation]))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    const result = await fetchNodeExplanations(ORG_ID, CONTEXT_ID, GRAPH_HASH)
+
+    expect(result).toEqual([nodeExplanation])
+    expect(fetchSpy).toHaveBeenCalledWith(
+      `/api/v1/organizations/${ORG_ID}/contexts/${CONTEXT_ID}/graph-generations/${GRAPH_HASH}/node-explanations`,
+      undefined,
+    )
+  })
+
+  it("throws on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })))
+    await expect(fetchNodeExplanations(ORG_ID, CONTEXT_ID, GRAPH_HASH)).rejects.toThrow("HTTP 500")
+  })
+})
+
+describe("putNodeExplanation", () => {
+  it("PUTs the explanation to the node's route", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(nodeExplanation))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    const result = await putNodeExplanation(ORG_ID, CONTEXT_ID, GRAPH_HASH, "node-a", nodeExplanation.explanation)
+
+    expect(result).toEqual(nodeExplanation)
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      `/api/v1/organizations/${ORG_ID}/contexts/${CONTEXT_ID}/graph-generations/${GRAPH_HASH}/node-explanations/node-a`,
+    )
+    expect(init.method).toBe("PUT")
+    expect(JSON.parse(String(init.body))).toEqual({ explanation: nodeExplanation.explanation })
+  })
+
+  it("throws on a non-ok response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 403 })))
+    await expect(
+      putNodeExplanation(ORG_ID, CONTEXT_ID, GRAPH_HASH, "node-a", "prose"),
+    ).rejects.toThrow("HTTP 403")
   })
 })

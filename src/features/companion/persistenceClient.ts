@@ -1,7 +1,13 @@
-// Fetch functions + TanStack Query key helpers for the `graph_generations` persistence API
-// (TBR-117), mirroring `src/features/files/hooks.ts`'s `fetchJson`/`orgBase` pattern.
+// Fetch functions + TanStack Query key helpers for the `graph_generations` and
+// `graph_node_explanations` persistence API (TBR-117), mirroring `src/features/files/hooks.ts`'s
+// `fetchJson`/`orgBase` pattern.
 
-import type { GraphGenerationDTO, PatchGraphGenerationBody, PutGraphGenerationBody } from './persistenceTypes'
+import type {
+  GraphGenerationDTO,
+  NodeExplanationDTO,
+  PatchGraphGenerationBody,
+  PutGraphGenerationBody,
+} from './persistenceTypes'
 
 function orgBase(organizationId: string) {
   return `/api/v1/organizations/${organizationId}`
@@ -43,5 +49,30 @@ export function patchGraphGeneration(
   return fetchJson<GraphGenerationDTO>(
     `${orgBase(organizationId)}/contexts/${contextId}/graph-generations/${graphHash}`,
     { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+  )
+}
+
+export const graphNodeExplanationKeys = {
+  all: ['graphNodeExplanations'] as const,
+  list: (contextId: string, graphHash: string) =>
+    [...graphNodeExplanationKeys.all, 'list', contextId, graphHash] as const,
+}
+
+export function fetchNodeExplanations(organizationId: string, contextId: string, graphHash: string) {
+  return fetchJson<Array<NodeExplanationDTO>>(
+    `${orgBase(organizationId)}/contexts/${contextId}/graph-generations/${graphHash}/node-explanations`,
+  )
+}
+
+export function putNodeExplanation(
+  organizationId: string,
+  contextId: string,
+  graphHash: string,
+  nodeId: string,
+  explanation: string,
+) {
+  return fetchJson<NodeExplanationDTO>(
+    `${orgBase(organizationId)}/contexts/${contextId}/graph-generations/${graphHash}/node-explanations/${nodeId}`,
+    { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ explanation }) },
   )
 }
