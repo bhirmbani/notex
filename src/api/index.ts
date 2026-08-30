@@ -16,6 +16,7 @@ import { membershipsApi } from '@/features/memberships/api'
 import { grantsApi } from '@/features/grants/api'
 import { apiKeysApi } from '@/features/apikeys/api'
 import { expandApi } from '@/features/vocabulary-expansion/api'
+import { persistenceApi } from '@/features/companion/persistenceApi'
 
 export const api = new Hono<ApiAuthEnv>().basePath('/api/v1')
 
@@ -52,3 +53,4 @@ api.route('/', filesApi)
 api.route('/', notesApi)
 api.route('/', mermaidApi)
 api.route('/', mindmapApi)
+api.route('/', persistenceApi)
