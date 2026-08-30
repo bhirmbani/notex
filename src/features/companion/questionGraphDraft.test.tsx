@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, renderHook, waitFor } from "@testing-library/react"
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
 
 import { DEFAULT_DRAFT_NAME, useQuestionGraphDraft } from "./questionGraphDraft"
 import * as connectionState from "./connectionState"
 import * as client from "./client"
 import type { ReactNode } from "react"
+import type { GraphGenerationDTO } from "./persistenceTypes"
 import type { ProviderConfig } from "@/features/provider-keys/types"
 import type { DraftExpansionOutcome } from "@/features/vocabulary-expansion/expandForDraft"
 import type { DraftSynthesisOutcome } from "@/features/draft-synthesis/synthesizeForDraft"
@@ -14,7 +15,133 @@ import * as providerKeyStorage from "@/features/provider-keys/storage"
 import * as expandForDraftModule from "@/features/vocabulary-expansion/expandForDraft"
 import * as synthesizeForDraftModule from "@/features/draft-synthesis/synthesizeForDraft"
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.resolve(body),
+  } as Response
+}
+
+/**
+ * A minimal in-memory stand-in for the `graph_generations`/`files` persistence endpoints
+ * (TBR-117), installed on `global.fetch` fresh before every test. `useQuestionGraphDraft` is
+ * cache-first (TBR-118) — its rendered `result` is sourced from a GET against this backend, not
+ * from a companion result directly — so any test that checks `.result` needs it wired up.
+ */
+function installBackend() {
+  let generations: Array<GraphGenerationDTO> = []
+  let saveFileImpl: () => Response | Promise<Response> = () => jsonResponse({ id: "f1" })
+  let deferredSave: { promise: Promise<Response>; resolve: (r: Response) => void } | null = null
+  let deferredPut: { promise: Promise<Response>; resolve: (r: Response) => void } | null = null
+  let nextPatchFails = false
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const method = init?.method ?? "GET"
+
+    if (url.endsWith("/graph-generations") && method === "GET") {
+      return jsonResponse(generations)
+    }
+
+    const genMatch = url.match(/\/graph-generations\/([^/]+)$/)
+    if (genMatch && method === "PUT") {
+      const graphHash = decodeURIComponent(genMatch[1] ?? "")
+      const body = JSON.parse(String(init?.body)) as Omit<
+        GraphGenerationDTO,
+        "graphHash" | "createdAt" | "updatedAt"
+      >
+      const existing = generations.find((g) => g.graphHash === graphHash)
+      const now = Date.now()
+      const row: GraphGenerationDTO = {
+        graphHash,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+        ...body,
+      }
+      // The server-side write always lands immediately — only the HTTP response back to the
+      // client is (optionally) held up, modelling the round-trip window `activeGraphHash`
+      // guards against.
+      generations = [row, ...generations.filter((g) => g.graphHash !== graphHash)]
+      if (deferredPut) {
+        const d = deferredPut
+        deferredPut = null
+        return d.promise
+      }
+      return jsonResponse(row)
+    }
+    if (genMatch && method === "PATCH") {
+      if (nextPatchFails) {
+        nextPatchFails = false
+        return jsonResponse({ error: { code: "INTERNAL" } }, 500)
+      }
+      const graphHash = decodeURIComponent(genMatch[1] ?? "")
+      const existing = generations.find((g) => g.graphHash === graphHash)
+      if (!existing) return jsonResponse({ error: { code: "NOT_FOUND" } }, 404)
+      const body = JSON.parse(String(init?.body)) as { draftText?: string; draftName?: string }
+      const row = { ...existing, ...body, updatedAt: Date.now() }
+      generations = generations.map((g) => (g.graphHash === graphHash ? row : g))
+      return jsonResponse(row)
+    }
+
+    if (url.endsWith("/files") && method === "POST") {
+      if (deferredSave) {
+        const d = deferredSave
+        deferredSave = null
+        return d.promise
+      }
+      return saveFileImpl()
+    }
+
+    throw new Error(`Unhandled fetch in test: ${method} ${url}`)
+  })
+  vi.spyOn(global, "fetch").mockImplementation(fetchMock as unknown as typeof fetch)
+
+  return {
+    fetchMock,
+    seed(rows: Array<GraphGenerationDTO>) {
+      generations = rows
+    },
+    get generations() {
+      return generations
+    },
+    setSaveFileImpl(impl: () => Response | Promise<Response>) {
+      saveFileImpl = impl
+    },
+    deferNextSave() {
+      let resolve!: (r: Response) => void
+      const promise = new Promise<Response>((res) => {
+        resolve = res
+      })
+      deferredSave = { promise, resolve }
+      return { resolve }
+    },
+    deferNextPut() {
+      let resolve!: (r: Response) => void
+      const promise = new Promise<Response>((res) => {
+        resolve = res
+      })
+      deferredPut = { promise, resolve }
+      return { resolve }
+    },
+    failNextPatch() {
+      nextPatchFails = true
+    },
+  }
+}
+
+let backend: ReturnType<typeof installBackend>
+
+beforeEach(() => {
+  backend = installBackend()
+})
+
 afterEach(() => {
+  // Unmounts every hook rendered in the test, running each effect's own cleanup (notably the
+  // autosave effect's `clearTimeout`) — without this, a real 1s autosave timer left pending by
+  // one test can fire mid-run of a later test and hit that test's freshly (re)installed fetch
+  // mock, corrupting its call count.
+  cleanup()
   vi.restoreAllMocks()
   localStorage.clear()
 })
@@ -37,6 +164,29 @@ function connectAsConnected() {
     pairing: PAIRING,
     status: STATUS,
   })
+}
+
+function seedGeneration(overrides: Partial<GraphGenerationDTO> = {}): GraphGenerationDTO {
+  return {
+    graphHash: "hash-a",
+    builtAt: "2026-08-29T00:00:00.000Z",
+    headSha: null,
+    nodeCount: 1,
+    edgeCount: 0,
+    communityCount: 1,
+    questionAtGeneration: "how does auth work?",
+    subgraph: { nodes: [], edges: [], seeds: [] },
+    context: { markdown: "persisted evidence", sources: [] },
+    footer: null,
+    lowConfidence: null,
+    draftText: "persisted draft",
+    draftName: "Graph draft",
+    expansionBanner: null,
+    synthesisBanner: null,
+    createdAt: 1000,
+    updatedAt: 1000,
+    ...overrides,
+  }
 }
 
 describe("useQuestionGraphDraft", () => {
@@ -209,10 +359,6 @@ describe("useQuestionGraphDraft", () => {
       context: { markdown: "evidence body", sources: [] },
       footer: "\n---\nDrafted from the code graph on 2026-08-28.",
     })
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ id: "f1" }),
-    } as Response)
 
     const { result } = renderHook(
       () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
@@ -228,7 +374,7 @@ describe("useQuestionGraphDraft", () => {
       await result.current.save()
     })
 
-    expect(fetchSpy).toHaveBeenCalledWith(
+    expect(backend.fetchMock).toHaveBeenCalledWith(
       "/api/v1/organizations/org-1/contexts/ctx-1/files",
       expect.objectContaining({
         method: "POST",
@@ -258,11 +404,7 @@ describe("useQuestionGraphDraft", () => {
         footer: "",
       })
 
-    let resolveFetch!: (value: Response) => void
-    const fetchPromise = new Promise<Response>((resolve) => {
-      resolveFetch = resolve
-    })
-    vi.spyOn(global, "fetch").mockReturnValue(fetchPromise)
+    const { resolve: resolveFetch } = backend.deferNextSave()
 
     const { result } = renderHook(
       () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
@@ -281,7 +423,7 @@ describe("useQuestionGraphDraft", () => {
     await waitFor(() => expect(result.current.draftText).toBe("newer evidence body"))
 
     await act(async () => {
-      resolveFetch({ ok: true, json: () => Promise.resolve({ id: "f1" }) } as Response)
+      resolveFetch(jsonResponse({ id: "f1" }))
       await savePromise
     })
 
@@ -296,10 +438,6 @@ describe("useQuestionGraphDraft", () => {
       context: { markdown: "evidence body", sources: [] },
       footer: "",
     })
-    vi.spyOn(global, "fetch").mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ id: "f1" }),
-    } as Response)
 
     const { result } = renderHook(
       () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
@@ -316,6 +454,288 @@ describe("useQuestionGraphDraft", () => {
 
     act(() => result.current.setDraftText("evidence body, more edits"))
     expect(result.current.saved).toBe(false)
+  })
+
+  // TBR-118, TBR-124: cache-first load, regenerate resetting the version selector, a version
+  // switch cancelling a stale pending autosave, and a failed autosave surfacing the indicator.
+  describe("cache-first load, regenerate, autosave, version switching", () => {
+    it("renders the last persisted generation on mount with no companion call", async () => {
+      connectAsConnected()
+      backend.seed([seedGeneration()])
+      const querySpy = vi.spyOn(client, "query")
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+
+      await waitFor(() =>
+        expect(result.current.result?.context?.markdown).toBe("persisted evidence")
+      )
+      expect(result.current.draftText).toBe("persisted draft")
+      expect(result.current.hasGeneration).toBe(true)
+      expect(querySpy).not.toHaveBeenCalled()
+    })
+
+    it("renders the persisted generation even with the companion disconnected — only Regenerate is unavailable", async () => {
+      vi.spyOn(connectionState, "resolveConnectionState").mockResolvedValue({ state: "unpaired" })
+      backend.seed([seedGeneration()])
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+
+      await waitFor(() => expect(result.current.hasGeneration).toBe(true))
+      expect(result.current.result?.context?.markdown).toBe("persisted evidence")
+      expect(result.current.canDraft).toBe(false)
+    })
+
+    it("resets selectedGraphHash to null (follow latest) when regenerate is called", async () => {
+      connectAsConnected()
+      backend.seed([
+        seedGeneration({ graphHash: "hash-a", builtAt: "2026-08-29T00:00:00.000Z" }),
+        seedGeneration({ graphHash: "hash-b", builtAt: "2026-08-20T00:00:00.000Z" }),
+      ])
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: {} as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+        context: { markdown: "fresh evidence", sources: [] },
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.hasGeneration).toBe(true))
+
+      act(() => result.current.selectVersion("hash-b"))
+      expect(result.current.selectedGraphHash).toBe("hash-b")
+
+      act(() => result.current.run())
+      expect(result.current.selectedGraphHash).toBeNull()
+    })
+
+    it("cancels a pending autosave from a previous version on a version switch — it must never write into the wrong row", async () => {
+      connectAsConnected()
+      backend.seed([
+        seedGeneration({ graphHash: "hash-a", draftText: "version a draft" }),
+        seedGeneration({
+          graphHash: "hash-b",
+          draftText: "version b draft",
+          builtAt: "2026-08-20T00:00:00.000Z",
+        }),
+      ])
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.draftText).toBe("version a draft"))
+
+      act(() => result.current.setDraftText("edited on version a"))
+      act(() => result.current.selectVersion("hash-b"))
+      await waitFor(() => expect(result.current.draftText).toBe("version b draft"))
+
+      // Give version a's 1s autosave debounce plenty of time to have fired if the switch above
+      // hadn't cancelled it.
+      await new Promise((resolve) => setTimeout(resolve, 1300))
+
+      const patchCalls = backend.fetchMock.mock.calls.filter(
+        ([, init]) => (init)?.method === "PATCH"
+      )
+      expect(patchCalls).toHaveLength(0)
+      expect(result.current.draftText).toBe("version b draft")
+    }, 10000)
+
+    it("sets autosaveState to 'failed' when the autosave PATCH fails, without discarding the edit", async () => {
+      connectAsConnected()
+      backend.seed([seedGeneration()])
+      backend.failNextPatch()
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.draftText).toBe("persisted draft"))
+
+      act(() => result.current.setDraftText("an edit that fails to autosave"))
+
+      // Real time, matching the 1s autosave debounce — see the version-switch test above for
+      // why `waitFor`'s own polling timeout isn't used to race against it.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      })
+
+      expect(result.current.autosaveState).toBe("failed")
+      expect(result.current.draftText).toBe("an edit that fails to autosave")
+    }, 10000)
+
+    it("autosaves a Draft edit and clears to 'saved'", async () => {
+      connectAsConnected()
+      backend.seed([seedGeneration()])
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.draftText).toBe("persisted draft"))
+
+      act(() => result.current.setDraftText("an autosaved edit"))
+      expect(result.current.autosaveState).toBe("pending")
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      })
+
+      expect(result.current.autosaveState).toBe("saved")
+      expect(backend.generations.find((g) => g.graphHash === "hash-a")?.draftText).toBe(
+        "an autosaved edit"
+      )
+    }, 10000)
+
+    it("resets autosaveState back to idle on a version switch — a stale 'failed'/'saved' must not describe the newly shown version", async () => {
+      connectAsConnected()
+      backend.seed([
+        seedGeneration({ graphHash: "hash-a", draftText: "version a draft" }),
+        seedGeneration({
+          graphHash: "hash-b",
+          draftText: "version b draft",
+          builtAt: "2026-08-20T00:00:00.000Z",
+        }),
+      ])
+      backend.failNextPatch()
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.draftText).toBe("version a draft"))
+
+      act(() => result.current.setDraftText("an edit that will fail to autosave"))
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      })
+      expect(result.current.autosaveState).toBe("failed")
+
+      act(() => result.current.selectVersion("hash-b"))
+      await waitFor(() => expect(result.current.draftText).toBe("version b draft"))
+      expect(result.current.autosaveState).toBe("idle")
+    }, 10000)
+
+    it("PATCHes the version a regenerate just produced, not the still-shown previous one, when an edit lands before the regenerate's own persist round-trips", async () => {
+      connectAsConnected()
+      backend.seed([seedGeneration({ graphHash: "hash-old", draftText: "old version draft" })])
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: { graphHash: "hash-new", builtAt: "2026-08-30T00:00:00.000Z" } as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+        context: { markdown: "fresh evidence", sources: [] },
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.draftText).toBe("old version draft"))
+
+      // Hold up the regenerate's own PUT response — `shown` (still `hash-old`) won't catch up
+      // to `hash-new` until it resolves, but `draftText` already has.
+      const { resolve: resolvePut } = backend.deferNextPut()
+      act(() => result.current.run())
+      await waitFor(() => expect(result.current.draftText).toBe("fresh evidence"))
+
+      // The user edits while `shown` is still the old version.
+      act(() => result.current.setDraftText("edited before the PUT round-tripped"))
+
+      resolvePut(jsonResponse({}))
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      })
+
+      const patchCalls = backend.fetchMock.mock.calls.filter(
+        ([, init]) => (init)?.method === "PATCH"
+      )
+      expect(patchCalls).toHaveLength(1)
+      expect(String(patchCalls[0]?.[0])).toContain("/graph-generations/hash-new")
+      expect(
+        backend.generations.find((g) => g.graphHash === "hash-old")?.draftText
+      ).toBe("old version draft")
+      expect(
+        backend.generations.find((g) => g.graphHash === "hash-new")?.draftText
+      ).toBe("edited before the PUT round-tripped")
+    }, 10000)
+
+    it("carries the traversal-cap ('truncated') notice from a fresh regenerate into the rendered result", async () => {
+      connectAsConnected()
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: { graphHash: "hash-a", builtAt: "2026-08-30T00:00:00.000Z" } as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+        context: { markdown: "evidence", sources: [] },
+        truncated: { reason: "maxNodes", omittedCount: 7 },
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.canDraft).toBe(true))
+
+      act(() => result.current.run())
+
+      await waitFor(() => expect(result.current.result?.truncated).toEqual({
+        reason: "maxNodes",
+        omittedCount: 7,
+      }))
+    })
+
+    it("clears a stale truncated notice on a version switch to a generation it wasn't captured for", async () => {
+      connectAsConnected()
+      backend.seed([
+        seedGeneration({ graphHash: "hash-a" }),
+        seedGeneration({ graphHash: "hash-b", builtAt: "2026-08-20T00:00:00.000Z" }),
+      ])
+      vi.spyOn(client, "query").mockResolvedValue({
+        graph: { graphHash: "hash-a", builtAt: "2026-08-30T00:00:00.000Z" } as never,
+        subgraph: { nodes: [], edges: [], seeds: [] },
+        context: { markdown: "evidence", sources: [] },
+        truncated: { reason: "maxNodes", omittedCount: 3 },
+      })
+
+      const { result } = renderHook(
+        () => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", "ctx-1"),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.hasGeneration).toBe(true))
+
+      act(() => result.current.run())
+      await waitFor(() => expect(result.current.result?.truncated).toBeTruthy())
+
+      act(() => result.current.selectVersion("hash-b"))
+      await waitFor(() => expect(result.current.draftText).toBe("persisted draft"))
+      expect(result.current.result?.truncated).toBeUndefined()
+    })
+
+    it("resets every per-Question field when contextId changes — the route reuses this hook instance across Questions", async () => {
+      connectAsConnected()
+      backend.seed([seedGeneration({ graphHash: "hash-a", draftText: "question A's draft" })])
+
+      const { result, rerender } = renderHook(
+        ({ ctxId }) => useQuestionGraphDraft("repo-1", "how does auth work?", "org-1", ctxId),
+        { wrapper, initialProps: { ctxId: "ctx-1" } }
+      )
+      await waitFor(() => expect(result.current.draftText).toBe("question A's draft"))
+      act(() => result.current.selectVersion("hash-a"))
+
+      // A second Question, with nothing persisted yet — same hook instance, new contextId, the
+      // way TanStack Router reuses a component across a param-only navigation.
+      backend.seed([])
+      rerender({ ctxId: "ctx-2" })
+
+      expect(result.current.draftText).toBe("")
+      expect(result.current.selectedGraphHash).toBeNull()
+      expect(result.current.hasGeneration).toBe(false)
+      expect(result.current.result).toBeUndefined()
+    })
   })
 
   // docs/specs/vocabulary-expansion.md §1, §5 — TBR-98.
