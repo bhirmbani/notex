@@ -11,50 +11,13 @@ import { getRequest } from '@tanstack/react-start/server'
 import { useState } from 'react'
 import { RiCpuLine, RiKey2Line } from '@remixicon/react'
 
-import type { AuthBindings, createAuth } from '@/features/auth/lib/server'
-import type { DashboardSession } from '@/features/auth/lib/validation'
+import type { AuthBindings } from '@/features/auth/lib/server'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Sidebar } from '@/components/Sidebar'
 import { OrgSwitcher } from '@/components/OrgSwitcher'
-import { isBetterAuthApiError } from '@/api/middleware/auth'
 import { signOutCurrentSession } from '@/features/auth/lib/client'
-import { createAuth as createAuthInstance } from '@/features/auth/lib/server'
-import { isDashboardSession } from '@/features/auth/lib/validation'
-
-// The apiKey plugin throws (rather than returning null) when a request
-// carries an invalid/expired/revoked/rate-limited `x-api-key` header —
-// unlike a missing or malformed session cookie, which getSession resolves
-// to null. Treat it the same as "no session" here. better-auth's APIError
-// can be a different bundled class than one imported statically in this
-// file (Nitro splits `@/features/auth/lib/server` into its own chunk, each
-// with its own copy of 'better-auth'), so detect it by shape via
-// isBetterAuthApiError rather than by `instanceof`.
-export async function resolveDashboardSession(
-  auth: ReturnType<typeof createAuth>,
-  headers: Headers,
-): Promise<DashboardSession | null> {
-  let session: Awaited<ReturnType<typeof auth.api.getSession>>
-  try {
-    session = await auth.api.getSession({ headers })
-  } catch (error) {
-    if (!isBetterAuthApiError(error)) {
-      throw error
-    }
-    return null
-  }
-
-  if (!isDashboardSession(session)) {
-    return null
-  }
-
-  return {
-    user: {
-      id: session.user.id,
-      name: typeof session.user.name === 'string' ? session.user.name : undefined,
-      email: typeof session.user.email === 'string' ? session.user.email : undefined,
-    },
-  } satisfies DashboardSession
-}
+import { createAuth } from '@/features/auth/lib/server'
+import { resolveDashboardSession } from '@/features/auth/lib/resolveDashboardSession'
 
 const getDashboardSession = createServerFn({ method: 'GET' }).handler(async () => {
   const env = (globalThis as Record<string, unknown>).__env__ as
@@ -66,7 +29,7 @@ const getDashboardSession = createServerFn({ method: 'GET' }).handler(async () =
   }
 
   const request = getRequest()
-  const auth = createAuthInstance(env as AuthBindings)
+  const auth = createAuth(env as AuthBindings)
 
   return resolveDashboardSession(auth, request.headers)
 })
