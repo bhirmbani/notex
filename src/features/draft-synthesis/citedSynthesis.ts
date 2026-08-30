@@ -43,10 +43,13 @@ export function sourceKey(source: CitableSource): string {
 // prompt only instructs the model, it doesn't constrain its output, so validation must still
 // catch a citation the model embeds in descriptive parenthetical text (e.g.
 // "(see api/auth.ts:L18)") or packs alongside another ("(api/a.ts:L10, api/b.ts:L20)"). The path
-// charset (word chars, `.`, `/`, `-`) stops the match at the surrounding punctuation — comma,
+// charset (word chars, `.`, `/`, `-`, `$`) stops the match at the surrounding punctuation — comma,
 // space, closing paren, or a sentence's trailing period — so none of that leaks into the captured
-// source key.
-const CITATION_PATTERN = /([\w./-]+:L\d+)/g
+// source key. `$` is included because TanStack Router names dynamic-segment directories/files
+// with a literal `$` (`o/$organizationId/...`) — omitting it truncated any citation through one
+// of this app's own route files at the last `$`, silently mismatching a correct citation against
+// the known source list (TBR-128).
+const CITATION_PATTERN = /([\w./$-]+:L\d+)/g
 
 function citedSources(prose: string): Array<string> {
   return [...prose.matchAll(CITATION_PATTERN)]
