@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -286,6 +287,40 @@ export const entityLinks = sqliteTable('entity_links', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
+export const graphGenerations = sqliteTable(
+  'graph_generations',
+  {
+    id: text('id').primaryKey(),
+    contextId: text('context_id')
+      .notNull()
+      .references(() => contexts.id, { onDelete: 'cascade' }),
+    graphHash: text('graph_hash').notNull(),
+    builtAt: text('built_at').notNull(),
+    headSha: text('head_sha'),
+    nodeCount: integer('node_count').notNull(),
+    edgeCount: integer('edge_count').notNull(),
+    communityCount: integer('community_count').notNull(),
+    questionAtGeneration: text('question_at_generation').notNull(),
+    subgraph: text('subgraph').notNull(), // JSON: QueryResult['subgraph']
+    context: text('context'), // JSON: QueryResult['context'] | null
+    footer: text('footer'),
+    lowConfidenceTopScore: real('low_confidence_top_score'),
+    draftText: text('draft_text').notNull().default(''),
+    draftName: text('draft_name').notNull().default('Graph draft'),
+    expansionBanner: text('expansion_banner', { enum: ['noProvider', 'expansionFailed'] }),
+    synthesisBanner: text('synthesis_banner', { enum: ['synthesisFailed'] }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => ({
+    contextGraphHashUnique: uniqueIndex('graph_generations_context_graph_hash_unique').on(
+      table.contextId,
+      table.graphHash,
+    ),
+    contextIdIdx: index('graph_generations_context_id_idx').on(table.contextId),
+  }),
+)
+
 // ── Schema Export ───────────────────────────────────────────────────
 
 export const schema = {
@@ -305,4 +340,5 @@ export const schema = {
   notes,
   mermaidDiagrams,
   entityLinks,
+  graphGenerations,
 }
