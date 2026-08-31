@@ -12,6 +12,7 @@ import { rankFiles } from "./rankFiles"
 import { groupEvidence } from "./groupEvidence"
 import { computeCanvasLayout } from "./canvasLayout"
 import { communityColor } from "./communityColor"
+import { useCopy } from "./useCopy"
 import type { KeyboardEvent, ReactNode } from "react"
 import type { AutosaveState, ExpansionBanner, GraphVariant, SynthesisBanner } from "./questionGraphDraft"
 import type { GraphGenerationDTO } from "./persistenceTypes"
@@ -105,6 +106,24 @@ function formatFailureReason(message: string): string {
   return message.replace(/\.+$/, "")
 }
 
+// Appended client-side only, for the "Copy with save instructions" action (TBR-131) —
+// buildContext/context.markdown (packages/companion/src/context.ts) stay evidence-only by design
+// ("fragments injected here fight [the agent's own system prompt]"); the plain "Copy for your
+// agent" button keeps its own "no instructions added" guarantee true by never calling this.
+function buildSaveInstructions(markdown: string): string {
+  return `${markdown}
+
+---
+
+## Instructions for your agent
+
+After answering the question above, save your answer as a Draft using the \`notex\` MCP server's \`notex_save_answer\` tool:
+- \`question\`: the exact question text from the "# " heading above
+- \`name\`: a short, distinct title for the answer (not a restatement of the question)
+- \`content\`: your drafted answer prose
+- \`sourceNodeIds\`: node ids returned by your own \`graph_search\`/\`graph_query\`/\`graph_node\`/\`graph_path\` tool calls in this session — ids only appearing in the evidence above were not returned by your own session and will be rejected, so verify or re-derive them yourself first.`
+}
+
 export function QuestionGraphPanel({
   result,
   generations,
@@ -137,8 +156,8 @@ export function QuestionGraphPanel({
   explainFailureMessages,
   onExplainNode,
 }: Props) {
-  const [copied, setCopied] = useState(false)
-  const [copyError, setCopyError] = useState(false)
+  const agentCopy = useCopy()
+  const instructionsCopy = useCopy()
 
   if (isPending && !result) {
     return <div className="mb-6 h-24 animate-pulse rounded-xl border bg-muted/30" />
@@ -159,15 +178,14 @@ export function QuestionGraphPanel({
   const scheme = getStoredEditorScheme()
   const builtDate = result.graph.builtAt.slice(0, 10)
 
-  const handleCopy = async () => {
+  const handleCopy = () => {
     if (!result.context) return
-    try {
-      await navigator.clipboard.writeText(result.context.markdown)
-      setCopied(true)
-      setCopyError(false)
-    } catch {
-      setCopyError(true)
-    }
+    void agentCopy.copy(result.context.markdown)
+  }
+
+  const handleCopyWithInstructions = () => {
+    if (!result.context) return
+    void instructionsCopy.copy(buildSaveInstructions(result.context.markdown))
   }
 
   return (
@@ -355,21 +373,44 @@ export function QuestionGraphPanel({
         </>
       )}
 
-      <div className="flex flex-col gap-2 border-t p-4">
-        <div className="flex items-center justify-between gap-4">
-          <Button size="sm" variant="outline" disabled={!result.context} onClick={handleCopy}>
-            {copied ? "Copied" : "Copy for your agent"}
-          </Button>
-          <p className="text-right text-[11px] text-muted-foreground">
-            Evidence only — no role, framing, or instructions added.
-          </p>
+      <div className="flex flex-col gap-3 border-t p-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-4">
+            <Button size="sm" variant="outline" disabled={!result.context} onClick={handleCopy}>
+              {agentCopy.copied ? "Copied" : "Copy for your agent"}
+            </Button>
+            <p className="text-right text-[11px] text-muted-foreground">
+              Evidence only — no role, framing, or instructions added.
+            </p>
+          </div>
+          {agentCopy.error && (
+            <p role="alert" className="text-xs text-destructive">
+              Could not copy to your clipboard. Try again, or check your browser&apos;s clipboard
+              permission.
+            </p>
+          )}
         </div>
-        {copyError && (
-          <p role="alert" className="text-xs text-destructive">
-            Could not copy to your clipboard. Try again, or check your browser&apos;s clipboard
-            permission.
-          </p>
-        )}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-4">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!result.context}
+              onClick={handleCopyWithInstructions}
+            >
+              {instructionsCopy.copied ? "Copied" : "Copy with save instructions"}
+            </Button>
+            <p className="text-right text-[11px] text-muted-foreground">
+              Evidence, plus instructions to save the agent&apos;s answer via notex MCP.
+            </p>
+          </div>
+          {instructionsCopy.error && (
+            <p role="alert" className="text-xs text-destructive">
+              Could not copy to your clipboard. Try again, or check your browser&apos;s clipboard
+              permission.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )
