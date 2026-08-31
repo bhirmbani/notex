@@ -22,6 +22,13 @@ prompt fires only from an explicit connect flow), or does it quietly violate one
 - `packages/companion/src/serve.ts` (server bootstrap — port, token load, origins, full file)
 - `packages/companion/src/link.ts` (full file — read to rule out conflation, see Finding 0 below)
 - `docs/specs/graph-companion.md` §2.1, §7, §8 (process boundary, deferred scope, known risks)
+- TBR-136 and TBR-132 (Linear) — TBR-132's "Standing decisions from the destination-naming grill"
+  section is **binding on every child ticket, including this one**, and pins down two facts the
+  ticket text alone doesn't: "True multi-instance concurrency: one companion process per checkout,
+  **each on its own port**" and "Discovery: a single always-on hub bound to the fixed port 7717;
+  per-checkout instances register with it as satellites. The browser never port-scans." These
+  settle the open architectural question flagged in an earlier draft of this research (see ADR-0004
+  finding below) rather than leaving it open.
 
 ## Finding 0 — `link.ts` is a different pairing mechanism, not in scope for this question
 
@@ -97,38 +104,46 @@ any device on your local network"), already admits the grant is origin-scoped an
 promise to "only talk to `127.0.0.1:7717`" (companion-api.md:456-457) is a **self-imposed** UI
 commitment, not something the browser enforces per-port. Given that:
 
-- **The hub model is a clean fit for ADR-0004's mechanism, conditional on one architectural fact
-  the ticket doesn't pin down: whether the browser's `fetch` target stays fixed at
-  `127.0.0.1:7717` for every satellite, with the hub proxying to satellites over some channel the
-  browser never touches.** If so, switching satellites requires no new LNA interaction because the
-  origin already holds a `granted` permission (companion-api.md §6, state row "connected") and the
-  fetch target never changes — nothing new is disclosed or consented to, so nothing new needs
-  disclosing. This is consistent with ADR-0004 as written.
-- **If instead "switching" ever means the browser fetches a *different* loopback port per
-  satellite** (e.g. each satellite keeps its own HTTP listener and the hub only brokers discovery/
-  auth, not traffic), two things break: companion-api.md §3.1's "No port scanning, ever" /ADR-0004's
-  own literal disclosure text "we only talk to `127.0.0.1:7717`" (companion-api.md:456-457) becomes
-  false the moment a second port is fetched — the browser *would* be talking to more than
-  `127.0.0.1:7717`, which is precisely the "look for and connect to any device" behavior the
-  disclosure screen was written to scope down, not expand. That is a direct break of ADR-0004's
-  explicit-disclosure clause, not merely a risk.
+TBR-132's binding standing decisions settle which shape applies: **"one companion process per
+checkout, each on its own port"** for concurrency, with **"a single always-on hub bound to the
+fixed port 7717"** used only for discovery/registration ("the browser never port-scans" — it asks
+the hub, which hands back the satellite's actual port; it never guesses). That means the browser's
+op traffic (`search`/`query`/`path`/`node`/`browse`) does **not** stay pinned to `127.0.0.1:7717`
+after a switch — it ends up fetching whichever loopback port the selected satellite is bound to.
 
-Nothing in the ticket description forces the second (multi-port) shape, but nothing rules it out
-either — this is the one open architectural question that determines ADR-0004 compliance outright,
-and it should be pinned down (single fixed-port hub-as-proxy) before implementation, not discovered
-during it (echoing companion-api.md §7 Trap 1's warning, lines 467-471, that the LNA path is
-"structurally untestable in local dev" and can only be exercised against a deployed `https://`
-origin — a multi-port design would only reveal this break in that expensive, already-fragile test
-lane).
+Two separate questions follow from that, with two different answers:
+
+- **Does a new LNA *prompt* fire?** No. LNA is granted per requesting **origin**
+  (companion-api.md:455-457's own prompt wording, "…wants to look for and connect to **any
+  device**…", already concedes this), not per target port, and companion-api.md §6's state machine
+  has no state that re-triggers the permission query once `granted` — a satellite on a different
+  loopback port is still just "a device on your local network" the origin was already granted
+  blanket access to. **ADR-0004's procedural rule — the prompt fires only from the explicit
+  "Connect companion" flow — is not violated**: no new prompt fires anywhere in a satellite switch.
+- **Does the disclosure stay true?** No. ADR-0004's connect screen states, as a matter of decided
+  content, that "we only talk to `127.0.0.1:7717`" (companion-api.md:456-457) — that sentence is
+  literally what was decided, not incidental copy. Once a satellite switch routes real traffic to
+  `127.0.0.1:<satellite's own port>`, that sentence is false for every session after the first
+  switch. This is not "port scanning" in companion-api.md §3.1's sense (the browser is *told* the
+  port by the hub, never guesses it), so §3.1's ban is technically intact — but the specific,
+  decided disclosure text of ADR-0004 no longer describes what the browser does, and needs to be
+  rewritten (e.g. "we only talk to the local companion hub and the projects it hands off to")
+  before this ships.
 
 ## Verdict
 
-**ADR-0004: consistent, conditionally.** The hub model does not by itself require a second LNA
-prompt or violate the explicit-connect-flow rule, because the origin-scoped permission and the
-fixed hub port (127.0.0.1:7717) mean satellite switching can be, and should be designed to be, just
-routing behind an already-granted, unchanged fetch target. This holds only if the hub is
-architected as a strict single-port proxy that the browser exclusively talks to — a constraint the
-ticket doesn't yet state explicitly and should.
+**ADR-0004: consistent in behavior, inconsistent in stated content.** No new LNA prompt fires
+during a satellite switch (the origin-scoped `loopback-network` permission, once granted, already
+covers any loopback target, and companion-api.md §6's state machine has no re-prompt path off
+`granted`) — so the *procedural* rule ADR-0004 decided (prompt only from the explicit "Connect
+companion" flow, never elsewhere) is not broken. But per-checkout satellites each running on their
+own port (TBR-132's binding standing decision) means the browser ends up fetching loopback ports
+other than 7717 once switching is in play, which makes the ADR's own decided disclosure sentence —
+"we only talk to `127.0.0.1:7717`" (companion-api.md:456-457) — false. That sentence was the
+*content* of the informed-consent screen ADR-0004 exists to gate; shipping the hub model without
+updating it means the consent the user gave was for a narrower claim than what the shipped system
+does. This needs a copy fix before the hub model ships, even though no code-level ADR-0004 rule
+(prompt timing, permission-query-before-fetch ordering) is technically broken.
 
 **ADR-0003: inconsistent as literally scoped.** The token-custody clause (Notex-the-server holds
 nothing) and the per-machine pairing granularity clause both survive untouched. The clause that
@@ -161,7 +176,9 @@ requirement.
    "the permission flow is entirely unvalidated" (lines 191-195) and that a denial is sticky and not
    self-healing — a hub that broadens what a single grant reaches raises the cost of ever needing to
    claw that back.
-3. **The single open architecture question governs everything above.** Whether satellites are
-   reached exclusively through the hub's fixed port, or ever get their own directly-fetched ports,
-   determines both the ADR-0004 verdict and the shape of the token-scoping fix for Finding 1. This
-   should be settled explicitly in TBR-132's design, not left implicit.
+3. **The ADR-0004 disclosure copy is now a known, concrete gap, not a hypothetical.** Since
+   TBR-132's standing decisions confirm satellites each run on their own port, the "we only talk to
+   `127.0.0.1:7717`" disclosure sentence needs to be rewritten as part of implementing the hub
+   model — this is a small, mechanical fix, but it's binding ADR content, not incidental UI copy,
+   so it should go through the same rigor (a short ADR-0004 addendum or amendment) rather than being
+   patched silently in a PR description.
