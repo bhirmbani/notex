@@ -35,6 +35,7 @@ const DEFAULT_HEARTBEAT_MS = 15_000
 const DEFAULT_PING_RETRIES = 2
 const DEFAULT_PING_RETRY_DELAY_MS = 75
 const DEFAULT_PING_TIMEOUT_MS = 500
+const DEFAULT_DEREGISTER_TIMEOUT_MS = 2000
 
 export type ServeOptions = {
   /** Absolute path of the checkout to serve — where graphify-out/graph.json and .notex/ live. */
@@ -64,6 +65,10 @@ export type ServeOptions = {
   /** Deadline for a single `/v1/ping` attempt against the port's occupant. Default 500ms —
    * covers a slow-but-real hub without hanging forever on a non-HTTP occupant. */
   pingTimeoutMs?: number
+  /** Deadline for the deregister call a clean shutdown makes to the hub. Default 2000ms — an
+   * unresponsive or crashed hub must never be the reason `notex-companion serve` can't exit on
+   * its own SIGINT/SIGTERM. */
+  deregisterTimeoutMs?: number
 }
 
 type BaseHandle = {
@@ -131,14 +136,28 @@ function linkFor(checkoutPath: string): InstanceLink {
  * (`EADDRINUSE`) never calls `buildHandler` at all, so those costs are paid exactly once, by
  * whichever process actually becomes the hub, not by every process that merely tries.
  */
-async function bindWithHandler(
+/** Exported purely so its post-bind-failure cleanup is directly unit-testable, the same reason
+ * cli.ts exports `parseServeArgs` — `startHub`/`startStandalone`/`startSatellite` are its only
+ * real callers. */
+export async function bindWithHandler(
   port: number,
   buildHandler: () => FetchHandler,
 ): Promise<{ ok: true; server: MinimalServer } | { ok: false }> {
   const handlerRef = { current: notReadyHandler }
   const bind = await tryStartServer({ hostname: "127.0.0.1", port, fetch: (req) => handlerRef.current(req) })
   if (!bind.ok) return { ok: false }
-  handlerRef.current = buildHandler()
+
+  try {
+    handlerRef.current = buildHandler()
+  } catch (err) {
+    // The bind already succeeded — the listening socket must not outlive the handler that was
+    // supposed to serve it, or it leaks for the life of the process with nobody left holding a
+    // reference to stop it (same hazard `startSatellite` already guards around its own
+    // post-bind `registerWithHub` failure).
+    bind.server.stop(true)
+    throw err
+  }
+
   return { ok: true, server: bind.server }
 }
 
@@ -238,16 +257,30 @@ function startHeartbeatLoop(hubBaseUrl: string, fetchImpl: typeof fetch, instanc
   return () => clearInterval(timer)
 }
 
-/** Same reasoning as `registerWithHub`: a caller of `deregister()` (e.g. the CLI's SIGINT
+/**
+ * Same reasoning as `registerWithHub`: a caller of `deregister()` (e.g. the CLI's SIGINT
  * handler) is the one deciding whether a failed deregister is worth acting on — swallowing it
- * silently here would hide that the hub still thinks this satellite is live. */
-async function deregisterFromHub(hubBaseUrl: string, fetchImpl: typeof fetch, instanceId: string): Promise<void> {
-  const res = await fetchImpl(`${hubBaseUrl}/v1/deregister`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instanceId }),
-  })
-  if (!res.ok) throw new Error(`notex-companion: hub rejected deregister (HTTP ${res.status})`)
+ * silently here would hide that the hub still thinks this satellite is live.
+ *
+ * The timeout matters more here than on `registerWithHub`: this call runs from a shutdown path
+ * (SIGINT/SIGTERM), and an unresponsive or already-crashed hub must never be the reason the
+ * satellite process itself can't exit — mirrors `pingOnce`'s same deadline-over-hanging-forever
+ * reasoning.
+ */
+async function deregisterFromHub(hubBaseUrl: string, fetchImpl: typeof fetch, instanceId: string, timeoutMs: number): Promise<void> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetchImpl(`${hubBaseUrl}/v1/deregister`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instanceId }),
+      signal: controller.signal,
+    })
+    if (!res.ok) throw new Error(`notex-companion: hub rejected deregister (HTTP ${res.status})`)
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function startStandalone(
@@ -369,7 +402,7 @@ async function startSatellite(
     stopHeartbeat,
     deregister: async () => {
       stopHeartbeat()
-      await deregisterFromHub(hubBaseUrl, fetchImpl, instanceId)
+      await deregisterFromHub(hubBaseUrl, fetchImpl, instanceId, opts.deregisterTimeoutMs ?? DEFAULT_DEREGISTER_TIMEOUT_MS)
     },
   }
 }

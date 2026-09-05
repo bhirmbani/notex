@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { serve } from "../serve.ts"
+import { bindWithHandler, serve } from "../serve.ts"
+import { tryStartServer } from "../net.ts"
 import type { ServeHandle } from "../serve.ts"
 
 const FIXTURE_ROOT = resolve(import.meta.dir, "fixtures/sample-checkout")
@@ -202,6 +203,47 @@ describe("hub/satellite auto-promotion", () => {
     const after = await json(await fetch(`${handle.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${handle.token}` } }))
     expect(after.instances).toHaveLength(1)
     expect(after.instances[0].role).toBe("hub")
+  })
+
+  it("stops the already-bound server when buildHandler throws, rather than leaking the listening socket", async () => {
+    const port = 18960
+    await expect(bindWithHandler(port, () => { throw new Error("boom") })).rejects.toThrow("boom")
+
+    // If the failed attempt's server had leaked (never stopped), this second bind on the same
+    // port would fail with EADDRINUSE instead of succeeding.
+    const retry = await tryStartServer({ hostname: "127.0.0.1", port, fetch: async () => new Response(null) })
+    expect(retry.ok).toBe(true)
+    if (retry.ok) retry.server.stop(true)
+  })
+
+  it("deregister() doesn't hang forever when the hub is unresponsive", async () => {
+    handle = await serve({ checkoutPath, port: 18961, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+
+    const hangingFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/deregister")) {
+        // Never resolves on its own — respects abort like a real fetch would, same as any
+        // request against an unresponsive or crashed hub.
+        return new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))
+        })
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    secondHandle = await serve({
+      checkoutPath: extraCheckoutPath,
+      port: 18961,
+      hubBaseDir,
+      fetchImpl: hangingFetch,
+      deregisterTimeoutMs: 50,
+    })
+    assertRole(secondHandle, "satellite")
+
+    const start = Date.now()
+    await expect(secondHandle.deregister()).rejects.toThrow()
+    expect(Date.now() - start).toBeLessThan(1000)
   })
 
   it("rejects rather than silently claiming satellite status when the hub refuses registration", async () => {
