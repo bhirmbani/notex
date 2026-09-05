@@ -82,16 +82,19 @@ function isAddrInUse(err: unknown): boolean {
  * heartbeat" treatment, not an immediate re-election. Confirmed directly against both runtimes
  * `detectRuntime()` ever returns, no message-text fallback: Node's fetch (undici) wraps the
  * underlying `ECONNREFUSED` as a `TypeError`'s `.cause`; Bun's fetch instead sets `.code` directly
- * to its own `"ConnectionRefused"`, never populating `.cause`. A prior version of this also
- * matched `/ECONNREFUSED/` against `.message` as a belt-and-suspenders fallback — dropped because
- * it was dead weight for both actual runtimes (Bun's own message text never contains that word)
- * while still carrying the same misclassification risk `isAddrInUse`'s message match above
- * accepts for a different, lower-stakes reason (a losing bind attempt vs. an immediate handover
- * of the machine-level hub role).
+ * to its own `"ConnectionRefused"`, never populating `.cause`. The plain `.code === "ECONNREFUSED"`
+ * check guards the standard Node errno shape too — undici's own fetch errors never carry it
+ * directly (only nested under `.cause`), but `isConnRefused` is exported, and a caller handed a
+ * raw `node:net`/`node:http` connection error (no `fetch()`, no `.cause` wrapping) would have it
+ * set right on the error itself. A prior version of this also matched `/ECONNREFUSED/` against
+ * `.message` as a belt-and-suspenders fallback — dropped because it was dead weight for both
+ * actual runtimes (Bun's own message text never contains that word) while still carrying the same
+ * misclassification risk `isAddrInUse`'s message match above accepts for a different, lower-stakes
+ * reason (a losing bind attempt vs. an immediate handover of the machine-level hub role).
  */
 export function isConnRefused(err: unknown): boolean {
   const e = err as { cause?: NodeJS.ErrnoException; code?: string } | undefined
-  return e?.cause?.code === "ECONNREFUSED" || e?.code === "ConnectionRefused"
+  return e?.cause?.code === "ECONNREFUSED" || e?.code === "ECONNREFUSED" || e?.code === "ConnectionRefused"
 }
 
 /**

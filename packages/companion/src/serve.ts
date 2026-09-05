@@ -293,6 +293,12 @@ async function registerWithHub(hubBaseUrl: string, fetchImpl: typeof fetch, body
  * the same time. The `firedOnce` guard is what actually prevents a second, now-stale tick from
  * calling `onHubDown` again while the first call is still re-electing — without it, two concurrent
  * `reElectHub` runs would race to mutate the same `handle` object.
+ *
+ * `inFlight` is a separate guard for a separate hazard: skipping a tick outright while the
+ * previous one is still awaiting its response caps this at one outstanding heartbeat request at a
+ * time, rather than letting them accumulate unboundedly whenever `intervalMs` is short relative to
+ * round-trip latency (this package's own tests use a heartbeatIntervalMs far below the 15s
+ * production default specifically to force many ticks quickly).
  */
 function startHeartbeatLoop(
   hubBaseUrl: string,
@@ -302,17 +308,24 @@ function startHeartbeatLoop(
   onHubDown: () => void,
 ): () => void {
   let firedOnce = false
+  let inFlight = false
   const timer = setInterval(() => {
+    if (inFlight) return
+    inFlight = true
     void fetchImpl(`${hubBaseUrl}/v1/heartbeat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ instanceId }),
-    }).catch((err) => {
-      if (!isConnRefused(err) || firedOnce) return
-      firedOnce = true
-      clearInterval(timer)
-      onHubDown()
     })
+      .catch((err) => {
+        if (!isConnRefused(err) || firedOnce) return
+        firedOnce = true
+        clearInterval(timer)
+        onHubDown()
+      })
+      .finally(() => {
+        inFlight = false
+      })
   }, intervalMs)
   // Node/Bun timers keep the event loop alive by default; a heartbeat ticking forever must
   // never be the reason `notex-companion serve` can't exit on its own.
