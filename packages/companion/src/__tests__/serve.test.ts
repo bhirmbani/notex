@@ -285,6 +285,36 @@ describe("hub/satellite auto-promotion", () => {
     expect(secondHandle.token).not.toBe(hubToken)
   })
 
+  it("uses the freshest hub token for its pairing line, even if the hub token rotates mid-startup", async () => {
+    handle = await serve({ checkoutPath, port: 18962, hubBaseDir })
+    const staleHubPairingLine = handle.pairingLine
+    extraCheckoutPath = newCheckout()
+
+    const { loadOrCreateHubToken } = await import("../hubIdentity.ts")
+
+    // Simulates hub.json changing underneath a satellite mid-startup (e.g. an external rotation
+    // racing its own ping/register sequence) by rotating it the moment the satellite's very
+    // first network call goes out — before serve() resolved `hubToken` had any chance to go
+    // stale on its own.
+    let rotatedOnce = false
+    const rotatingFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      if (!rotatedOnce) {
+        rotatedOnce = true
+        loadOrCreateHubToken(hubBaseDir, { rotate: true })
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18962, hubBaseDir, fetchImpl: rotatingFetch })
+    assertRole(secondHandle, "satellite")
+
+    const currentHubToken = loadOrCreateHubToken(hubBaseDir)
+    expect(secondHandle.pairingLine).toContain(currentHubToken)
+    // The real hub's own printed line was captured before the simulated rotation — proving this
+    // isn't just coincidentally the same value.
+    expect(secondHandle.pairingLine).not.toBe(staleHubPairingLine)
+  })
+
   it("rejects an occupant on the target port whose apiVersion isn't wire-compatible", async () => {
     const impostorHandler = () =>
       Promise.resolve(

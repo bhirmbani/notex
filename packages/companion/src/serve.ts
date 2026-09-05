@@ -361,7 +361,6 @@ async function startSatellite(
   opts: ServeOptions,
   origins: Array<string>,
   hubBaseUrl: string,
-  hubToken: string,
   fetchImpl: typeof fetch,
 ): Promise<SatelliteHandle> {
   const token = loadOrCreateToken(opts.checkoutPath, { rotate: opts.rotateToken })
@@ -393,11 +392,18 @@ async function startSatellite(
 
   const stopHeartbeat = startHeartbeatLoop(hubBaseUrl, fetchImpl, instanceId, opts.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS)
 
+  // Re-read rather than reuse the `hubToken` `serve()` resolved before this function's own
+  // bind/ping/register sequence ran: that sequence can span retries and backoff delays, and if
+  // the real hub gets restarted-with-rotation during that window, a value carried across it
+  // would print a pairing line the hub no longer accepts. This read is a cheap, idempotent
+  // load-or-create — never a rotate — so it can't step on the hub's own rotation.
+  const currentHubToken = loadOrCreateHubToken(opts.hubBaseDir)
+
   return {
     server: bind.server,
     token,
     baseUrl: hubBaseUrl,
-    pairingLine: buildPairingLine(hubBaseUrl, hubToken),
+    pairingLine: buildPairingLine(hubBaseUrl, currentHubToken),
     role: "satellite",
     stopHeartbeat,
     deregister: async () => {
@@ -420,8 +426,11 @@ export async function serve(opts: ServeOptions): Promise<ServeHandle> {
 
   // Created before the bind attempt (not after), and never rotated here, so that by the time a
   // satellite confirms this hub is alive, the identity file it's about to read is guaranteed to
-  // already exist with a stable token — whoever wins the race below has already persisted it
-  // either way. Only the actual winner (startHub) may rotate it, and only after winning.
+  // already exist — whoever wins the race below has already persisted it either way. Only the
+  // actual winner (startHub) may rotate it, and only after winning. A satellite doesn't reuse
+  // this value for its own pairing line (startSatellite re-reads it fresh, right before use —
+  // see the comment there) since this read happens before this function's own ping-retry
+  // sequence, which can span the exact window a concurrent hub rotation would land in.
   const hubToken = loadOrCreateHubToken(opts.hubBaseDir)
 
   const hubAttempt = await startHub(opts, origins, targetPort, hubToken)
@@ -435,7 +444,7 @@ export async function serve(opts: ServeOptions): Promise<ServeHandle> {
     opts.pingRetryDelayMs ?? DEFAULT_PING_RETRY_DELAY_MS,
     opts.pingTimeoutMs ?? DEFAULT_PING_TIMEOUT_MS,
   )
-  if (confirmed) return startSatellite(opts, origins, hubBaseUrl, hubToken, fetchImpl)
+  if (confirmed) return startSatellite(opts, origins, hubBaseUrl, fetchImpl)
 
   return startStandalone(
     opts,
