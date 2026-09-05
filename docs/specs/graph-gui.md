@@ -224,7 +224,9 @@ persisted per-origin block (TBR-56 §6 state 4) recoverable only through browser
 >
 > Your browser will ask for permission to *"look for and connect to any device on your local
 > network."* That wording is Chrome's, and it's broader than what happens: Notex talks to
-> `127.0.0.1:7717` on this machine and nothing else. No scanning, no other addresses.
+> `127.0.0.1` on this machine and nothing else — first the companion hub at port 7717, and
+> after you switch checkouts, that checkout's own companion process on whatever port it
+> reports. Still nothing beyond `127.0.0.1`. No scanning, no other addresses.
 >
 > Requires Chrome 142+ or Firefox 151+. **If you deny it, the block sticks** — clearing it
 > means resetting site permissions in your browser settings.
