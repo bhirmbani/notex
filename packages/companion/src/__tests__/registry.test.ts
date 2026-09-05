@@ -114,4 +114,37 @@ describe("InstanceRegistry", () => {
     const registry = new InstanceRegistry(hubSelf())
     expect(() => registry.deregister("never-registered")).not.toThrow()
   })
+
+  // ------------------------------------------- staleness pruning (TBR-142)
+
+  it("keeps a satellite listed before its heartbeat-timeout window has elapsed", async () => {
+    const registry = new InstanceRegistry(hubSelf(), 30)
+    registry.register(registerRequest())
+
+    await new Promise((r) => setTimeout(r, 5))
+
+    expect(registry.list().map((i) => i.instanceId)).toContain("sat-1")
+  })
+
+  it("prunes a satellite that missed its heartbeat-timeout window, next time list() is called", async () => {
+    const registry = new InstanceRegistry(hubSelf(), 20)
+    registry.register(registerRequest())
+
+    await new Promise((r) => setTimeout(r, 40))
+
+    const list = registry.list()
+    expect(list.map((i) => i.instanceId)).not.toContain("sat-1")
+    expect(list.map((i) => i.role)).toEqual(["hub"])
+  })
+
+  it("does not prune a satellite that keeps heartbeating within the timeout window", async () => {
+    const registry = new InstanceRegistry(hubSelf(), 30)
+    registry.register(registerRequest())
+
+    await new Promise((r) => setTimeout(r, 20))
+    registry.heartbeat("sat-1")
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(registry.list().map((i) => i.instanceId)).toContain("sat-1")
+  })
 })

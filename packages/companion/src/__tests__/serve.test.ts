@@ -336,6 +336,26 @@ describe("hub/satellite auto-promotion", () => {
     }
   })
 
+  it("keeps a crashed satellite listed immediately, but prunes it once the heartbeat-timeout window elapses", async () => {
+    handle = await serve({ checkoutPath, port: 18970, hubBaseDir, heartbeatTimeoutMs: 40 })
+    extraCheckoutPath = newCheckout()
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18970, hubBaseDir, heartbeatIntervalMs: 5_000 })
+    assertRole(secondHandle, "satellite")
+
+    // `kill -9`: the whole process dies at once — no deregister call, no more heartbeats.
+    secondHandle.stopHeartbeat()
+    secondHandle.server.stop(true)
+
+    const immediately = await json(await fetch(`${handle.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${handle.token}` } }))
+    expect(immediately.instances).toHaveLength(2)
+
+    await new Promise((r) => setTimeout(r, 70))
+
+    const after = await json(await fetch(`${handle.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${handle.token}` } }))
+    expect(after.instances).toHaveLength(1)
+    expect(after.instances[0].role).toBe("hub")
+  })
+
   it("falls back to standalone with a warning when the occupant on the target port never confirms it's a hub", async () => {
     // A raw TCP listener that accepts connections but never speaks HTTP — ping can never
     // confirm it, which is exactly the "something else is on this port" case TBR-133 covers.
@@ -351,5 +371,111 @@ describe("hub/satellite auto-promotion", () => {
     } finally {
       impostor.close()
     }
+  })
+})
+
+// ------------------------------------------------ hub death re-election (TBR-142)
+
+describe("hub death re-election", () => {
+  let hubBaseDir: string
+  let extraCheckoutPath: string | undefined
+  let thirdCheckoutPath: string | undefined
+  let secondHandle: ServeHandle | undefined
+  let thirdHandle: ServeHandle | undefined
+
+  beforeEach(() => {
+    hubBaseDir = mkdtempSync(join(tmpdir(), "companion-hub-identity-"))
+  })
+
+  afterEach(() => {
+    stopHandle(secondHandle)
+    stopHandle(thirdHandle)
+    secondHandle = undefined
+    thirdHandle = undefined
+    rmSync(hubBaseDir, { recursive: true, force: true })
+    if (extraCheckoutPath) {
+      rmSync(extraCheckoutPath, { recursive: true, force: true })
+      extraCheckoutPath = undefined
+    }
+    if (thirdCheckoutPath) {
+      rmSync(thirdCheckoutPath, { recursive: true, force: true })
+      thirdCheckoutPath = undefined
+    }
+  })
+
+  it("promotes the surviving satellite to hub via the ECONNREFUSED fast path, reusing the original hub's token", async () => {
+    handle = await serve({ checkoutPath, port: 18980, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18980, hubBaseDir, heartbeatIntervalMs: 10 })
+    assertRole(handle, "hub")
+    expect(secondHandle.role).toBe("satellite")
+    const originalHubToken = handle.token
+
+    // `kill -9` on the hub: its listening socket disappears with no deregister, no warning.
+    handle.server.stop(true)
+    handle = undefined
+
+    // Several heartbeat ticks' worth of wait, but nowhere near a 45s heartbeat-timeout window —
+    // if promotion only happened via that timeout, this assertion would still be failing here.
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(secondHandle.role).toBe("hub")
+    assertRole(secondHandle, "hub")
+    expect(secondHandle.baseUrl).toBe("http://127.0.0.1:18980")
+    expect(secondHandle.registry).toBeDefined()
+    // AC: a browser pairing token obtained against the original hub still authenticates against
+    // the new hub process.
+    expect(secondHandle.token).toBe(originalHubToken)
+
+    const res = await fetch(`${secondHandle.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${originalHubToken}` } })
+    expect(res.status).toBe(200)
+  })
+
+  it("re-registers the losing satellite against the newly-elected hub, not the dead one", async () => {
+    handle = await serve({ checkoutPath, port: 18981, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    thirdCheckoutPath = newCheckout()
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18981, hubBaseDir, heartbeatIntervalMs: 10 })
+    thirdHandle = await serve({ checkoutPath: thirdCheckoutPath, port: 18981, hubBaseDir, heartbeatIntervalMs: 10 })
+    assertRole(handle, "hub")
+
+    handle.server.stop(true)
+    handle = undefined
+
+    await new Promise((r) => setTimeout(r, 150))
+
+    const roles = [secondHandle.role, thirdHandle.role].sort()
+    expect(roles).toEqual(["hub", "satellite"])
+
+    const newHub = secondHandle.role === "hub" ? secondHandle : thirdHandle
+    assertRole(newHub, "hub")
+    const list = await json(await fetch(`${newHub.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${newHub.token}` } }))
+    expect(list.instances).toHaveLength(2)
+    expect(list.instances.map((i: { role: string }) => i.role).sort()).toEqual(["hub", "satellite"])
+  })
+
+  it("re-elects immediately when the hub dies between the satellite's ping-confirmation and its own register call", async () => {
+    handle = await serve({ checkoutPath, port: 18982, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    let killedHub = false
+    const killingFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/register") && !killedHub) {
+        killedHub = true
+        hubHandle.server.stop(true)
+        // Gives the OS time to actually release the port, so this call hits a clean
+        // ECONNREFUSED (nothing listening) rather than racing an ECONNRESET on a connection
+        // that was still mid-handshake when the hub's socket closed underneath it.
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18982, hubBaseDir, fetchImpl: killingFetch })
+    expect(secondHandle.role).toBe("hub")
+    handle = undefined
   })
 })
