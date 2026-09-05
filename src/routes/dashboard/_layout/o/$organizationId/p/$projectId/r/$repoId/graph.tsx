@@ -24,6 +24,7 @@ import {
   useDebouncedCompanionSearch,
 } from "@/features/companion/hooks"
 import { getPairing } from "@/features/companion/pairing"
+import { InstancePickerPrototype } from "@/features/companion/InstancePickerPrototype"
 import { NotexJsonCard } from "@/features/companion/NotexJsonCard"
 import { stalenessMessage } from "@/features/companion/staleness"
 import { stateNotice } from "@/features/companion/stateNotice"
@@ -83,13 +84,18 @@ function GraphPage() {
       {connection.isPending ? (
         <div className="h-20 animate-pulse rounded-xl border bg-muted/30" />
       ) : connection.data ? (
-        <ConnectionSection
-          repositoryId={repoId}
-          result={connection.data}
-          retry={connection.retry}
-          showFlow={showFlow}
-          setShowFlow={setShowFlow}
-        />
+        <>
+          <ConnectionSection
+            repositoryId={repoId}
+            result={connection.data}
+            retry={connection.retry}
+            showFlow={showFlow}
+            setShowFlow={setShowFlow}
+          />
+          {connection.data.state !== "connected" && (
+            <InstancePickerPrototype repositoryId={repoId} />
+          )}
+        </>
       ) : null}
 
       <NotexJsonCard
