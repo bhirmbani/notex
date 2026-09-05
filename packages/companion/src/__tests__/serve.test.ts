@@ -403,6 +403,74 @@ describe("hub death re-election", () => {
     }
   })
 
+  it("does not resurrect a losing satellite's handle after stopHeartbeat() fires mid re-registration", async () => {
+    handle = await serve({ checkoutPath, port: 18986, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    thirdCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    // Satellite A: detects the hub's death fast and reliably wins the bind race for 18986.
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18986, hubBaseDir, heartbeatIntervalMs: 10 })
+    expect(secondHandle.role).toBe("satellite")
+
+    // Satellite B: a much longer heartbeat interval so it always notices the mismatch (its
+    // heartbeats start succeeding against A with `{ ok: false }`, since A's registry has never
+    // heard of B — see startHeartbeatLoop) only after A has already won and become the new hub —
+    // guaranteeing B ends up in the "lost, must re-register" branch. Its second-ever /v1/register
+    // call (the re-registration against A, as opposed to its first, at startup, against the
+    // original hub) is artificially delayed, and signals exactly when it starts — a deterministic
+    // window to call stopHeartbeat() while that call is in flight, with no timing guesswork.
+    let registerCallCount = 0
+    let markSecondRegisterStarted: (() => void) | undefined
+    const secondRegisterStarted = new Promise<void>((done) => {
+      markSecondRegisterStarted = done
+    })
+    const delayingFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/register")) {
+        registerCallCount++
+        if (registerCallCount === 2) {
+          markSecondRegisterStarted?.()
+          return new Promise<Response>((done) => setTimeout(() => done(fetch(input, init)), 100))
+        }
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    thirdHandle = await serve({
+      checkoutPath: thirdCheckoutPath,
+      port: 18986,
+      hubBaseDir,
+      heartbeatIntervalMs: 200,
+      fetchImpl: delayingFetch,
+    })
+    expect(thirdHandle.role).toBe("satellite")
+
+    hubHandle.server.stop(true)
+    handle = undefined
+
+    // Let A win the bind race and become the new hub, well before B's own 200ms heartbeat tick.
+    await new Promise((r) => setTimeout(r, 100))
+    expect(secondHandle.role).toBe("hub")
+
+    // Waits exactly until B's delayed re-registration against A is in flight — no fixed sleep to
+    // tune, since B's own heartbeat, ping-confirm, and register sequence has no fixed duration.
+    await secondRegisterStarted
+    assertRole(thirdHandle, "satellite")
+    const stopHeartbeatAtStop = thirdHandle.stopHeartbeat
+    const deregisterAtStop = thirdHandle.deregister
+    stopHeartbeatAtStop()
+
+    // Past the 100ms register delay, so the in-flight re-registration has resolved by now —
+    // if `stopHeartbeat()` failed to prevent it, `Object.assign` would have replaced these two
+    // fields with a fresh heartbeat loop's closures despite the caller already asking to stop.
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(thirdHandle.stopHeartbeat).toBe(stopHeartbeatAtStop)
+    expect(thirdHandle.deregister).toBe(deregisterAtStop)
+  })
+
   it("stops heartbeating once promoted to hub, rather than continuing to tick against itself", async () => {
     handle = await serve({ checkoutPath, port: 18985, hubBaseDir })
     extraCheckoutPath = newCheckout()
