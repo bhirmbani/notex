@@ -18,13 +18,28 @@ function newCheckout(): string {
   return dir
 }
 
+/** `ServeHandle` is a discriminated union (TBR-141 code review) — narrows `handle` to the
+ * variant named by `role`, throwing if it's actually something else, so tests can assert on
+ * role-specific fields (`registry`, `stopHeartbeat`, `deregister`, `standaloneWarning`) without
+ * the compiler treating them as possibly absent. */
+function assertRole<R extends ServeHandle["role"]>(h: ServeHandle, role: R): asserts h is Extract<ServeHandle, { role: R }> {
+  if (h.role !== role) throw new Error(`expected role "${role}", got "${h.role}"`)
+}
+
+/** Cleanup used by every `afterEach` below — stops a satellite's heartbeat interval first (a
+ * hub or standalone handle has none to stop), then the HTTP server itself. */
+function stopHandle(h: ServeHandle | undefined): void {
+  if (!h) return
+  if (h.role === "satellite") h.stopHeartbeat()
+  h.server.stop(true)
+}
+
 beforeEach(() => {
   checkoutPath = newCheckout()
 })
 
 afterEach(() => {
-  handle?.stopHeartbeat?.()
-  handle?.server.stop(true)
+  stopHandle(handle)
   handle = undefined
   rmSync(checkoutPath, { recursive: true, force: true })
 })
@@ -103,8 +118,7 @@ describe("hub/satellite auto-promotion", () => {
   })
 
   afterEach(() => {
-    secondHandle?.stopHeartbeat?.()
-    secondHandle?.server.stop(true)
+    stopHandle(secondHandle)
     secondHandle = undefined
     rmSync(hubBaseDir, { recursive: true, force: true })
     if (extraCheckoutPath) {
@@ -115,7 +129,7 @@ describe("hub/satellite auto-promotion", () => {
 
   it("binds the target port and becomes hub in an empty machine state", async () => {
     handle = await serve({ checkoutPath, port: 18940, hubBaseDir })
-    expect(handle.role).toBe("hub")
+    assertRole(handle, "hub")
     expect(handle.baseUrl).toBe("http://127.0.0.1:18940")
     expect(handle.registry).toBeDefined()
   })
@@ -182,7 +196,8 @@ describe("hub/satellite auto-promotion", () => {
     const before = await json(await fetch(`${handle.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${handle.token}` } }))
     expect(before.instances).toHaveLength(2)
 
-    await secondHandle.deregister?.()
+    assertRole(secondHandle, "satellite")
+    await secondHandle.deregister()
 
     const after = await json(await fetch(`${handle.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${handle.token}` } }))
     expect(after.instances).toHaveLength(1)
@@ -204,6 +219,51 @@ describe("hub/satellite auto-promotion", () => {
     )
   })
 
+  it("rotates the hub identity token only once this process has actually won the hub race", async () => {
+    const { loadOrCreateHubToken } = await import("../hubIdentity.ts")
+    const before = loadOrCreateHubToken(hubBaseDir)
+
+    handle = await serve({ checkoutPath, port: 18947, hubBaseDir, rotateToken: true })
+    assertRole(handle, "hub")
+    expect(handle.token).not.toBe(before)
+    expect(loadOrCreateHubToken(hubBaseDir)).toBe(handle.token)
+  })
+
+  it("does not rotate the hub's identity token when this process becomes a satellite instead", async () => {
+    handle = await serve({ checkoutPath, port: 18948, hubBaseDir })
+    const hubToken = handle.token
+    extraCheckoutPath = newCheckout()
+
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18948, hubBaseDir, rotateToken: true })
+    assertRole(secondHandle, "satellite")
+    // The satellite's own --rotate-token rotates its own per-checkout pairing token, not the
+    // hub's — rotating the hub's from a losing process would invalidate the real hub's
+    // already-issued pairing token out from under any browser already connected to it.
+    expect(secondHandle.pairingLine).toBe(handle.pairingLine)
+    expect(secondHandle.token).not.toBe(hubToken)
+  })
+
+  it("rejects an occupant on the target port whose apiVersion isn't wire-compatible", async () => {
+    const impostorHandler = () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ ok: true, apiVersion: "99.0.0" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+    const { tryStartServer } = await import("../net.ts")
+    const bind = await tryStartServer({ hostname: "127.0.0.1", port: 18949, fetch: impostorHandler })
+    if (!bind.ok) throw new Error("impostor bind unexpectedly failed")
+
+    try {
+      handle = await serve({ checkoutPath, port: 18949, hubBaseDir, pingRetries: 0, pingRetryDelayMs: 1 })
+      assertRole(handle, "standalone")
+      expect(handle.standaloneWarning).toContain("couldn't confirm a hub")
+    } finally {
+      bind.server.stop(true)
+    }
+  })
+
   it("falls back to standalone with a warning when the occupant on the target port never confirms it's a hub", async () => {
     // A raw TCP listener that accepts connections but never speaks HTTP — ping can never
     // confirm it, which is exactly the "something else is on this port" case TBR-133 covers.
@@ -213,7 +273,7 @@ describe("hub/satellite auto-promotion", () => {
 
     try {
       handle = await serve({ checkoutPath, port: 18945, hubBaseDir, pingRetries: 0, pingRetryDelayMs: 1, pingTimeoutMs: 50 })
-      expect(handle.role).toBe("standalone")
+      assertRole(handle, "standalone")
       expect(handle.standaloneWarning).toContain("couldn't confirm a hub")
       expect(handle.baseUrl).not.toBe("http://127.0.0.1:18945")
     } finally {

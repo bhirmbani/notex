@@ -4,13 +4,13 @@
 //
 // Hub/satellite auto-promotion (TBR-141, decided by TBR-133/TBR-138): the first process to bind
 // the target port (7717 by default) becomes the hub for this machine; every later one on the
-// same machine detects that via `EADDRINUSE`, confirms the occupant is really a notex-companion
-// (`GET /v1/ping`), and becomes a satellite — its own REST server on an OS-assigned port, plus a
-// registration + heartbeat relationship with the hub. If the occupant doesn't confirm within a
-// short retry budget (something else is bound to the port, or a notex-companion hub is still
-// mid-startup and hasn't answered yet), this falls back to standalone mode on an OS-assigned
-// port, same as today's behaviour, with a warning that hub/satellite switching is unavailable
-// this session.
+// same machine detects that via `EADDRINUSE`, confirms the occupant is really a wire-compatible
+// notex-companion (`GET /v1/ping`), and becomes a satellite — its own REST server on an
+// OS-assigned port, plus a registration + heartbeat relationship with the hub. If the occupant
+// doesn't confirm within a short retry budget (something else is bound to the port, or a
+// notex-companion hub is still mid-startup and hasn't answered yet), this falls back to
+// standalone mode on an OS-assigned port, same as today's behaviour, with a warning that
+// hub/satellite switching is unavailable this session.
 //
 // Crash/restart recovery (a satellite's hub disappearing mid-session, staleness-based pruning
 // of a satellite that exited uncleanly) is TBR-142's job, not this module's.
@@ -23,6 +23,7 @@ import { loadOrCreateHubToken } from "./hubIdentity.ts"
 import { tryStartServer } from "./net.ts"
 import { pairingLine as buildPairingLine, loadOrCreateToken } from "./pairing.ts"
 import { readLinkIds } from "./notexConfig.ts"
+import { API_VERSION } from "./ops.ts"
 import { InstanceRegistry } from "./registry.ts"
 import { OpError } from "./types.ts"
 import type { FetchHandler, MinimalServer } from "./net.ts"
@@ -34,8 +35,6 @@ const DEFAULT_HEARTBEAT_MS = 15_000
 const DEFAULT_PING_RETRIES = 2
 const DEFAULT_PING_RETRY_DELAY_MS = 75
 const DEFAULT_PING_TIMEOUT_MS = 500
-
-export type ServeRole = "hub" | "satellite" | "standalone"
 
 export type ServeOptions = {
   /** Absolute path of the checkout to serve — where graphify-out/graph.json and .notex/ live. */
@@ -67,25 +66,41 @@ export type ServeOptions = {
   pingTimeoutMs?: number
 }
 
-export type ServeHandle = {
+type BaseHandle = {
   server: MinimalServer
   token: string
   baseUrl: string
   pairingLine: string
-  role: ServeRole
+}
+
+export type HubHandle = BaseHandle & {
+  role: "hub"
+  /** Lets the CLI or tests inspect who's registered. */
+  registry: InstanceRegistry
+}
+
+export type SatelliteHandle = BaseHandle & {
+  role: "satellite"
+  /** Stops the heartbeat interval without deregistering — for test cleanup; a real shutdown
+   * should call `deregister()` instead. */
+  stopHeartbeat: () => void
+  /** Sends the explicit deregister call (TBR-133's resolution) so a clean shutdown disappears
+   * from `GET /v1/instances` immediately rather than waiting out the hub's heartbeat timeout —
+   * that timeout path is TBR-142's job, not this one's. */
+  deregister: () => Promise<void>
+}
+
+export type StandaloneHandle = BaseHandle & {
+  role: "standalone"
   /** Set when standalone mode was reached because a hub couldn't be confirmed on the target
    * port, rather than because the caller explicitly requested port 0. */
   standaloneWarning?: string
-  /** Present only for role "hub" — lets the CLI or tests inspect who's registered. */
-  registry?: InstanceRegistry
-  /** Present only for role "satellite". Stops the heartbeat interval without deregistering —
-   * for test cleanup; a real shutdown should call `deregister()` instead. */
-  stopHeartbeat?: () => void
-  /** Present only for role "satellite". Sends the explicit deregister call (TBR-133's
-   * resolution) so a clean shutdown disappears from `GET /v1/instances` immediately rather than
-   * waiting out the hub's heartbeat timeout — that timeout path is TBR-142's job, not this one's. */
-  deregister?: () => Promise<void>
 }
+
+/** A discriminated union, not one flat type with role-keyed optional fields — narrow on `role`
+ * (a switch, or an `if`) before touching `registry`, `stopHeartbeat`, or `deregister`, and the
+ * compiler catches a role/field mismatch instead of it only ever showing up at runtime. */
+export type ServeHandle = HubHandle | SatelliteHandle | StandaloneHandle
 
 function buildGraphState(checkoutPath: string, onGraphState?: (state: GraphState) => void): { getGraphState: () => GraphState } {
   let graphState: GraphState = { kind: "loading" }
@@ -108,19 +123,23 @@ function linkFor(checkoutPath: string): InstanceLink {
 
 /**
  * Binds `port` with a placeholder handler, then swaps in the real one built by `buildHandler`
- * only once the bind actually succeeds. This is what keeps a losing race (`EADDRINUSE`) from
- * ever triggering `buildHandler`'s graph load — the loser's server object is simply discarded,
- * never having served a request or scheduled any work.
+ * only once the bind actually succeeds. The point isn't guarding a request race — the swap
+ * happens synchronously right after `tryStartServer`'s promise resolves, with no `await` in
+ * between, so no request can ever reach the placeholder on a real server. The point is deferring
+ * `buildHandler`'s side effects — the git subprocess spawns and the queued graph load a full
+ * `createHandler(...)` triggers — until a bind has actually succeeded: a losing race
+ * (`EADDRINUSE`) never calls `buildHandler` at all, so those costs are paid exactly once, by
+ * whichever process actually becomes the hub, not by every process that merely tries.
  */
 async function bindWithHandler(
   port: number,
   buildHandler: () => FetchHandler,
-): Promise<{ ok: true; server: MinimalServer; handlerRef: { current: FetchHandler } } | { ok: false }> {
+): Promise<{ ok: true; server: MinimalServer } | { ok: false }> {
   const handlerRef = { current: notReadyHandler }
   const bind = await tryStartServer({ hostname: "127.0.0.1", port, fetch: (req) => handlerRef.current(req) })
   if (!bind.ok) return { ok: false }
   handlerRef.current = buildHandler()
-  return { ok: true, server: bind.server, handlerRef }
+  return { ok: true, server: bind.server }
 }
 
 function notReadyHandler(_req: Request): Promise<Response> {
@@ -130,6 +149,26 @@ function notReadyHandler(_req: Request): Promise<Response> {
       headers: { "Content-Type": "application/json" },
     }),
   )
+}
+
+function parseMajorMinor(version: string): { major: number; minor: number } | null {
+  const match = /^(\d+)\.(\d+)\.\d+/.exec(version)
+  if (!match) return null
+  return { major: Number(match[1]), minor: Number(match[2]) }
+}
+
+/**
+ * Mirrors companion-api.md §1.1's compatibility rule: while the major version stays 0, the
+ * minor component is the breaking boundary; once it reaches 1.0.0, the major component is.
+ * Reused here so hub-liveness confirmation can't mistake a wire-incompatible notex-companion —
+ * or, in principle, any other process that merely happens to answer `/v1/ping`-shaped JSON —
+ * for a satellite-compatible hub.
+ */
+function isCompatibleApiVersion(candidate: string): boolean {
+  const ours = parseMajorMinor(API_VERSION)
+  const theirs = parseMajorMinor(candidate)
+  if (!ours || !theirs) return false
+  return ours.major === 0 ? theirs.major === 0 && theirs.minor === ours.minor : theirs.major === ours.major
 }
 
 /**
@@ -145,7 +184,7 @@ async function pingOnce(baseUrl: string, fetchImpl: typeof fetch, timeoutMs: num
     const res = await fetchImpl(`${baseUrl}/v1/ping`, { signal: controller.signal })
     if (!res.ok) return false
     const body = (await res.json()) as { ok?: unknown; apiVersion?: unknown }
-    return body.ok === true && typeof body.apiVersion === "string"
+    return body.ok === true && typeof body.apiVersion === "string" && isCompatibleApiVersion(body.apiVersion)
   } catch {
     return false
   } finally {
@@ -199,12 +238,16 @@ function startHeartbeatLoop(hubBaseUrl: string, fetchImpl: typeof fetch, instanc
   return () => clearInterval(timer)
 }
 
+/** Same reasoning as `registerWithHub`: a caller of `deregister()` (e.g. the CLI's SIGINT
+ * handler) is the one deciding whether a failed deregister is worth acting on — swallowing it
+ * silently here would hide that the hub still thinks this satellite is live. */
 async function deregisterFromHub(hubBaseUrl: string, fetchImpl: typeof fetch, instanceId: string): Promise<void> {
-  await fetchImpl(`${hubBaseUrl}/v1/deregister`, {
+  const res = await fetchImpl(`${hubBaseUrl}/v1/deregister`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ instanceId }),
   })
+  if (!res.ok) throw new Error(`notex-companion: hub rejected deregister (HTTP ${res.status})`)
 }
 
 async function startStandalone(
@@ -212,7 +255,7 @@ async function startStandalone(
   origins: Array<string>,
   port: number,
   standaloneWarning: string | undefined,
-): Promise<ServeHandle> {
+): Promise<StandaloneHandle> {
   const token = loadOrCreateToken(opts.checkoutPath, { rotate: opts.rotateToken })
   const { getGraphState } = buildGraphState(opts.checkoutPath, opts.onGraphState)
   const handler = createHandler({ token, origins, getGraphState })
@@ -230,20 +273,38 @@ async function startStandalone(
   }
 }
 
-async function startHub(opts: ServeOptions, origins: Array<string>, targetPort: number, hubToken: string): Promise<{ ok: true; handle: ServeHandle } | { ok: false }> {
-  const registry = new InstanceRegistry({
-    instanceId: randomUUID(),
-    checkoutPath: opts.checkoutPath,
-    port: targetPort,
-    gitRemote: readGitRemote(opts.checkoutPath),
-    headSha: readHeadSha(opts.checkoutPath),
-    link: linkFor(opts.checkoutPath),
-    registeredAt: new Date().toISOString(),
-  })
+async function startHub(
+  opts: ServeOptions,
+  origins: Array<string>,
+  targetPort: number,
+  hubToken: string,
+): Promise<{ ok: true; handle: HubHandle } | { ok: false }> {
+  let registry: InstanceRegistry | undefined
+  let resolvedHubToken = hubToken
 
   const bind = await bindWithHandler(targetPort, () => {
+    // Rotating only happens here — inside the closure `bindWithHandler` runs strictly after a
+    // successful bind — because rotating any earlier (before knowing we've actually won the
+    // port race) would invalidate the *real* hub's already-issued pairing token out from under
+    // any browser already connected to it, from a process that turns out not to be the hub.
+    if (opts.rotateToken) resolvedHubToken = loadOrCreateHubToken(opts.hubBaseDir, { rotate: true })
+
+    // Constructing the registry (two synchronous `git` subprocess spawns) inside this closure,
+    // not before calling `bindWithHandler`, is what actually defers that cost to the winner
+    // only — building it unconditionally up front would pay it on every losing attempt too,
+    // which is the common case on a machine that already has a hub running.
+    registry = new InstanceRegistry({
+      instanceId: randomUUID(),
+      checkoutPath: opts.checkoutPath,
+      port: targetPort,
+      gitRemote: readGitRemote(opts.checkoutPath),
+      headSha: readHeadSha(opts.checkoutPath),
+      link: linkFor(opts.checkoutPath),
+      registeredAt: new Date().toISOString(),
+    })
+
     const { getGraphState } = buildGraphState(opts.checkoutPath, opts.onGraphState)
-    return createHandler({ token: hubToken, origins, getGraphState, registry })
+    return createHandler({ token: resolvedHubToken, origins, getGraphState, registry })
   })
   if (!bind.ok) return { ok: false }
 
@@ -252,11 +313,13 @@ async function startHub(opts: ServeOptions, origins: Array<string>, targetPort: 
     ok: true,
     handle: {
       server: bind.server,
-      token: hubToken,
+      token: resolvedHubToken,
       baseUrl,
-      pairingLine: buildPairingLine(baseUrl, hubToken),
+      pairingLine: buildPairingLine(baseUrl, resolvedHubToken),
       role: "hub",
-      registry,
+      // Non-null: the closure above always runs — and always assigns `registry` — before
+      // `bindWithHandler` can resolve `{ ok: true }`.
+      registry: registry!,
     },
   }
 }
@@ -267,7 +330,7 @@ async function startSatellite(
   hubBaseUrl: string,
   hubToken: string,
   fetchImpl: typeof fetch,
-): Promise<ServeHandle> {
+): Promise<SatelliteHandle> {
   const token = loadOrCreateToken(opts.checkoutPath, { rotate: opts.rotateToken })
   const { getGraphState } = buildGraphState(opts.checkoutPath, opts.onGraphState)
   const handler = createHandler({ token, origins, getGraphState })
@@ -276,16 +339,24 @@ async function startSatellite(
   if (!bind.ok) throw new Error("notex-companion: could not bind an OS-assigned port for satellite mode")
 
   const instanceId = randomUUID()
-  await registerWithHub(hubBaseUrl, fetchImpl, {
-    instanceId,
-    checkoutPath: opts.checkoutPath,
-    port: bind.server.port,
-    pid: process.pid,
-    gitRemote: readGitRemote(opts.checkoutPath),
-    headSha: readHeadSha(opts.checkoutPath),
-    token,
-    link: linkFor(opts.checkoutPath),
-  })
+  try {
+    await registerWithHub(hubBaseUrl, fetchImpl, {
+      instanceId,
+      checkoutPath: opts.checkoutPath,
+      port: bind.server.port,
+      pid: process.pid,
+      gitRemote: readGitRemote(opts.checkoutPath),
+      headSha: readHeadSha(opts.checkoutPath),
+      token,
+      link: linkFor(opts.checkoutPath),
+    })
+  } catch (err) {
+    // A registration failure must not leave an unstoppable listening socket behind: `serve()`
+    // is a library entry point (index.ts), not just the CLI's — the CLI's own process.exit(1)
+    // would reclaim the port either way, but another caller catching this rejection wouldn't.
+    bind.server.stop(true)
+    throw err
+  }
 
   const stopHeartbeat = startHeartbeatLoop(hubBaseUrl, fetchImpl, instanceId, opts.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS)
 
@@ -314,9 +385,10 @@ export async function serve(opts: ServeOptions): Promise<ServeHandle> {
   const fetchImpl = opts.fetchImpl ?? fetch
   const targetPort = opts.port ?? DEFAULT_PORT
 
-  // Created before the bind attempt (not after) so that by the time a satellite confirms this
-  // hub is alive, the identity file it's about to read is guaranteed to already exist — whoever
-  // wins the race below has already persisted it either way.
+  // Created before the bind attempt (not after), and never rotated here, so that by the time a
+  // satellite confirms this hub is alive, the identity file it's about to read is guaranteed to
+  // already exist with a stable token — whoever wins the race below has already persisted it
+  // either way. Only the actual winner (startHub) may rotate it, and only after winning.
   const hubToken = loadOrCreateHubToken(opts.hubBaseDir)
 
   const hubAttempt = await startHub(opts, origins, targetPort, hubToken)

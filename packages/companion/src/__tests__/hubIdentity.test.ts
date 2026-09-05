@@ -47,4 +47,13 @@ describe("loadOrCreateHubToken", () => {
     const token = loadOrCreateHubToken(baseDir)
     expect(token.length).toBeGreaterThan(20)
   })
+
+  it("rotate: true invalidates the previous token", () => {
+    const first = loadOrCreateHubToken(baseDir)
+    const rotated = loadOrCreateHubToken(baseDir, { rotate: true })
+    expect(rotated).not.toBe(first)
+
+    const reloaded = loadOrCreateHubToken(baseDir)
+    expect(reloaded).toBe(rotated)
+  })
 })

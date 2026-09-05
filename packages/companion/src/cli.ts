@@ -149,9 +149,12 @@ function runServe(args: Array<string>): void {
       console.log(handle.pairingLine)
 
       // Clean shutdown (TBR-141): a satellite deregisters immediately rather than waiting out
-      // the hub's heartbeat timeout — that timeout path is TBR-142's crash-recovery job.
+      // the hub's heartbeat timeout — that timeout path is TBR-142's crash-recovery job. Only a
+      // satellite has anything to deregister; `ServeHandle` is a discriminated union, so this
+      // check is what lets the compiler confirm `deregister` even exists on this branch.
       const shutdown = () => {
-        Promise.resolve(handle.deregister?.())
+        const deregistered = handle.role === "satellite" ? handle.deregister() : Promise.resolve()
+        deregistered
           .catch(() => {})
           .finally(() => {
             handle.server.stop(true)

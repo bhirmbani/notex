@@ -4,7 +4,8 @@
 
 import { describe, expect, it } from "bun:test"
 import { CliUsageError, parseServeArgs, roleLine } from "../cli.ts"
-import type { ServeHandle } from "../serve.ts"
+import { InstanceRegistry } from "../registry.ts"
+import type { HubHandle, SatelliteHandle, StandaloneHandle } from "../serve.ts"
 
 describe("parseServeArgs", () => {
   it("defaults to no port override, no extra origins, no rotation", () => {
@@ -46,33 +47,42 @@ describe("parseServeArgs", () => {
   })
 })
 
-// Minimal fields for roleLine() — it only reads role/baseUrl/standaloneWarning.
-function fakeHandle(overrides: Partial<ServeHandle>): ServeHandle {
-  return {
-    server: { hostname: "127.0.0.1", port: 7717, stop: () => {} },
-    token: "tok",
-    baseUrl: "http://127.0.0.1:7717",
-    pairingLine: "http://127.0.0.1:7717/#token=tok",
-    role: "hub",
-    ...overrides,
-  }
+// Minimal fields for roleLine() — it only reads role/baseUrl/standaloneWarning. ServeHandle is a
+// discriminated union (TBR-141 code review), so each role gets its own literal rather than a
+// generic Partial<ServeHandle> factory.
+const BASE = {
+  server: { hostname: "127.0.0.1", port: 7717, stop: () => {} },
+  token: "tok",
+  baseUrl: "http://127.0.0.1:7717",
+  pairingLine: "http://127.0.0.1:7717/#token=tok",
 }
 
 describe("roleLine", () => {
   it("prints the hub banner (TBR-138's resolution)", () => {
-    expect(roleLine(fakeHandle({ role: "hub", baseUrl: "http://127.0.0.1:7717" }))).toBe(
-      "notex-companion: hub — bound to 127.0.0.1:7717",
-    )
+    const handle: HubHandle = {
+      ...BASE,
+      role: "hub",
+      registry: new InstanceRegistry({
+        instanceId: "hub-1",
+        checkoutPath: "/checkout",
+        port: 7717,
+        gitRemote: null,
+        headSha: null,
+        link: null,
+        registeredAt: new Date().toISOString(),
+      }),
+    }
+    expect(roleLine(handle)).toBe("notex-companion: hub — bound to 127.0.0.1:7717")
   })
 
   it("prints the satellite banner naming the hub's address (TBR-138's resolution)", () => {
-    expect(roleLine(fakeHandle({ role: "satellite", baseUrl: "http://127.0.0.1:7717" }))).toBe(
-      "notex-companion: satellite — registered with hub at 127.0.0.1:7717",
-    )
+    const handle: SatelliteHandle = { ...BASE, role: "satellite", stopHeartbeat: () => {}, deregister: async () => {} }
+    expect(roleLine(handle)).toBe("notex-companion: satellite — registered with hub at 127.0.0.1:7717")
   })
 
   it("prints the standalone-fallback warning verbatim (TBR-133's resolution)", () => {
     const warning = "couldn't confirm a hub on 7717 — running standalone, one-click switching unavailable this session."
-    expect(roleLine(fakeHandle({ role: "standalone", standaloneWarning: warning }))).toBe(`notex-companion: ${warning}`)
+    const handle: StandaloneHandle = { ...BASE, role: "standalone", standaloneWarning: warning }
+    expect(roleLine(handle)).toBe(`notex-companion: ${warning}`)
   })
 })

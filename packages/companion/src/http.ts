@@ -219,9 +219,13 @@ function optionalNullableString(body: Record<string, unknown>, key: string): str
   return v
 }
 
+/** Used for the register payload's `port` and `pid` (http.ts's only two integer-typed, required
+ * fields) — both are non-negative by construction, so this rejects a negative value rather than
+ * storing it and echoing it back verbatim via `GET /v1/instances`, unlike `optionalCount`'s
+ * non-negative check elsewhere in this file, which this mirrors. */
 function requireInt(body: Record<string, unknown>, key: string): number {
   const v = body[key]
-  if (typeof v !== "number" || !Number.isInteger(v)) throw new OpError("invalid_request", `"${key}" must be an integer`)
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0) throw new OpError("invalid_request", `"${key}" must be a non-negative integer`)
   return v
 }
 

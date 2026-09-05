@@ -6,63 +6,21 @@
 // pairing line (TBR-138), and a satellite reads it *after* confirming a hub is already up, so
 // the hub always creates it before that confirmation can succeed (see serve.ts).
 //
-// Mechanism mirrors pairing.ts's per-checkout token exactly (same exclusive-create race
-// handling, same atomic rewrite) — only the path and scope differ.
+// The persistence mechanism (exclusive-create race handling, atomic rewrite) lives in
+// tokenFile.ts, shared with pairing.ts's per-checkout token — only the path differs.
 
 import { homedir } from "node:os"
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { randomBytes } from "node:crypto"
-import { dirname, join } from "node:path"
-import { atomicWriteFile } from "./atomicWrite.ts"
-
-type HubIdentityFile = { token: string }
+import { join } from "node:path"
+import { loadOrCreateTokenFile } from "./tokenFile.ts"
 
 export function hubIdentityFilePath(baseDir: string = homedir()): string {
   return join(baseDir, ".notex-companion", "hub.json")
 }
 
-function generateToken(): string {
-  return randomBytes(32).toString("base64url")
-}
-
-function readExistingToken(path: string): string | undefined {
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as HubIdentityFile
-    return typeof parsed.token === "string" ? parsed.token : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function tokenContents(token: string): string {
-  return JSON.stringify({ token } satisfies HubIdentityFile, null, 2)
-}
-
-function createTokenFileExclusive(path: string, token: string): void {
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, tokenContents(token), { mode: 0o600, flag: "wx" })
-}
-
-function rewriteTokenFile(path: string, token: string): void {
-  atomicWriteFile(path, tokenContents(token), 0o600)
-}
-
-/** Loads the persisted machine-level hub token, or generates and persists a new one. */
-export function loadOrCreateHubToken(baseDir: string = homedir()): string {
-  const path = hubIdentityFilePath(baseDir)
-
-  const existing = readExistingToken(path)
-  if (existing !== undefined) return existing
-
-  const token = generateToken()
-  try {
-    createTokenFileExclusive(path, token)
-    return token
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err
-    const winner = readExistingToken(path)
-    if (winner !== undefined) return winner
-    rewriteTokenFile(path, token)
-    return token
-  }
+/** Loads the persisted machine-level hub token, or generates and persists a new one.
+ * `rotate: true` always regenerates — used only once this process has actually won the hub
+ * race (serve.ts), never before: rotating from a losing process would invalidate the real
+ * hub's already-issued pairing token out from under any browser already connected to it. */
+export function loadOrCreateHubToken(baseDir: string = homedir(), opts: { rotate?: boolean } = {}): string {
+  return loadOrCreateTokenFile(hubIdentityFilePath(baseDir), opts)
 }

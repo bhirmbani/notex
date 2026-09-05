@@ -355,6 +355,15 @@ describe("POST /v1/register", () => {
     const res = await hubHandler(registry)(req("/v1/register", { method: "POST", token: null, body: { instanceId: "sat-1" } }))
     expect(res.status).toBe(422)
   })
+
+  it("rejects a negative port or pid as invalid_request", async () => {
+    const registry = freshRegistry()
+    const negativePort = await hubHandler(registry)(req("/v1/register", { method: "POST", token: null, body: registerBody({ port: -1 }) }))
+    expect(negativePort.status).toBe(422)
+
+    const negativePid = await hubHandler(registry)(req("/v1/register", { method: "POST", token: null, body: registerBody({ pid: -1 }) }))
+    expect(negativePid.status).toBe(422)
+  })
 })
 
 describe("POST /v1/heartbeat", () => {
