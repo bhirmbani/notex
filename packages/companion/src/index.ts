@@ -8,5 +8,5 @@
 export * from "./types.ts"
 export * from "./ops.ts"
 export { loadGraph, type GraphIndex } from "./graph.ts"
-export { serve, type ServeHandle, type ServeOptions } from "./serve.ts"
+export { serve, type ServeHandle, type ServeOptions, type HubHandle, type SatelliteHandle, type StandaloneHandle } from "./serve.ts"
 export { createHandler, type GraphState, type HandlerOptions } from "./http.ts"

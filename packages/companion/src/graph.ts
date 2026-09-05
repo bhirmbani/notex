@@ -85,6 +85,55 @@ export function readHeadSha(checkoutPath: string): string | null {
   }
 }
 
+/**
+ * Strips embedded credentials from an HTTPS-style remote URL. Covers both places a token turns
+ * up in practice: userinfo (`https://user:token@host/...`, what GitHub Actions' checkout and
+ * GitLab CI's job-token pattern both produce) and a query string (`?access_token=...` /
+ * `?token=...`, some self-hosted or custom-tooling setups). The query string and hash fragment
+ * are dropped unconditionally rather than pattern-matched against known token param names —
+ * enumerating those names would always risk missing a non-standard one, whereas a legitimate
+ * git remote URL essentially never needs a query string or fragment for the git protocol itself.
+ * Left alone: the SCP-style SSH form (`git@host:org/repo.git`) never carries a secret this way —
+ * `git` there is the protocol's fixed remote username, not a credential — and `new URL()`
+ * rejects that form outright, which is exactly why the catch branch below passes it through
+ * unchanged rather than redacting it.
+ */
+function redactGitRemote(url: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return url
+  }
+
+  if (!parsed.username && !parsed.password && !parsed.search && !parsed.hash) return url
+
+  parsed.username = ""
+  parsed.password = ""
+  parsed.search = ""
+  parsed.hash = ""
+  return parsed.toString()
+}
+
+/**
+ * Used by the hub/satellite registration payload (TBR-133's resolution, TBR-141) — reported
+ * alongside `headSha` for the human-confirmed checkout<->Repository binding of companion-api.md
+ * §3.3, and echoed to the browser via `GET /v1/instances`. `null` covers both "not a git
+ * checkout" and "no `origin` remote configured". Credentials embedded in the URL are redacted
+ * before it ever leaves this function — the browser is a materially less trusted boundary than
+ * the loopback processes the rest of this registration payload assumes.
+ */
+export function readGitRemote(checkoutPath: string): string | null {
+  try {
+    const raw = execSync("git remote get-url origin", { cwd: checkoutPath, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim()
+    return redactGitRemote(raw)
+  } catch {
+    return null
+  }
+}
+
 const SUGGESTED_QUESTIONS_HEADING = /^## Suggested Questions\s*$/
 const SECTION_HEADING = /^## /
 const QUESTION_BULLET = /^- \*\*(.+)\*\*$/

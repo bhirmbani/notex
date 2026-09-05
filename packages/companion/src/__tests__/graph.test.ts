@@ -1,7 +1,9 @@
-import { existsSync } from "node:fs"
-import { resolve } from "node:path"
-import { describe, expect, it } from "bun:test"
-import { loadGraph, loadSuggestedQuestions, parseSuggestedQuestions, rootPrefixFor } from "../graph.ts"
+import { execSync } from "node:child_process"
+import { existsSync, mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "bun:test"
+import { loadGraph, loadSuggestedQuestions, parseSuggestedQuestions, readGitRemote, rootPrefixFor } from "../graph.ts"
 import { FIXTURE_ROOT } from "./fixtures/setup.ts"
 
 const REPO_ROOT = resolve(import.meta.dir, "../../../..")
@@ -195,5 +197,56 @@ describe("loadGraph against this repo's own checkout", () => {
       const onDisk = resolve(REPO_ROOT, projected.sourceFile)
       expect(existsSync(onDisk)).toBe(true)
     }
+  })
+})
+
+describe("readGitRemote", () => {
+  let checkoutPath: string
+
+  beforeEach(() => {
+    checkoutPath = mkdtempSync(join(tmpdir(), "companion-git-remote-"))
+    execSync("git init -q", { cwd: checkoutPath })
+  })
+
+  afterEach(() => {
+    rmSync(checkoutPath, { recursive: true, force: true })
+  })
+
+  it("returns null when there is no origin remote", () => {
+    expect(readGitRemote(checkoutPath)).toBeNull()
+  })
+
+  it("returns null when the checkout isn't a git repository at all", () => {
+    const notAGitRepo = mkdtempSync(join(tmpdir(), "companion-not-git-"))
+    try {
+      expect(readGitRemote(notAGitRepo)).toBeNull()
+    } finally {
+      rmSync(notAGitRepo, { recursive: true, force: true })
+    }
+  })
+
+  it("passes through a credential-free remote unchanged", () => {
+    execSync("git remote add origin https://github.com/example/repo.git", { cwd: checkoutPath })
+    expect(readGitRemote(checkoutPath)).toBe("https://github.com/example/repo.git")
+  })
+
+  it("redacts embedded credentials from an HTTPS remote", () => {
+    execSync("git remote add origin https://x-access-token:ghp_secrettoken123@github.com/example/repo.git", { cwd: checkoutPath })
+    const remote = readGitRemote(checkoutPath)
+    expect(remote).not.toContain("ghp_secrettoken123")
+    expect(remote).not.toContain("x-access-token")
+    expect(remote).toBe("https://github.com/example/repo.git")
+  })
+
+  it("redacts a query-string-embedded token, not just userinfo", () => {
+    execSync("git remote add origin 'https://gitlab.example.com/org/repo.git?access_token=glpat-secrettoken456'", { cwd: checkoutPath })
+    const remote = readGitRemote(checkoutPath)
+    expect(remote).not.toContain("glpat-secrettoken456")
+    expect(remote).toBe("https://gitlab.example.com/org/repo.git")
+  })
+
+  it("passes through an SCP-style SSH remote unchanged — it never carries a secret this way", () => {
+    execSync("git remote add origin git@github.com:example/repo.git", { cwd: checkoutPath })
+    expect(readGitRemote(checkoutPath)).toBe("git@github.com:example/repo.git")
   })
 })

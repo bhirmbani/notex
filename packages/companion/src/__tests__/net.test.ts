@@ -5,7 +5,7 @@
 
 import { connect } from "node:net"
 import { describe, expect, it } from "bun:test"
-import { startServer } from "../net.ts"
+import { startServer, tryStartServer } from "../net.ts"
 
 function echoHandler(): (req: Request) => Promise<Response> {
   return async (req) => {
@@ -89,6 +89,41 @@ describe("startServer(..., \"node\")", () => {
       expect(res.status).toBe(200)
     } finally {
       handle.stop(true)
+    }
+  })
+})
+
+describe("tryStartServer(..., \"node\")", () => {
+  it("resolves ok:true and reports the bound port for a fixed port", async () => {
+    const result = await tryStartServer({ hostname: "127.0.0.1", port: 18927, fetch: echoHandler() }, "node")
+    try {
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error("unreachable")
+      expect(result.server.port).toBe(18927)
+    } finally {
+      if (result.ok) result.server.stop(true)
+    }
+  })
+
+  it("resolves ok:true with the OS-assigned port for a dynamic port (0)", async () => {
+    const result = await tryStartServer({ hostname: "127.0.0.1", port: 0, fetch: echoHandler() }, "node")
+    try {
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error("unreachable")
+      expect(result.server.port).toBeGreaterThan(0)
+    } finally {
+      if (result.ok) result.server.stop(true)
+    }
+  })
+
+  it("resolves ok:false EADDRINUSE instead of throwing when the port is already bound", async () => {
+    const first = await tryStartServer({ hostname: "127.0.0.1", port: 18928, fetch: echoHandler() }, "node")
+    if (!first.ok) throw new Error("first bind unexpectedly failed")
+    try {
+      const second = await tryStartServer({ hostname: "127.0.0.1", port: 18928, fetch: echoHandler() }, "node")
+      expect(second).toEqual({ ok: false, code: "EADDRINUSE" })
+    } finally {
+      first.server.stop(true)
     }
   })
 })
