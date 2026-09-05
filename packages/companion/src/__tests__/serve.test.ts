@@ -403,6 +403,41 @@ describe("hub death re-election", () => {
     }
   })
 
+  it("stops heartbeating once promoted to hub, rather than continuing to tick against itself", async () => {
+    handle = await serve({ checkoutPath, port: 18985, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    let heartbeatCount = 0
+    const countingFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/heartbeat")) heartbeatCount++
+      return fetch(input, init)
+    }) as typeof fetch
+
+    secondHandle = await serve({
+      checkoutPath: extraCheckoutPath,
+      port: 18985,
+      hubBaseDir,
+      heartbeatIntervalMs: 10,
+      fetchImpl: countingFetch,
+    })
+    expect(secondHandle.role).toBe("satellite")
+
+    hubHandle.server.stop(true)
+    handle = undefined
+
+    await new Promise((r) => setTimeout(r, 150))
+    expect(secondHandle.role).toBe("hub")
+
+    const countAtPromotion = heartbeatCount
+    // Several more heartbeat-interval's worth of wait — if the old loop were still ticking
+    // against the (now nonexistent) old hub URL, this would have grown well past countAtPromotion.
+    await new Promise((r) => setTimeout(r, 150))
+    expect(heartbeatCount).toBe(countAtPromotion)
+  })
+
   it("promotes the surviving satellite to hub via the ECONNREFUSED fast path, reusing the original hub's token", async () => {
     handle = await serve({ checkoutPath, port: 18980, hubBaseDir })
     extraCheckoutPath = newCheckout()
