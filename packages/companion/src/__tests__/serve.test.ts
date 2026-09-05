@@ -471,6 +471,64 @@ describe("hub death re-election", () => {
     expect(thirdHandle.deregister).toBe(deregisterAtStop)
   })
 
+  it("does not resurrect a losing satellite's handle after deregister() fires mid re-registration", async () => {
+    handle = await serve({ checkoutPath, port: 18987, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    thirdCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    // Same setup as the stopHeartbeat() variant above, but exercising deregister() directly —
+    // deregister() calls stopHeartbeat() internally, so this checks that path actually reaches
+    // the same `disposed` flag rather than only setting it when stopHeartbeat() is called
+    // directly.
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18987, hubBaseDir, heartbeatIntervalMs: 10 })
+    expect(secondHandle.role).toBe("satellite")
+
+    let registerCallCount = 0
+    let markSecondRegisterStarted: (() => void) | undefined
+    const secondRegisterStarted = new Promise<void>((done) => {
+      markSecondRegisterStarted = done
+    })
+    const delayingFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/register")) {
+        registerCallCount++
+        if (registerCallCount === 2) {
+          markSecondRegisterStarted?.()
+          return new Promise<Response>((done) => setTimeout(() => done(fetch(input, init)), 100))
+        }
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    thirdHandle = await serve({
+      checkoutPath: thirdCheckoutPath,
+      port: 18987,
+      hubBaseDir,
+      heartbeatIntervalMs: 200,
+      fetchImpl: delayingFetch,
+    })
+    expect(thirdHandle.role).toBe("satellite")
+
+    hubHandle.server.stop(true)
+    handle = undefined
+
+    await new Promise((r) => setTimeout(r, 100))
+    expect(secondHandle.role).toBe("hub")
+
+    await secondRegisterStarted
+    assertRole(thirdHandle, "satellite")
+    const stopHeartbeatAtStop = thirdHandle.stopHeartbeat
+    const deregisterAtStop = thirdHandle.deregister
+    await deregisterAtStop()
+
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(thirdHandle.stopHeartbeat).toBe(stopHeartbeatAtStop)
+    expect(thirdHandle.deregister).toBe(deregisterAtStop)
+  })
+
   it("is safe to call stopHeartbeat()/deregister() on a stale pre-promotion reference after promotion", async () => {
     handle = await serve({ checkoutPath, port: 18988, hubBaseDir })
     extraCheckoutPath = newCheckout()
