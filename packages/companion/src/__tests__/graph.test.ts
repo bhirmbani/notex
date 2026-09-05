@@ -238,6 +238,13 @@ describe("readGitRemote", () => {
     expect(remote).toBe("https://github.com/example/repo.git")
   })
 
+  it("redacts a query-string-embedded token, not just userinfo", () => {
+    execSync("git remote add origin 'https://gitlab.example.com/org/repo.git?access_token=glpat-secrettoken456'", { cwd: checkoutPath })
+    const remote = readGitRemote(checkoutPath)
+    expect(remote).not.toContain("glpat-secrettoken456")
+    expect(remote).toBe("https://gitlab.example.com/org/repo.git")
+  })
+
   it("passes through an SCP-style SSH remote unchanged — it never carries a secret this way", () => {
     execSync("git remote add origin git@github.com:example/repo.git", { cwd: checkoutPath })
     expect(readGitRemote(checkoutPath)).toBe("git@github.com:example/repo.git")

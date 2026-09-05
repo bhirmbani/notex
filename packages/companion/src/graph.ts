@@ -86,22 +86,33 @@ export function readHeadSha(checkoutPath: string): string | null {
 }
 
 /**
- * Strips embedded credentials from an HTTPS-style remote URL (`https://user:token@host/...`) —
- * a pattern CI tooling and some hosts still produce. Left alone: the SCP-style SSH form
- * (`git@host:org/repo.git`) never carries a secret this way — `git` there is the protocol's
- * fixed remote username, not a credential — and `new URL()` rejects that form outright, which is
- * exactly why the catch branch below passes it through unchanged rather than redacting it.
+ * Strips embedded credentials from an HTTPS-style remote URL. Covers both places a token turns
+ * up in practice: userinfo (`https://user:token@host/...`, what GitHub Actions' checkout and
+ * GitLab CI's job-token pattern both produce) and a query string (`?access_token=...` /
+ * `?token=...`, some self-hosted or custom-tooling setups). The query string and hash fragment
+ * are dropped unconditionally rather than pattern-matched against known token param names —
+ * enumerating those names would always risk missing a non-standard one, whereas a legitimate
+ * git remote URL essentially never needs a query string or fragment for the git protocol itself.
+ * Left alone: the SCP-style SSH form (`git@host:org/repo.git`) never carries a secret this way —
+ * `git` there is the protocol's fixed remote username, not a credential — and `new URL()`
+ * rejects that form outright, which is exactly why the catch branch below passes it through
+ * unchanged rather than redacting it.
  */
 function redactGitRemote(url: string): string {
+  let parsed: URL
   try {
-    const parsed = new URL(url)
-    if (!parsed.username && !parsed.password) return url
-    parsed.username = ""
-    parsed.password = ""
-    return parsed.toString()
+    parsed = new URL(url)
   } catch {
     return url
   }
+
+  if (!parsed.username && !parsed.password && !parsed.search && !parsed.hash) return url
+
+  parsed.username = ""
+  parsed.password = ""
+  parsed.search = ""
+  parsed.hash = ""
+  return parsed.toString()
 }
 
 /**
