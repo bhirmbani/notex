@@ -79,18 +79,19 @@ function isAddrInUse(err: unknown): boolean {
  * True only for an actual connection refusal, never a timeout/abort or an HTTP error status —
  * `fetch()` only rejects with this for the former, and TBR-142's hub-death fast path needs to
  * fire on nothing else: a slow-but-alive hub must keep getting the ordinary "try again next
- * heartbeat" treatment, not an immediate re-election. Node's fetch (undici) wraps the underlying
- * `ECONNREFUSED` as a `TypeError`'s `.cause`; Bun's fetch instead sets `.code` directly to its own
- * `"ConnectionRefused"`, never populating `.cause` — confirmed against both runtimes directly,
- * unlike a message-text match (Bun's own generic "Unable to connect" wording, for one, isn't
- * specific to this failure — e.g. it likely also covers DNS failures — so matching on it risked
- * misclassifying an unrelated, possibly-transient fetch failure as proof the hub is gone).
+ * heartbeat" treatment, not an immediate re-election. Confirmed directly against both runtimes
+ * `detectRuntime()` ever returns, no message-text fallback: Node's fetch (undici) wraps the
+ * underlying `ECONNREFUSED` as a `TypeError`'s `.cause`; Bun's fetch instead sets `.code` directly
+ * to its own `"ConnectionRefused"`, never populating `.cause`. A prior version of this also
+ * matched `/ECONNREFUSED/` against `.message` as a belt-and-suspenders fallback — dropped because
+ * it was dead weight for both actual runtimes (Bun's own message text never contains that word)
+ * while still carrying the same misclassification risk `isAddrInUse`'s message match above
+ * accepts for a different, lower-stakes reason (a losing bind attempt vs. an immediate handover
+ * of the machine-level hub role).
  */
 export function isConnRefused(err: unknown): boolean {
-  const e = err as { cause?: NodeJS.ErrnoException; code?: string; message?: string } | undefined
-  if (e?.cause?.code === "ECONNREFUSED") return true
-  if (e?.code === "ConnectionRefused") return true
-  return /ECONNREFUSED/.test(String(e?.message ?? ""))
+  const e = err as { cause?: NodeJS.ErrnoException; code?: string } | undefined
+  return e?.cause?.code === "ECONNREFUSED" || e?.code === "ConnectionRefused"
 }
 
 /**
