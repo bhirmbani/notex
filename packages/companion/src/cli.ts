@@ -152,7 +152,15 @@ function runServe(args: Array<string>): void {
       // the hub's heartbeat timeout — that timeout path is TBR-142's crash-recovery job. Only a
       // satellite has anything to deregister; `ServeHandle` is a discriminated union, so this
       // check is what lets the compiler confirm `deregister` even exists on this branch.
+      let shuttingDown = false
       const shutdown = () => {
+        // SIGINT then SIGTERM in close succession (or a mashed Ctrl+C) would otherwise re-enter
+        // this while the first call's deregister is still in flight — each individual step
+        // tolerates that (a second deregister no-ops on an already-removed instanceId, a second
+        // `server.stop()` is harmless), but there's no reason to fire the network call twice.
+        if (shuttingDown) return
+        shuttingDown = true
+
         const deregistered = handle.role === "satellite" ? handle.deregister() : Promise.resolve()
         deregistered
           .catch(() => {})
