@@ -85,6 +85,19 @@ export function readHeadSha(checkoutPath: string): string | null {
   }
 }
 
+/** Used by the hub/satellite registration payload (TBR-133's resolution, TBR-141) — reported
+ * alongside `headSha` for the human-confirmed checkout<->Repository binding of companion-api.md
+ * §3.3. `null` covers both "not a git checkout" and "no `origin` remote configured". */
+export function readGitRemote(checkoutPath: string): string | null {
+  try {
+    return execSync("git remote get-url origin", { cwd: checkoutPath, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim()
+  } catch {
+    return null
+  }
+}
+
 const SUGGESTED_QUESTIONS_HEADING = /^## Suggested Questions\s*$/
 const SECTION_HEADING = /^## /
 const QUESTION_BULLET = /^- \*\*(.+)\*\*$/

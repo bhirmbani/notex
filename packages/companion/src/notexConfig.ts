@@ -61,3 +61,34 @@ export function loadNotexConfig(
 
   return { kind: "linked", config: { organizationId, projectId, repositoryId, apiKey: resolvedKey } }
 }
+
+export type NotexLinkIds = { organizationId: string; projectId: string; repositoryId: string }
+
+/**
+ * Lighter than `loadNotexConfig`: the hub/satellite registration payload (TBR-141) only needs
+ * to know whether this checkout is linked to a Repository, not the `apiKey` a `notex_*` MCP
+ * call would need. Unlike `loadNotexConfig`, a present-but-keyless config still counts as
+ * linked here — the registration `link` field TBR-137's picker and TBR-139's binding
+ * confirmation read is about identity, not MCP-write authorization.
+ */
+export function readLinkIds(checkoutPath: string): NotexLinkIds | null {
+  let raw: string
+  try {
+    raw = readFileSync(configFilePath(checkoutPath), "utf8")
+  } catch {
+    return null
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null
+
+  const { organizationId, projectId, repositoryId } = parsed as Record<string, unknown>
+  if (!nonEmptyString(organizationId) || !nonEmptyString(projectId) || !nonEmptyString(repositoryId)) return null
+
+  return { organizationId, projectId, repositoryId }
+}

@@ -3,7 +3,8 @@
 // thin dispatcher exercised by the build/pack verification, not unit tests.
 
 import { describe, expect, it } from "bun:test"
-import { CliUsageError, parseServeArgs } from "../cli.ts"
+import { CliUsageError, parseServeArgs, roleLine } from "../cli.ts"
+import type { ServeHandle } from "../serve.ts"
 
 describe("parseServeArgs", () => {
   it("defaults to no port override, no extra origins, no rotation", () => {
@@ -42,5 +43,36 @@ describe("parseServeArgs", () => {
 
   it("rejects an unrecognised flag", () => {
     expect(() => parseServeArgs(["--bogus"])).toThrow(CliUsageError)
+  })
+})
+
+// Minimal fields for roleLine() — it only reads role/baseUrl/standaloneWarning.
+function fakeHandle(overrides: Partial<ServeHandle>): ServeHandle {
+  return {
+    server: { hostname: "127.0.0.1", port: 7717, stop: () => {} },
+    token: "tok",
+    baseUrl: "http://127.0.0.1:7717",
+    pairingLine: "http://127.0.0.1:7717/#token=tok",
+    role: "hub",
+    ...overrides,
+  }
+}
+
+describe("roleLine", () => {
+  it("prints the hub banner (TBR-138's resolution)", () => {
+    expect(roleLine(fakeHandle({ role: "hub", baseUrl: "http://127.0.0.1:7717" }))).toBe(
+      "notex-companion: hub — bound to 127.0.0.1:7717",
+    )
+  })
+
+  it("prints the satellite banner naming the hub's address (TBR-138's resolution)", () => {
+    expect(roleLine(fakeHandle({ role: "satellite", baseUrl: "http://127.0.0.1:7717" }))).toBe(
+      "notex-companion: satellite — registered with hub at 127.0.0.1:7717",
+    )
+  })
+
+  it("prints the standalone-fallback warning verbatim (TBR-133's resolution)", () => {
+    const warning = "couldn't confirm a hub on 7717 — running standalone, one-click switching unavailable this session."
+    expect(roleLine(fakeHandle({ role: "standalone", standaloneWarning: warning }))).toBe(`notex-companion: ${warning}`)
   })
 })

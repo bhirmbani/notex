@@ -18,6 +18,7 @@ import { ERROR_CODES,   OpError } from "./types.ts"
 import type { BrowseRequest, PathRequest, QueryRequest, SearchRequest } from "./ops.ts"
 import type { ErrorCode, ErrorResponse } from "./types.ts"
 import type { GraphIndex } from "./graph.ts"
+import type { InstanceLink, InstanceRegistry, RegisterRequest } from "./registry.ts"
 
 /**
  * The graph is loaded once into memory (companion-api.md §3); `loading` covers the window
@@ -29,6 +30,9 @@ export type HandlerOptions = {
   token: string
   origins: Array<string>
   getGraphState: () => GraphState
+  /** Present only when this process is the hub (TBR-141) — its presence is what turns on the
+   * satellite-facing register/heartbeat/deregister routes and the browser-facing instances one. */
+  registry?: InstanceRegistry
 }
 
 const ERROR_STATUS: Record<ErrorCode, number> = {
@@ -69,7 +73,27 @@ async function dispatch(req: Request, url: URL, opts: HandlerOptions): Promise<u
 
   if (method === "GET" && pathname === "/v1/ping") return { ok: true, apiVersion: API_VERSION }
 
+  // Satellite -> hub ops (TBR-141, TBR-133's resolution). Unauthenticated: a satellite has no
+  // shared secret with the hub at register time — loopback bind is the trust boundary here, same
+  // posture as /v1/ping. Only exist at all when this process is the hub (`opts.registry` set);
+  // a satellite or standalone process falls through to the unmatched-route 404 below.
+  if (opts.registry) {
+    if (method === "POST" && pathname === "/v1/register") return registerInstance(opts.registry, parseRegisterRequest(await readJsonBody(req)))
+    if (method === "POST" && pathname === "/v1/heartbeat") return { ok: opts.registry.heartbeat(requireString(await readJsonBody(req), "instanceId")) }
+    if (method === "POST" && pathname === "/v1/deregister") {
+      opts.registry.deregister(requireString(await readJsonBody(req), "instanceId"))
+      return { ok: true }
+    }
+  }
+
   requireAuth(req, opts.token)
+
+  // Browser-facing (companion-api.md envelope conventions) — needs the registry, not the graph.
+  if (method === "GET" && pathname === "/v1/instances") {
+    if (!opts.registry) throw new OpError("not_found", `No such route: ${method} ${pathname}`)
+    return { instances: opts.registry.list() }
+  }
+
   const index = requireGraph(opts.getGraphState())
 
   if (method === "GET" && pathname === "/v1/status") return status(index)
@@ -186,6 +210,49 @@ function parseQueryRequest(body: Record<string, unknown>): QueryRequest {
 
 function parsePathRequest(body: Record<string, unknown>): PathRequest {
   return { from: requireString(body, "from"), to: requireString(body, "to"), maxDepth: optionalCount(body, "maxDepth") }
+}
+
+function optionalNullableString(body: Record<string, unknown>, key: string): string | null {
+  const v = body[key]
+  if (v === null || v === undefined) return null
+  if (typeof v !== "string") throw new OpError("invalid_request", `"${key}" must be a string or null`)
+  return v
+}
+
+function requireInt(body: Record<string, unknown>, key: string): number {
+  const v = body[key]
+  if (typeof v !== "number" || !Number.isInteger(v)) throw new OpError("invalid_request", `"${key}" must be an integer`)
+  return v
+}
+
+function parseLink(body: Record<string, unknown>): InstanceLink {
+  const v = body.link
+  if (v === null || v === undefined) return null
+  if (typeof v !== "object" || Array.isArray(v)) throw new OpError("invalid_request", '"link" must be an object or null')
+  const link = v as Record<string, unknown>
+  return {
+    organizationId: requireString(link, "organizationId"),
+    projectId: requireString(link, "projectId"),
+    repositoryId: requireString(link, "repositoryId"),
+  }
+}
+
+function parseRegisterRequest(body: Record<string, unknown>): RegisterRequest {
+  return {
+    instanceId: requireString(body, "instanceId"),
+    checkoutPath: requireString(body, "checkoutPath"),
+    port: requireInt(body, "port"),
+    pid: requireInt(body, "pid"),
+    gitRemote: optionalNullableString(body, "gitRemote"),
+    headSha: optionalNullableString(body, "headSha"),
+    token: requireString(body, "token"),
+    link: parseLink(body),
+  }
+}
+
+function registerInstance(registry: InstanceRegistry, req: RegisterRequest): { ok: true } {
+  registry.register(req)
+  return { ok: true }
 }
 
 function parseBrowseRequest(searchParams: URLSearchParams): BrowseRequest {

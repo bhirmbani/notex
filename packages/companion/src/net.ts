@@ -66,6 +66,69 @@ function startNodeServer(opts: StartServerOptions): MinimalServer {
   }
 }
 
+export type BindResult = { ok: true; server: MinimalServer } | { ok: false; code: "EADDRINUSE" }
+
+function isAddrInUse(err: unknown): boolean {
+  if ((err as NodeJS.ErrnoException | undefined)?.code === "EADDRINUSE") return true
+  // Bun.serve() throws a plain Error (no `.code`) whose message names the conflict — matched by
+  // substring since Bun hasn't committed to exact wording across versions.
+  return /in use|EADDRINUSE/i.test(String((err as Error | undefined)?.message ?? ""))
+}
+
+/**
+ * Like `startServer`, but resolves `{ ok: false, code: "EADDRINUSE" }` instead of throwing when
+ * the port is already bound — the hub/satellite auto-promotion decision (TBR-141, TBR-133's
+ * resolution) needs to distinguish "someone's already listening here" from every other bind
+ * failure, which should still propagate. Unlike `startServer`, this supports a dynamic port (0)
+ * under the Node fallback too: being async, it can wait for the `listening` event and read the
+ * OS-assigned port back from `server.address()` — the thing that made the synchronous API refuse
+ * port 0 in the first place no longer applies here.
+ */
+export async function tryStartServer(opts: StartServerOptions, runtime: Runtime = detectRuntime()): Promise<BindResult> {
+  if (runtime === "bun") {
+    try {
+      return { ok: true, server: Bun!.serve(opts) }
+    } catch (err) {
+      if (isAddrInUse(err)) return { ok: false, code: "EADDRINUSE" }
+      throw err
+    }
+  }
+  return tryStartNodeServer(opts)
+}
+
+function tryStartNodeServer(opts: StartServerOptions): Promise<BindResult> {
+  return new Promise((resolvePromise, reject) => {
+    const server = createServer((req, res) => {
+      res.on("error", () => {})
+      void handleRequest(req, res, opts.fetch)
+    })
+
+    server.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") resolvePromise({ ok: false, code: "EADDRINUSE" })
+      else reject(err)
+    })
+
+    server.once("listening", () => {
+      const address = server.address()
+      const boundPort = typeof address === "object" && address !== null ? address.port : opts.port
+      resolvePromise({
+        ok: true,
+        server: {
+          hostname: opts.hostname,
+          port: boundPort,
+          stop(closeActiveConnections) {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            if (closeActiveConnections) server.closeAllConnections?.()
+            server.close()
+          },
+        },
+      })
+    })
+
+    server.listen(opts.port, opts.hostname)
+  })
+}
+
 async function handleRequest(req: IncomingMessage, res: ServerResponse, fetch: FetchHandler): Promise<void> {
   try {
     const request = await toWebRequest(req)

@@ -16,6 +16,7 @@ import { CliUsageError } from "./cliErrors.ts"
 import { link, parseLinkArgs } from "./link.ts"
 import { serve } from "./serve.ts"
 import { startMcpServer } from "./mcp.ts"
+import type { ServeHandle } from "./serve.ts"
 
 const HELP = `notex-companion — local retrieval companion over a checkout's graphify-out/graph.json
 
@@ -102,6 +103,19 @@ function runMcp(): void {
   })
 }
 
+/** The role/registration line printed right before the shared pairing line (TBR-138's
+ * resolution) — every process prints the *same* pairing line beneath this regardless of role. */
+export function roleLine(handle: ServeHandle): string {
+  switch (handle.role) {
+    case "hub":
+      return `notex-companion: hub — bound to ${handle.baseUrl.replace("http://", "")}`
+    case "satellite":
+      return `notex-companion: satellite — registered with hub at ${handle.baseUrl.replace("http://", "")}`
+    case "standalone":
+      return handle.standaloneWarning ? `notex-companion: ${handle.standaloneWarning}` : `notex-companion: standalone`
+  }
+}
+
 function runServe(args: Array<string>): void {
   const { port, origins, rotateToken } = parseServeArgs(args)
   const checkoutPath = process.cwd()
@@ -115,7 +129,7 @@ function runServe(args: Array<string>): void {
     process.exit(1)
   }
 
-  const handle = serve({
+  serve({
     checkoutPath,
     port,
     origins,
@@ -128,10 +142,30 @@ function runServe(args: Array<string>): void {
         console.error(`notex-companion: graph.json could not be read: ${state.error.message}`)
       }
     },
-  })
+  }).then(
+    (handle) => {
+      console.log(`notex-companion serving ${checkoutPath}`)
+      console.log(roleLine(handle))
+      console.log(handle.pairingLine)
 
-  console.log(`notex-companion serving ${checkoutPath}`)
-  console.log(handle.pairingLine)
+      // Clean shutdown (TBR-141): a satellite deregisters immediately rather than waiting out
+      // the hub's heartbeat timeout — that timeout path is TBR-142's crash-recovery job.
+      const shutdown = () => {
+        Promise.resolve(handle.deregister?.())
+          .catch(() => {})
+          .finally(() => {
+            handle.server.stop(true)
+            process.exit(0)
+          })
+      }
+      process.on("SIGINT", shutdown)
+      process.on("SIGTERM", shutdown)
+    },
+    (err) => {
+      console.error(`notex-companion: failed to start: ${err instanceof Error ? err.message : String(err)}`)
+      process.exit(1)
+    },
+  )
 }
 
 export function main(argv: Array<string> = process.argv.slice(2)): void {
