@@ -292,6 +292,14 @@ async function registerWithHub(hubBaseUrl: string, fetchImpl: typeof fetch, body
 type Disposed = { current: boolean }
 
 /**
+ * Shared no-ops for a `SatelliteHandle`'s `stopHeartbeat`/`deregister` once `reElectHub` has
+ * mutated its owner past being a satellite (into a hub or standalone) — see the assignment sites
+ * for why these replace `undefined` rather than leaving the fields absent.
+ */
+function noopStopHeartbeat(): void {}
+async function noopDeregister(): Promise<void> {}
+
+/**
  * `onHubDown` fires at most once per loop, on either of two signals — a slow-but-alive hub (a
  * timeout, DNS blip, or 5xx) is still just next-interval's problem to notice (staleness pruning,
  * TBR-134/TBR-142 on the hub's side):
@@ -590,8 +598,14 @@ async function reElectHub(
       baseUrl,
       pairingLine: buildPairingLine(baseUrl, hubToken),
       registry: registry!,
-      stopHeartbeat: undefined,
-      deregister: undefined,
+      // Not `undefined`: `handle` was typed `SatelliteHandle` (non-optional `stopHeartbeat`/
+      // `deregister`) at the moment a caller — the CLI's SIGINT handler, or any other holder of
+      // that same reference — first got it. `handle.role` is what tells a caller these are no
+      // longer meaningful post-promotion, but nothing forces them to re-check it before calling
+      // one anyway; a safe no-op here is the difference between that being a wasted call and an
+      // `undefined is not a function` crash.
+      stopHeartbeat: noopStopHeartbeat,
+      deregister: noopDeregister,
     })
     oldServer.stop(true)
     return
@@ -617,8 +631,8 @@ async function reElectHub(
       baseUrl,
       pairingLine: buildPairingLine(baseUrl, handle.token),
       standaloneWarning: `couldn't confirm a new hub on ${targetPort} after the previous one disappeared — running standalone, one-click switching unavailable this session.`,
-      stopHeartbeat: undefined,
-      deregister: undefined,
+      stopHeartbeat: noopStopHeartbeat,
+      deregister: noopDeregister,
     })
     return
   }

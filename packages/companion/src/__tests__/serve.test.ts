@@ -4,7 +4,7 @@ import { join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { bindWithHandler, serve } from "../serve.ts"
 import { tryStartServer } from "../net.ts"
-import type { ServeHandle } from "../serve.ts"
+import type { SatelliteHandle, ServeHandle } from "../serve.ts"
 
 const FIXTURE_ROOT = resolve(import.meta.dir, "fixtures/sample-checkout")
 
@@ -469,6 +469,31 @@ describe("hub death re-election", () => {
 
     expect(thirdHandle.stopHeartbeat).toBe(stopHeartbeatAtStop)
     expect(thirdHandle.deregister).toBe(deregisterAtStop)
+  })
+
+  it("is safe to call stopHeartbeat()/deregister() on a stale pre-promotion reference after promotion", async () => {
+    handle = await serve({ checkoutPath, port: 18988, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18988, hubBaseDir, heartbeatIntervalMs: 10 })
+    expect(secondHandle.role).toBe("satellite")
+    // Captured before promotion — mirrors a caller (the CLI's SIGINT handler, or any other
+    // holder of this same object) that got a `SatelliteHandle`-typed reference and doesn't
+    // re-check `.role` before calling one of these, since the type itself never said it might
+    // stop meaning what it used to. A plain cast, not `assertRole`, so it doesn't narrow
+    // `secondHandle` itself — this test still needs to observe its `.role` change to "hub" below.
+    const staleSatelliteRef = secondHandle as SatelliteHandle
+
+    hubHandle.server.stop(true)
+    handle = undefined
+
+    await new Promise((r) => setTimeout(r, 150))
+    expect(secondHandle.role).toBe("hub")
+
+    expect(() => staleSatelliteRef.stopHeartbeat()).not.toThrow()
+    await expect(staleSatelliteRef.deregister()).resolves.toBeUndefined()
   })
 
   it("stops heartbeating once promoted to hub, rather than continuing to tick against itself", async () => {

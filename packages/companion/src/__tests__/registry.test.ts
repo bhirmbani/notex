@@ -117,11 +117,16 @@ describe("InstanceRegistry", () => {
 
   // ------------------------------------------- staleness pruning (TBR-142)
 
+  // Margins below are generous (tens of ms of slack either side of the configured timeout) —
+  // `setTimeout` is a minimum delay, not an exact one, and a tight margin here would make these
+  // flaky under scheduler contention (a loaded CI runner, e.g.) rather than testing anything real
+  // about the pruning logic itself (TBR-142 code review).
+
   it("keeps a satellite listed before its heartbeat-timeout window has elapsed", async () => {
-    const registry = new InstanceRegistry(hubSelf(), 30)
+    const registry = new InstanceRegistry(hubSelf(), 100)
     registry.register(registerRequest())
 
-    await new Promise((r) => setTimeout(r, 5))
+    await new Promise((r) => setTimeout(r, 10))
 
     expect(registry.list().map((i) => i.instanceId)).toContain("sat-1")
   })
@@ -130,7 +135,7 @@ describe("InstanceRegistry", () => {
     const registry = new InstanceRegistry(hubSelf(), 20)
     registry.register(registerRequest())
 
-    await new Promise((r) => setTimeout(r, 40))
+    await new Promise((r) => setTimeout(r, 100))
 
     const list = registry.list()
     expect(list.map((i) => i.instanceId)).not.toContain("sat-1")
@@ -138,12 +143,12 @@ describe("InstanceRegistry", () => {
   })
 
   it("does not prune a satellite that keeps heartbeating within the timeout window", async () => {
-    const registry = new InstanceRegistry(hubSelf(), 30)
+    const registry = new InstanceRegistry(hubSelf(), 100)
     registry.register(registerRequest())
 
-    await new Promise((r) => setTimeout(r, 20))
+    await new Promise((r) => setTimeout(r, 30))
     registry.heartbeat("sat-1")
-    await new Promise((r) => setTimeout(r, 20))
+    await new Promise((r) => setTimeout(r, 30))
 
     expect(registry.list().map((i) => i.instanceId)).toContain("sat-1")
   })
