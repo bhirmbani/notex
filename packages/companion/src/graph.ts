@@ -85,14 +85,39 @@ export function readHeadSha(checkoutPath: string): string | null {
   }
 }
 
-/** Used by the hub/satellite registration payload (TBR-133's resolution, TBR-141) — reported
+/**
+ * Strips embedded credentials from an HTTPS-style remote URL (`https://user:token@host/...`) —
+ * a pattern CI tooling and some hosts still produce. Left alone: the SCP-style SSH form
+ * (`git@host:org/repo.git`) never carries a secret this way — `git` there is the protocol's
+ * fixed remote username, not a credential — and `new URL()` rejects that form outright, which is
+ * exactly why the catch branch below passes it through unchanged rather than redacting it.
+ */
+function redactGitRemote(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (!parsed.username && !parsed.password) return url
+    parsed.username = ""
+    parsed.password = ""
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
+/**
+ * Used by the hub/satellite registration payload (TBR-133's resolution, TBR-141) — reported
  * alongside `headSha` for the human-confirmed checkout<->Repository binding of companion-api.md
- * §3.3. `null` covers both "not a git checkout" and "no `origin` remote configured". */
+ * §3.3, and echoed to the browser via `GET /v1/instances`. `null` covers both "not a git
+ * checkout" and "no `origin` remote configured". Credentials embedded in the URL are redacted
+ * before it ever leaves this function — the browser is a materially less trusted boundary than
+ * the loopback processes the rest of this registration payload assumes.
+ */
 export function readGitRemote(checkoutPath: string): string | null {
   try {
-    return execSync("git remote get-url origin", { cwd: checkoutPath, stdio: ["ignore", "pipe", "ignore"] })
+    const raw = execSync("git remote get-url origin", { cwd: checkoutPath, stdio: ["ignore", "pipe", "ignore"] })
       .toString()
       .trim()
+    return redactGitRemote(raw)
   } catch {
     return null
   }
