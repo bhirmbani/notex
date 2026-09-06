@@ -83,6 +83,22 @@ function errorCode(error: unknown): string | null {
   return error instanceof CompanionRequestError ? error.code : null
 }
 
+/** Whether `pairing` — this Repository's *actual* live connection — is presently talking to
+ * `instance`, distinct from `linkMatches` (whether that instance's own persisted `.notex/
+ * notex.json` happens to name this Repository). The two can disagree: a satellite can be
+ * correctly linked to this Repository while the browser is still paired directly to the hub
+ * (e.g. an earlier manual "Connect companion" paste that self-confirmed against the hub's own
+ * checkout). Every `baseUrl` this app ever stores is `http://127.0.0.1:<port>` (pairing.ts's
+ * parse, switch.ts's own handoff), so comparing ports is exact — wrapped in try/catch since
+ * `pairing` comes from localStorage, which a user can hand-edit into something unparsable. */
+function isLiveConnection(pairing: PairingRecord, instance: InstanceSummary): boolean {
+  try {
+    return new URL(pairing.baseUrl).port === String(instance.port)
+  } catch {
+    return false
+  }
+}
+
 export function InstancePicker({
   repositoryId,
   organizationId,
@@ -170,7 +186,12 @@ export function InstancePicker({
       </p>
       <div className="divide-y rounded-lg border px-3">
         {instances.map((instance) => {
-          const isCurrent = linkMatches(instance.link, { organizationId, projectId, repositoryId })
+          const isLinked = linkMatches(instance.link, { organizationId, projectId, repositoryId })
+          const isLive = isLiveConnection(pairing, instance)
+          // The hub is a broker, never a switch target — switchInstance's registry lookup only
+          // ever finds satellites, so a hub row can never do anything but 404. Disabled rather
+          // than omitted: seeing it (with its own link/role badges) is still useful context.
+          const isHub = instance.role === "hub"
           const isActive = instance.instanceId === activeInstanceId
           const isSwitchingThis = isActive && step === "switching"
 
@@ -181,17 +202,20 @@ export function InstancePicker({
                   <p className="truncate font-mono text-xs">{instance.checkoutPath}</p>
                   <div className="mt-1 flex items-center gap-1.5">
                     <RoleBadge role={instance.role} />
-                    <LinkBadge link={instance.link} isCurrent={isCurrent} />
+                    <LinkBadge link={instance.link} isCurrent={isLinked} />
                   </div>
                 </div>
                 <Button
                   size="sm"
-                  variant={isCurrent ? "outline" : "default"}
-                  disabled={isCurrent || (activeInstanceId !== null && !isActive) || isSwitchingThis}
+                  variant={isLive ? "outline" : "default"}
+                  disabled={isLive || isHub || (activeInstanceId !== null && !isActive) || isSwitchingThis}
+                  title={isHub && !isLive ? "The hub itself can't be a switch target — connect a satellite checkout instead." : undefined}
                   onClick={() => handleRowClick(instance)}
                 >
-                  {isCurrent ? (
+                  {isLive ? (
                     "Current"
+                  ) : isHub ? (
+                    "Hub"
                   ) : isSwitchingThis ? (
                     <>
                       <RiLoader4Line className="size-3.5 animate-spin" /> Switching…
