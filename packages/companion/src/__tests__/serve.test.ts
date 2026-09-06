@@ -471,6 +471,50 @@ describe("hub death re-election", () => {
     expect(thirdHandle.deregister).toBe(deregisterAtStop)
   })
 
+  it("does not trigger re-election from a disposed heartbeat whose response body was still being parsed", async () => {
+    handle = await serve({ checkoutPath, port: 18989, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+
+    // The heartbeat call itself resolves immediately with a real-looking response, but reading
+    // its body (`res.json()`) is what's artificially delayed — the exact window between
+    // startHeartbeatLoop's two `disposed` checks (before and after that second await).
+    let heartbeatCount = 0
+    const slowBodyFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/heartbeat")) {
+        heartbeatCount++
+        if (heartbeatCount === 1) {
+          return Promise.resolve({
+            json: () => new Promise((done) => setTimeout(() => done({ ok: false }), 100)),
+          } as unknown as Response)
+        }
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    secondHandle = await serve({
+      checkoutPath: extraCheckoutPath,
+      port: 18989,
+      hubBaseDir,
+      heartbeatIntervalMs: 10,
+      fetchImpl: slowBodyFetch,
+    })
+    assertRole(secondHandle, "satellite")
+
+    // The first heartbeat tick has fired and is awaiting its slow res.json() by now; stop before
+    // that 100ms delay elapses.
+    await new Promise((r) => setTimeout(r, 20))
+    secondHandle.stopHeartbeat()
+    const roleAtStop = secondHandle.role
+
+    // Past the 100ms body-parse delay — if the second `disposed` check were missing, the stale
+    // `{ ok: false }` would still have fired onHubDown and mutated this handle by now.
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(secondHandle.role).toBe(roleAtStop)
+  })
+
   it("does not resurrect a losing satellite's handle after deregister() fires mid re-registration", async () => {
     handle = await serve({ checkoutPath, port: 18987, hubBaseDir })
     extraCheckoutPath = newCheckout()

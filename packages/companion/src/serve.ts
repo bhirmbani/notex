@@ -353,7 +353,15 @@ function startHeartbeatLoop(
         })
         if (firedOnce || disposed.current) return
         const body = (await res.json().catch(() => null)) as { ok?: unknown } | null
-        if (body?.ok !== false) return
+        // Re-checked after this second await, not just the one above `fetchImpl` itself: parsing
+        // the response body is itself asynchronous, and `stopHeartbeat()` firing during that
+        // narrow window must not still land a re-election the caller already asked to stop.
+        // eslint can't see that `disposed.current` may have flipped during that await — it's a
+        // mutable field on an object this function doesn't own, not a value flow-narrowed once
+        // and never touched again — so it wrongly reads the earlier check as making this one
+        // redundant.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (body?.ok !== false || disposed.current) return
         firedOnce = true
         clearInterval(timer)
         onHubDown()
