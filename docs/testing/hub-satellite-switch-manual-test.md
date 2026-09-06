@@ -129,8 +129,9 @@ switching unavailable this session`, not a hang or a crash.
   §3 walks through, which the picker *does* now cover: once any pairing exists at all, even a
   self-confirmed one against the wrong checkout, the picker is reachable from there.
 - **A satellite reached via its own direct-handoff pairing (post-switch) has no picker either.**
-  Only the hub serves `GET /v1/instances`; a satellite's own pairing 404s it. To switch again from
-  there, use a *different* Repository's tab that's still paired against the hub, or re-pair this
-  one against the hub's line via the fallback link.
+  Only the hub serves `GET /v1/instances`; a satellite's own pairing 404s it. `ConnectionSection`
+  shows a "Pair a different companion manually" link in its place (TBR-145) so you can still get
+  back into `ConnectFlow` from there — use it, or switch from a *different* Repository's tab
+  that's still paired against the hub.
 - **A denied/blocked LNA permission is out of scope here** — that's `companion-connect-flow.md`'s
   job, deployed-origin only.
