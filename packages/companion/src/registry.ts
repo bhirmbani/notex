@@ -10,6 +10,19 @@
 
 export type InstanceLink = { organizationId: string; projectId: string; repositoryId: string } | null
 
+/** Shared by switch.ts's own-hub fast-path check and the browser's instance-picker "Current"
+ * badge (TBR-144) — both need the identical "is this instance already linked to exactly these
+ * ids" comparison, so it lives once here rather than twice. Fs-free like the rest of this
+ * module, so client.ts (the browser-safe subpath) can re-export it for real, not just its type. */
+export function linkMatches(link: InstanceLink, ids: { organizationId: string; projectId: string; repositoryId: string }): boolean {
+  return (
+    link !== null &&
+    link.organizationId === ids.organizationId &&
+    link.projectId === ids.projectId &&
+    link.repositoryId === ids.repositoryId
+  )
+}
+
 export type RegisterRequest = {
   instanceId: string
   checkoutPath: string
