@@ -8,3 +8,11 @@
 
 export * from "./types.ts"
 export * from "./ops.ts"
+// registry.ts is fs-free like types.ts/ops.ts, so `linkMatches` (the browser instance-picker's
+// "Current" badge needs the identical check switch.ts's own fast path uses) is a real export,
+// not type-only. switch.ts itself carries Node-only runtime code (atomicWrite.ts's `node:fs`),
+// so only its types are safe to re-export here — `export type` guarantees no runtime import is
+// emitted, unlike a bare `export *` which can't make that promise (TBR-144).
+export { linkMatches } from "./registry.ts"
+export type { InstanceLink, InstanceSummary } from "./registry.ts"
+export type { SwitchRequest, SwitchResult } from "./switch.ts"

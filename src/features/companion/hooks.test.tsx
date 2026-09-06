@@ -6,6 +6,7 @@ import { renderHook, waitFor } from "@testing-library/react"
 import {
   useCompanionBrowse,
   useCompanionConnection,
+  useCompanionInstances,
   useCompanionPath,
   useCompanionQuery,
   useCompanionSearch,
@@ -183,6 +184,33 @@ describe("useCompanionBrowse", () => {
     renderHook(() => useCompanionBrowse(null, true), { wrapper })
 
     expect(browseSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("useCompanionInstances", () => {
+  it("does not call the client when there is no pairing", () => {
+    const spy = vi.spyOn(client, "fetchInstances")
+    renderHook(() => useCompanionInstances(null), { wrapper })
+
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it("calls fetchInstances with the pairing's baseUrl/token when a pairing is present", async () => {
+    const spy = vi.spyOn(client, "fetchInstances").mockResolvedValue({ instances: [] })
+
+    const { result } = renderHook(() => useCompanionInstances(PAIRING), { wrapper })
+
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(PAIRING.baseUrl, PAIRING.token))
+    await waitFor(() => expect(result.current.data).toEqual({ instances: [] }))
+  })
+
+  it("does not retry on a failed fetch (e.g. the paired companion isn't the hub)", async () => {
+    const spy = vi.spyOn(client, "fetchInstances").mockRejectedValue(new Error("not_found"))
+
+    const { result } = renderHook(() => useCompanionInstances(PAIRING), { wrapper })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 })
 

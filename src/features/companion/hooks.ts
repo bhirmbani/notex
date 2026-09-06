@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import {
   browse as browseOp,
+  fetchInstances,
   fetchSuggestedQuestions,
   path as pathOp,
   query as queryOp,
@@ -136,6 +137,37 @@ export function useCompanionSuggestedQuestions(
     },
     enabled: enabled && !!pairing,
     staleTime: 60_000,
+  })
+}
+
+export const companionInstancesKeys = {
+  all: ["companion", "instances"] as const,
+  detail: (baseUrl: string) => [...companionInstancesKeys.all, baseUrl] as const,
+}
+
+/**
+ * The instance-picker's list (TBR-144) — decides whether `ConnectionSection`'s non-connected
+ * branch shows the picker at all: `pairing` here is whatever this Repository already has
+ * paired (typically the hub, per TBR-138's shared pairing line), tried regardless of the
+ * resolved connection state, since a `mismatched` companion can still answer `/v1/instances`.
+ * `enabled: !!pairing` alone (no extra state check) mirrors `useCompanionBrowse`'s posture — a
+ * failed fetch (wrong companion, standalone mode) is swallowed by the caller checking `.data`,
+ * not surfaced as an error state of its own. `retry: false` (unlike `useCompanionBrowse`/
+ * `useCompanionSuggestedQuestions`, which leave react-query's default retries in place) is
+ * deliberate here: a paired-but-not-the-hub companion (standalone mode, or a satellite) 404s
+ * `/v1/instances` deterministically — retrying can't turn that into a different answer, and
+ * would only delay the caller's fallback to the plain notice+CTA UI.
+ */
+export function useCompanionInstances(pairing: PairingRecord | null) {
+  return useQuery({
+    queryKey: companionInstancesKeys.detail(pairing?.baseUrl ?? ""),
+    queryFn: () => {
+      if (!pairing) return Promise.reject(new Error("not connected"))
+      return fetchInstances(pairing.baseUrl, pairing.token)
+    },
+    enabled: !!pairing,
+    retry: false,
+    staleTime: 10_000,
   })
 }
 

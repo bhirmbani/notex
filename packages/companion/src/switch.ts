@@ -12,9 +12,10 @@
 import { atomicWriteFile } from "./atomicWrite.ts"
 import { configFilePath } from "./notexConfig.ts"
 import { createNotexClient, resolveApiUrl } from "./notexClient.ts"
+import { linkMatches } from "./registry.ts"
 import { ERROR_CODES, OpError } from "./types.ts"
 import type { NotexConfig, NotexLinkIds } from "./notexConfig.ts"
-import type { InstanceLink, InstanceRegistry } from "./registry.ts"
+import type { InstanceRegistry } from "./registry.ts"
 
 /** The organizationId/projectId/repositoryId trio is `NotexLinkIds` (notexConfig.ts) everywhere
  * else it travels together — reused here rather than re-declared a third time. */
@@ -26,15 +27,6 @@ export type SwitchResult = {
   checkoutPath: string
   gitRemote: string | null
   headSha: string | null
-}
-
-function linkMatches(link: InstanceLink, req: SwitchRequest): boolean {
-  return (
-    link !== null &&
-    link.organizationId === req.organizationId &&
-    link.projectId === req.projectId &&
-    link.repositoryId === req.repositoryId
-  )
 }
 
 /** Mirrors link.ts's `describeValidationFailure` — same wording, since this is the identical

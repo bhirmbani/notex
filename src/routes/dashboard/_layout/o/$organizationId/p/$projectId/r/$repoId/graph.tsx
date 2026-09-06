@@ -9,6 +9,7 @@ import { MAX_BROWSE_GROUP_LIMIT } from "notex-companion/client"
 import type { FocusEvent, ReactNode } from "react"
 
 import type { PairingRecord, ResolvedNode } from "@/features/companion/types"
+import type { StateNotice } from "@/features/companion/stateNotice"
 import { useProject } from "@/features/projects/hooks"
 import { useRepository } from "@/features/repositories/hooks"
 import { Breadcrumb } from "@/components/Breadcrumb"
@@ -20,9 +21,11 @@ import { ConnectionStateChip } from "@/features/companion/ConnectionStateChip"
 import {
   useCompanionBrowse,
   useCompanionConnection,
+  useCompanionInstances,
   useCompanionPath,
   useDebouncedCompanionSearch,
 } from "@/features/companion/hooks"
+import { InstancePicker } from "@/features/companion/InstancePicker"
 import { getPairing } from "@/features/companion/pairing"
 import { NotexJsonCard } from "@/features/companion/NotexJsonCard"
 import { stalenessMessage } from "@/features/companion/staleness"
@@ -85,6 +88,8 @@ function GraphPage() {
       ) : connection.data ? (
         <ConnectionSection
           repositoryId={repoId}
+          organizationId={organizationId}
+          projectId={projectId}
           result={connection.data}
           retry={connection.retry}
           showFlow={showFlow}
@@ -108,14 +113,26 @@ function GraphPage() {
   )
 }
 
+/** The manual-pair fallback link always forces a fresh `"pair"` flow (paste a new line),
+ * regardless of `cta` — distinct from `cta`'s own reconnect/repair modes, which re-attempt
+ * whatever's already stored. */
+function connectFlowMode(manualPairRequested: boolean, cta: StateNotice["cta"]): "pair" | "reconnect" | "repair" {
+  if (manualPairRequested || cta === "connect") return "pair"
+  return cta === "reconnect" ? "reconnect" : "repair"
+}
+
 function ConnectionSection({
   repositoryId,
+  organizationId,
+  projectId,
   result,
   retry,
   showFlow,
   setShowFlow,
 }: {
   repositoryId: string
+  organizationId: string
+  projectId: string
   result: ReturnType<typeof useCompanionConnection>["data"] & {}
   retry: () => Promise<unknown> | void
   showFlow: boolean
@@ -126,6 +143,16 @@ function ConnectionSection({
     result.state === "unauthorized" || result.state === "mismatched"
       ? result.state
       : undefined
+  const [manualPairRequested, setManualPairRequested] = useState(false)
+
+  // Tried regardless of `result.state` (a `mismatched` companion — the common post-switch-setup
+  // case — can still answer `/v1/instances`, per TBR-138: every companion prints the *hub's*
+  // pairing line, hub or satellite). `null` in the `connected` branch below, which this hook call
+  // never reaches (it's declared before the early return, same as the other hooks in this
+  // component, but only *used* in the non-connected branch).
+  const pairing = result.state === "connected" ? null : getPairing(repositoryId)
+  const instancesQuery = useCompanionInstances(pairing)
+  const instances = instancesQuery.data?.instances ?? null
 
   if (result.state === "connected") {
     return (
@@ -174,49 +201,67 @@ function ConnectionSection({
 
   return (
     <div className="mb-8 space-y-4">
-      <div className="rounded-xl border bg-card p-5">
-        <p className="text-sm">{notice.message}</p>
-        {!showFlow && notice.cta !== "none" && (
-          <div className="mt-4">
-            <Button
-              size="sm"
-              onClick={() => {
-                if (notice.cta === "retry") void retry()
-                else setShowFlow(true)
-              }}
-            >
-              {notice.cta === "connect" && "Connect companion"}
-              {notice.cta === "reconnect" && "Grant permission"}
-              {notice.cta === "repair" &&
-                (repairReason === "mismatched"
-                  ? "Fix companion binding"
-                  : "Re-pair companion")}
-              {notice.cta === "retry" && "Retry"}
-            </Button>
-          </div>
-        )}
-      </div>
+      {instances && pairing ? (
+        <InstancePicker
+          repositoryId={repositoryId}
+          organizationId={organizationId}
+          projectId={projectId}
+          pairing={pairing}
+          instances={instances}
+          onSwitched={() => {
+            setShowFlow(false)
+            setManualPairRequested(false)
+            void retry()
+          }}
+          onManualPair={() => {
+            setManualPairRequested(true)
+            setShowFlow(true)
+          }}
+        />
+      ) : (
+        <div className="rounded-xl border bg-card p-5">
+          <p className="text-sm">{notice.message}</p>
+          {!showFlow && notice.cta !== "none" && (
+            <div className="mt-4">
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (notice.cta === "retry") void retry()
+                  else setShowFlow(true)
+                }}
+              >
+                {notice.cta === "connect" && "Connect companion"}
+                {notice.cta === "reconnect" && "Grant permission"}
+                {notice.cta === "repair" &&
+                  (repairReason === "mismatched"
+                    ? "Fix companion binding"
+                    : "Re-pair companion")}
+                {notice.cta === "retry" && "Retry"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {showFlow &&
-        (notice.cta === "connect" ||
+        (manualPairRequested ||
+          notice.cta === "connect" ||
           notice.cta === "reconnect" ||
           notice.cta === "repair") && (
           <ConnectFlow
             repositoryId={repositoryId}
-            mode={
-              notice.cta === "connect"
-                ? "pair"
-                : notice.cta === "reconnect"
-                  ? "reconnect"
-                  : "repair"
-            }
-            repairReason={repairReason}
-            existingPairing={getPairing(repositoryId)}
+            mode={connectFlowMode(manualPairRequested, notice.cta)}
+            repairReason={manualPairRequested ? undefined : repairReason}
+            existingPairing={pairing}
             onConnected={() => {
               setShowFlow(false)
+              setManualPairRequested(false)
               void retry()
             }}
-            onCancel={() => setShowFlow(false)}
+            onCancel={() => {
+              setShowFlow(false)
+              setManualPairRequested(false)
+            }}
           />
         )}
     </div>

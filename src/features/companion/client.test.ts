@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   CompanionRequestError,
   browse,
+  fetchInstances,
   fetchStatus,
   fetchSuggestedQuestions,
   node,
@@ -10,6 +11,8 @@ import {
   ping,
   query,
   search,
+  setHubKey,
+  switchInstance,
 } from "./client"
 import type { Mock } from "vitest"
 
@@ -228,5 +231,102 @@ describe("op fetch targets", () => {
     for (const call of fetchSpy.mock.calls) {
       expect(String(call[0]).startsWith(BASE_URL)).toBe(true)
     }
+  })
+})
+
+// ------------------------------------------------- hub ops (TBR-143, TBR-144)
+
+describe("fetchInstances", () => {
+  it("GETs /v1/instances with a bearer token, and the result carries no graph stamp", async () => {
+    const body = {
+      instances: [
+        {
+          instanceId: "inst-1",
+          checkoutPath: "/checkout",
+          port: 7717,
+          role: "hub",
+          registeredAt: "2026-09-05T00:00:00Z",
+          lastHeartbeatAt: "2026-09-05T00:00:00Z",
+          gitRemote: null,
+          headSha: null,
+          link: null,
+        },
+      ],
+    }
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(body))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    const result = await fetchInstances(BASE_URL, TOKEN)
+
+    expect(result).toEqual(body)
+    expect("graph" in result).toBe(false)
+    const [url, init] = firstCall(fetchSpy)
+    expect(url).toBe(`${BASE_URL}/v1/instances`)
+    expect(new Headers(init.headers).get("authorization")).toBe(`Bearer ${TOKEN}`)
+  })
+
+  it("surfaces a 404 as a CompanionRequestError", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ error: { code: "not_found", message: "no such route" } }, { status: 404 }))
+    )
+    await expect(fetchInstances(BASE_URL, TOKEN)).rejects.toMatchObject({ status: 404, code: "not_found" })
+  })
+})
+
+describe("switchInstance", () => {
+  const REQ = { instanceId: "sat-1", organizationId: "org_1", projectId: "proj_1", repositoryId: "repo_1" }
+
+  it("POSTs /v1/switch with the request body and a bearer token", async () => {
+    const body = {
+      baseUrl: "http://127.0.0.1:54321",
+      token: "sat-token",
+      checkoutPath: "/checkout/sat",
+      gitRemote: null,
+      headSha: null,
+    }
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(body))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    const result = await switchInstance(BASE_URL, TOKEN, REQ)
+
+    expect(result).toEqual(body)
+    const [url, init] = firstCall(fetchSpy)
+    expect(url).toBe(`${BASE_URL}/v1/switch`)
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body as string)).toEqual(REQ)
+    expect(new Headers(init.headers).get("authorization")).toBe(`Bearer ${TOKEN}`)
+  })
+
+  it("surfaces hub_key_required as a CompanionRequestError", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ error: { code: "hub_key_required", message: "no hub key persisted" } }, { status: 428 })
+        )
+    )
+    await expect(switchInstance(BASE_URL, TOKEN, REQ)).rejects.toMatchObject({
+      status: 428,
+      code: "hub_key_required",
+      message: "no hub key persisted",
+    })
+  })
+})
+
+describe("setHubKey", () => {
+  it("POSTs /v1/hub-key with the apiKey and a bearer token", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
+    vi.stubGlobal("fetch", fetchSpy)
+
+    const result = await setHubKey(BASE_URL, TOKEN, "key_1")
+
+    expect(result).toEqual({ ok: true })
+    const [url, init] = firstCall(fetchSpy)
+    expect(url).toBe(`${BASE_URL}/v1/hub-key`)
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body as string)).toEqual({ apiKey: "key_1" })
+    expect(new Headers(init.headers).get("authorization")).toBe(`Bearer ${TOKEN}`)
   })
 })
