@@ -1,6 +1,10 @@
-import { describe, expect, it } from "bun:test"
+import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { afterEach, describe, expect, it, mock } from "bun:test"
 import { createHandler } from "../http.ts"
 import { loadGraph } from "../graph.ts"
+import { loadHubApiKey } from "../hubIdentity.ts"
 import { API_VERSION } from "../ops.ts"
 import { InstanceRegistry } from "../registry.ts"
 import { OpError } from "../types.ts"
@@ -411,6 +415,171 @@ describe("GET /v1/instances", () => {
 
   it("404s on a process that isn't the hub (no registry)", async () => {
     const res = await handler()(req("/v1/instances"))
+    expect(res.status).toBe(404)
+  })
+})
+
+// --------------------------------------------------- hub-key + switch (TBR-143)
+
+function fakeFetch(status: number, body: unknown) {
+  return mock(async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })) as unknown as typeof fetch
+}
+
+function hubHandlerWithOpts(
+  registry: InstanceRegistry,
+  opts: { hubBaseDir?: string; fetchImpl?: typeof fetch } = {},
+  state: GraphState = { kind: "ready", index },
+) {
+  return createHandler({ token: TOKEN, origins: [ORIGIN], getGraphState: () => state, registry, ...opts })
+}
+
+describe("POST /v1/hub-key", () => {
+  let hubBaseDir: string
+
+  afterEach(() => {
+    if (hubBaseDir) rmSync(hubBaseDir, { recursive: true, force: true })
+  })
+
+  function freshHubBaseDir(): string {
+    hubBaseDir = mkdtempSync(join(tmpdir(), "companion-http-hubkey-"))
+    return hubBaseDir
+  }
+
+  it("requires the bearer token", async () => {
+    const registry = freshRegistry()
+    const res = await hubHandlerWithOpts(registry, { hubBaseDir: freshHubBaseDir() })(
+      req("/v1/hub-key", { method: "POST", token: null, body: { apiKey: "key_1" } }),
+    )
+    expect(res.status).toBe(401)
+  })
+
+  it("persists the apiKey", async () => {
+    const registry = freshRegistry()
+    const baseDir = freshHubBaseDir()
+    const res = await hubHandlerWithOpts(registry, { hubBaseDir: baseDir })(
+      req("/v1/hub-key", { method: "POST", body: { apiKey: "key_1" } }),
+    )
+    expect(res.status).toBe(200)
+    expect(await json(res)).toEqual({ ok: true })
+    expect(loadHubApiKey(baseDir)).toBe("key_1")
+  })
+
+  it("is idempotent — calling again rotates the persisted key", async () => {
+    const registry = freshRegistry()
+    const baseDir = freshHubBaseDir()
+    const h = hubHandlerWithOpts(registry, { hubBaseDir: baseDir })
+    await h(req("/v1/hub-key", { method: "POST", body: { apiKey: "key_1" } }))
+    await h(req("/v1/hub-key", { method: "POST", body: { apiKey: "key_2" } }))
+
+    expect(loadHubApiKey(baseDir)).toBe("key_2")
+  })
+
+  it("returns 422 invalid_request when apiKey is missing", async () => {
+    const registry = freshRegistry()
+    const baseDir = freshHubBaseDir()
+    const res = await hubHandlerWithOpts(registry, { hubBaseDir: baseDir })(req("/v1/hub-key", { method: "POST", body: {} }))
+    expect(res.status).toBe(422)
+  })
+
+  it("404s on a process that isn't the hub (no registry, auth still enforced first)", async () => {
+    const res = await handler()(req("/v1/hub-key", { method: "POST", body: { apiKey: "key_1" } }))
+    expect(res.status).toBe(404)
+  })
+})
+
+describe("POST /v1/switch", () => {
+  let checkoutPath: string
+  let hubBaseDir: string
+
+  afterEach(() => {
+    if (checkoutPath) rmSync(checkoutPath, { recursive: true, force: true })
+    if (hubBaseDir) rmSync(hubBaseDir, { recursive: true, force: true })
+  })
+
+  function setup(overrides: Partial<RegisterRequest> = {}) {
+    checkoutPath = mkdtempSync(join(tmpdir(), "companion-http-switch-"))
+    hubBaseDir = mkdtempSync(join(tmpdir(), "companion-http-hubkey-"))
+    const registry = freshRegistry()
+    registry.register(registerBody({ checkoutPath, ...overrides }))
+    return { registry, checkoutPath, hubBaseDir }
+  }
+
+  const SWITCH_BODY = { instanceId: "sat-1", organizationId: "org_1", projectId: "proj_1", repositoryId: "repo_1" }
+
+  it("requires the bearer token", async () => {
+    const { registry } = setup()
+    const res = await hubHandlerWithOpts(registry, { hubBaseDir })(
+      req("/v1/switch", { method: "POST", token: null, body: SWITCH_BODY }),
+    )
+    expect(res.status).toBe(401)
+  })
+
+  it("returns 428 hub_key_required when unlinked and no hub key is persisted", async () => {
+    const { registry } = setup()
+    const res = await hubHandlerWithOpts(registry, { hubBaseDir })(req("/v1/switch", { method: "POST", body: SWITCH_BODY }))
+    expect(res.status).toBe(428)
+    const body = await json(res)
+    expect(body.error.code).toBe("hub_key_required")
+  })
+
+  it("returns 404 satellite_not_registered for an unknown instanceId", async () => {
+    const { registry } = setup()
+    const res = await hubHandlerWithOpts(registry, { hubBaseDir })(
+      req("/v1/switch", { method: "POST", body: { ...SWITCH_BODY, instanceId: "no-such-instance" } }),
+    )
+    expect(res.status).toBe(404)
+    const body = await json(res)
+    expect(body.error.code).toBe("satellite_not_registered")
+  })
+
+  it("fast path: succeeds with no hub key when already linked to exactly the requested ids", async () => {
+    const { registry } = setup({ link: { organizationId: "org_1", projectId: "proj_1", repositoryId: "repo_1" } })
+    const res = await hubHandlerWithOpts(registry, { hubBaseDir })(req("/v1/switch", { method: "POST", body: SWITCH_BODY }))
+    expect(res.status).toBe(200)
+    const body = await json(res)
+    expect(body).toEqual({
+      baseUrl: "http://127.0.0.1:54321",
+      token: "satellite-own-token",
+      checkoutPath,
+      gitRemote: null,
+      headSha: null,
+    })
+  })
+
+  it("validates against the Notex API and writes .notex/notex.json when a hub key is persisted", async () => {
+    const { registry } = setup()
+    const fetchImpl = fakeFetch(200, { id: "repo_1", projectId: "proj_1", name: "notex", description: null })
+    const h = hubHandlerWithOpts(registry, { hubBaseDir, fetchImpl })
+
+    await h(req("/v1/hub-key", { method: "POST", body: { apiKey: "hub_key" } }))
+    const res = await h(req("/v1/switch", { method: "POST", body: SWITCH_BODY }))
+
+    expect(res.status).toBe(200)
+    const configPath = join(checkoutPath, ".notex", "notex.json")
+    expect(JSON.parse(readFileSync(configPath, "utf8"))).toEqual({
+      organizationId: "org_1",
+      projectId: "proj_1",
+      repositoryId: "repo_1",
+      apiKey: "hub_key",
+    })
+  })
+
+  it("surfaces not_found with link.ts's actionable wording when the Notex API validation fails", async () => {
+    const { registry } = setup()
+    const fetchImpl = fakeFetch(404, { error: { code: "NOT_FOUND", message: "gone" } })
+    const h = hubHandlerWithOpts(registry, { hubBaseDir, fetchImpl })
+
+    await h(req("/v1/hub-key", { method: "POST", body: { apiKey: "hub_key" } }))
+    const res = await h(req("/v1/switch", { method: "POST", body: SWITCH_BODY }))
+
+    expect(res.status).toBe(404)
+    const body = await json(res)
+    expect(body.error.code).toBe("not_found")
+    expect(body.error.message).toContain("was not found")
+  })
+
+  it("404s on a process that isn't the hub (no registry, auth still enforced first)", async () => {
+    const res = await handler()(req("/v1/switch", { method: "POST", body: SWITCH_BODY }))
     expect(res.status).toBe(404)
   })
 })

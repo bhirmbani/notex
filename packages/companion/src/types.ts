@@ -70,6 +70,13 @@ export const ERROR_CODES = {
   /** Any other non-2xx from the Notex API (rate limit, 5xx, ...) — notex-mcp-server.md §4.1
    * reuses this module's error vocabulary rather than inventing a second taxonomy. */
   notexApiError: "notex_api_error",
+  /** TBR-143: `POST /v1/switch` targets an `instanceId` the hub doesn't currently have registered. */
+  satelliteNotRegistered: "satellite_not_registered",
+  /** TBR-143: `POST /v1/switch` needs to validate + write a new link but the hub has no
+   * persisted apiKey yet (no `POST /v1/hub-key` call has succeeded). */
+  hubKeyRequired: "hub_key_required",
+  /** TBR-143: `atomicWriteFile` failed while writing the target satellite's `.notex/notex.json`. */
+  writeFailed: "write_failed",
 } as const
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES]
