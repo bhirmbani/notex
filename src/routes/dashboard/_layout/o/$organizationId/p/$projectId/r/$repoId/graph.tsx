@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { ConnectFlow } from "@/features/companion/ConnectFlow"
 import { ConnectionStateChip } from "@/features/companion/ConnectionStateChip"
 import {
+  useBootstrapPairing,
   useCompanionBrowse,
   useCompanionConnection,
   useCompanionInstances,
@@ -158,15 +159,24 @@ function ConnectionSection({
   // 404s and `instances` stays null.
   const pairing = getPairing(repositoryId)
   const instancesQuery = useCompanionInstances(pairing)
-  const instances = instancesQuery.data?.instances ?? null
+  // TBR-147: a Repository with no pairing of its own borrows any other pairing this browser
+  // already holds, trying candidates until one resolves to a hub (resolveBootstrapPairing) —
+  // `enabled` there is the exact inverse of `useCompanionInstances`'s, so exactly one of the two
+  // ever fetches for a given Repository. `bootstrapPairing` never gets written to this
+  // Repository's own storage; it exists only to seed the picker below, which persists its own
+  // pairing via `confirmPairing` once the human actually picks a checkout to switch to.
+  const bootstrapQuery = useBootstrapPairing(repositoryId, pairing)
+  const effectivePairing = pairing ?? bootstrapQuery.data?.pairing ?? null
+  const instances =
+    instancesQuery.data?.instances ?? bootstrapQuery.data?.instances ?? null
 
   const picker =
-    instances && pairing ? (
+    instances && effectivePairing ? (
       <InstancePicker
         repositoryId={repositoryId}
         organizationId={organizationId}
         projectId={projectId}
-        pairing={pairing}
+        pairing={effectivePairing}
         instances={instances}
         onSwitched={() => {
           setShowFlow(false)

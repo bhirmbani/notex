@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   clearPairing,
   getPairing,
+  listPairings,
   parsePairingLine,
   setPairing,
 } from "./pairing"
@@ -76,6 +77,73 @@ describe("pairing storage", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
+  })
+})
+
+describe("listPairings", () => {
+  it("returns an empty array when no pairings are stored", () => {
+    expect(listPairings()).toEqual([])
+  })
+
+  it("returns every stored pairing across repositories", () => {
+    setPairing("repo-1", {
+      baseUrl: "http://127.0.0.1:7717",
+      token: "tok1",
+      checkoutId: "c1",
+    })
+    setPairing("repo-2", {
+      baseUrl: "http://127.0.0.1:8888",
+      token: "tok2",
+      checkoutId: "c2",
+    })
+
+    expect(listPairings()).toEqual(
+      expect.arrayContaining([
+        {
+          repositoryId: "repo-1",
+          record: { baseUrl: "http://127.0.0.1:7717", token: "tok1", checkoutId: "c1" },
+        },
+        {
+          repositoryId: "repo-2",
+          record: { baseUrl: "http://127.0.0.1:8888", token: "tok2", checkoutId: "c2" },
+        },
+      ])
+    )
+    expect(listPairings()).toHaveLength(2)
+  })
+
+  it("excludes switch-confirmed bindings stored under the same key prefix", () => {
+    setPairing("repo-1", {
+      baseUrl: "http://127.0.0.1:7717",
+      token: "tok1",
+      checkoutId: "c1",
+    })
+    localStorage.setItem(
+      "notex:companion:switch-confirmed:repo-1",
+      JSON.stringify({ checkoutId: "c1", gitRemote: null, headSha: null })
+    )
+
+    expect(listPairings()).toEqual([
+      {
+        repositoryId: "repo-1",
+        record: { baseUrl: "http://127.0.0.1:7717", token: "tok1", checkoutId: "c1" },
+      },
+    ])
+  })
+
+  it("skips malformed stored entries rather than throwing", () => {
+    localStorage.setItem("notex:companion:repo-1", "not json")
+    localStorage.setItem(
+      "notex:companion:repo-2",
+      JSON.stringify({ baseUrl: "http://127.0.0.1:7717" })
+    )
+
+    expect(listPairings()).toEqual([])
+  })
+
+  it("ignores unrelated localStorage keys", () => {
+    localStorage.setItem("some-other-app:key", "value")
+    expect(listPairings()).toEqual([])
   })
 })
 

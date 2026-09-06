@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { renderHook, waitFor } from "@testing-library/react"
 
 import {
+  useBootstrapPairing,
   useCompanionBrowse,
   useCompanionConnection,
   useCompanionInstances,
@@ -13,6 +14,7 @@ import {
   useCompanionSuggestedQuestions,
   useDebouncedCompanionSearch,
 } from "./hooks"
+import * as bootstrapPairing from "./bootstrapPairing"
 import * as connectionState from "./connectionState"
 import * as client from "./client"
 import type { ReactNode } from "react"
@@ -211,6 +213,33 @@ describe("useCompanionInstances", () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(spy).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("useBootstrapPairing", () => {
+  it("does not resolve a bootstrap pairing when this Repository already has its own pairing", () => {
+    const spy = vi.spyOn(bootstrapPairing, "resolveBootstrapPairing")
+    renderHook(() => useBootstrapPairing("repo-1", PAIRING), { wrapper })
+
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it("resolves a bootstrap pairing when this Repository has never been paired", async () => {
+    const spy = vi
+      .spyOn(bootstrapPairing, "resolveBootstrapPairing")
+      .mockResolvedValue({ pairing: PAIRING, instances: [] })
+
+    const { result } = renderHook(() => useBootstrapPairing("repo-1", null), {
+      wrapper,
+    })
+
+    await waitFor(() => expect(spy).toHaveBeenCalledWith("repo-1"))
+    await waitFor(() =>
+      expect(result.current.data).toEqual({
+        pairing: PAIRING,
+        instances: [],
+      })
+    )
   })
 })
 

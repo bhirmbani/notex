@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
+import { resolveBootstrapPairing } from "./bootstrapPairing"
 import {
   browse as browseOp,
   fetchInstances,
@@ -171,6 +172,36 @@ export function useCompanionInstances(pairing: PairingRecord | null) {
       return fetchInstances(pairing.baseUrl, pairing.token)
     },
     enabled: !!pairing,
+    retry: false,
+    staleTime: 10_000,
+  })
+}
+
+export const companionBootstrapPairingKeys = {
+  // Not per-repositoryId: `resolveBootstrapPairing`'s own `repositoryId !== entry.repositoryId`
+  // exclusion is a no-op whenever this hook is enabled at all (an unpaired Repository, by
+  // definition, has no stored pairing of its own to exclude), so the result is identical for
+  // every currently-unpaired Repository — one shared cache entry avoids re-trying the same
+  // candidates across each.
+  all: ["companion", "bootstrapPairing"] as const,
+}
+
+/**
+ * TBR-147's bootstrap path: when `ownPairing` is null — this Repository has never been paired —
+ * tries every other pairing already stored in this browser until one resolves to a hub (see
+ * `resolveBootstrapPairing`). `enabled: ownPairing === null` is the exact inverse of
+ * `useCompanionInstances`'s `enabled: !!pairing`, so the two hooks are mutually exclusive by
+ * construction — never both fetching for the same Repository at once. `retry: false` for the
+ * same reason `useCompanionInstances` disables it: a satellite candidate's 404 is deterministic.
+ */
+export function useBootstrapPairing(
+  repositoryId: string,
+  ownPairing: PairingRecord | null
+) {
+  return useQuery({
+    queryKey: companionBootstrapPairingKeys.all,
+    queryFn: () => resolveBootstrapPairing(repositoryId),
+    enabled: ownPairing === null,
     retry: false,
     staleTime: 10_000,
   })

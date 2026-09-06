@@ -41,6 +41,29 @@ export function clearPairing(repositoryId: string): void {
   localStorage.removeItem(storageKey(repositoryId))
 }
 
+const SWITCH_CONFIRMED_INFIX = "switch-confirmed:"
+
+/**
+ * Every pairing this browser holds, across all Repositories (TBR-147's bootstrap path) — any
+ * companion process accepts the same pairing line (TBR-138), so a `PairingRecord` stored under
+ * one Repository can bootstrap another that has never been paired itself.
+ */
+export function listPairings(): Array<{ repositoryId: string; record: PairingRecord }> {
+  const results: Array<{ repositoryId: string; record: PairingRecord }> = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key || !key.startsWith(STORAGE_PREFIX)) continue
+    const suffix = key.slice(STORAGE_PREFIX.length)
+    // switchConfirmation.ts stores its own records under this same "notex:companion:" prefix
+    // (`notex:companion:switch-confirmed:<repositoryId>`) — skip explicitly rather than relying
+    // solely on isPairingRecord's shape check to reject them.
+    if (suffix.startsWith(SWITCH_CONFIRMED_INFIX)) continue
+    const record = getPairing(suffix)
+    if (record) results.push({ repositoryId: suffix, record })
+  }
+  return results
+}
+
 /**
  * Parses the companion's startup pairing line (companion-api.md §3.2):
  * `http://127.0.0.1:7717/#token=<token>`. Pure parsing only — no fetch, no storage.
