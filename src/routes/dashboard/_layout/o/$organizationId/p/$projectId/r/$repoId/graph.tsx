@@ -187,10 +187,57 @@ function ConnectionSection({
       />
     ) : null
 
+  // Rendered once so both `isConnected` branches below can share it: `manualPairRequested`
+  // (set from the fallback link either branch may show) is the only way `showFlow` turns true
+  // once already connected, since `notice.cta` is otherwise "none" here — same condition the
+  // not-connected branch already used, just reused instead of duplicated.
+  const connectFlow = showFlow &&
+    (manualPairRequested ||
+      notice.cta === "connect" ||
+      notice.cta === "reconnect" ||
+      notice.cta === "repair") && (
+      <ConnectFlow
+        repositoryId={repositoryId}
+        mode={connectFlowMode(manualPairRequested, notice.cta)}
+        repairReason={manualPairRequested ? undefined : repairReason}
+        existingPairing={pairing}
+        onConnected={() => {
+          setShowFlow(false)
+          setManualPairRequested(false)
+          void retry()
+        }}
+        onCancel={() => {
+          setShowFlow(false)
+          setManualPairRequested(false)
+        }}
+      />
+    )
+
   if (isConnected) {
     return (
       <div className="mb-8 space-y-4">
-        {picker}
+        {picker ?? (
+          // A satellite reached via direct handoff (post-switch) doesn't serve GET /v1/instances
+          // — only the hub does — so `picker` above is null here with no way back into pairing
+          // otherwise: InstancePicker's own "pair manually" fallback link never renders when
+          // there's no picker to hang it off of.
+          <div className="rounded-xl border bg-card p-5">
+            <p className="text-sm text-muted-foreground">
+              Connected directly to a satellite checkout — this machine&apos;s other companion
+              instances aren&apos;t listed here (only the hub serves that list).
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setManualPairRequested(true)
+                setShowFlow(true)
+              }}
+              className="mt-3 text-xs font-medium text-muted-foreground underline hover:text-foreground"
+            >
+              Pair a different companion manually
+            </button>
+          </div>
+        )}
         <div className="rounded-xl border bg-card p-5">
           <h2 className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
             Checkout binding
@@ -231,6 +278,7 @@ function ConnectionSection({
             {stalenessMessage(result.status.graph)}
           </p>
         </div>
+        {connectFlow}
       </div>
     )
   }
@@ -262,27 +310,7 @@ function ConnectionSection({
         </div>
       )}
 
-      {showFlow &&
-        (manualPairRequested ||
-          notice.cta === "connect" ||
-          notice.cta === "reconnect" ||
-          notice.cta === "repair") && (
-          <ConnectFlow
-            repositoryId={repositoryId}
-            mode={connectFlowMode(manualPairRequested, notice.cta)}
-            repairReason={manualPairRequested ? undefined : repairReason}
-            existingPairing={pairing}
-            onConnected={() => {
-              setShowFlow(false)
-              setManualPairRequested(false)
-              void retry()
-            }}
-            onCancel={() => {
-              setShowFlow(false)
-              setManualPairRequested(false)
-            }}
-          />
-        )}
+      {connectFlow}
     </div>
   )
 }
