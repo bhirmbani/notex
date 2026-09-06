@@ -28,6 +28,7 @@ Most of the suite is `bun run test` (Vitest). One flow can't be covered there:
 - [Running the MCP server: setup and manual verification](docs/testing/mcp-server-setup.md) — how to wire `npx notex-companion mcp` into an MCP host, which directory it reads from, and how to verify the tool surface by hand (or test an unreleased build).
 - [Manual test: "Draft this Answer from the graph" on a Question](docs/testing/question-graph-draft.md) — the Question surface's graph draft action has no end-to-end coverage against a real companion process; this walks the retrieval, variant switcher, honesty banners, and clipboard handoff by hand, entirely in local dev.
 - [Manual test: notex_* MCP tools against a real Notex API](docs/testing/notex-save-answer-manual-test.md) — the `notex_*` MCP tools are unit-tested against a faked Notex client, not the real `/api/v1` routes; this walks linking a checkout, the read/write tools, the refusal paths (fabricated source, stale session, wrong Repository, no Grant), and the byte-identical-footer check against the UI's own save path.
+- [Manual test: hub/satellite one-click switch](docs/testing/hub-satellite-switch-manual-test.md) — starting two real `notex-companion serve` processes and racing them for the hub, then driving the browser's instance picker against a live one, has no automated coverage; this walks hub/satellite promotion, the one-click switch and its hub-key prompt, the confirmed-binding skip, crash re-election, and the standalone fallback.
 
 ## Vocabulary expansion
 
