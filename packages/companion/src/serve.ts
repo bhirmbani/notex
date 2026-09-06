@@ -162,7 +162,10 @@ function buildHubRegistryAndHandler(
     opts.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS,
   )
   const { getGraphState } = buildGraphState(opts.checkoutPath, opts.onGraphState)
-  return { handler: createHandler({ token: hubToken, origins, getGraphState, registry }), registry }
+  return {
+    handler: createHandler({ token: hubToken, origins, getGraphState, registry, hubBaseDir: opts.hubBaseDir, fetchImpl: opts.fetchImpl }),
+    registry,
+  }
 }
 
 /**

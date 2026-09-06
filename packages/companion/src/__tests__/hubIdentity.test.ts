@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { hubIdentityFilePath, loadOrCreateHubToken } from "../hubIdentity.ts"
+import { hubIdentityFilePath, loadHubApiKey, loadOrCreateHubToken, persistHubApiKey } from "../hubIdentity.ts"
 
 let baseDir: string
 
@@ -55,5 +55,36 @@ describe("loadOrCreateHubToken", () => {
 
     const reloaded = loadOrCreateHubToken(baseDir)
     expect(reloaded).toBe(rotated)
+  })
+})
+
+describe("loadHubApiKey / persistHubApiKey (TBR-143)", () => {
+  it("is undefined before any key has been persisted", () => {
+    expect(loadHubApiKey(baseDir)).toBeUndefined()
+  })
+
+  it("persists a key at mode 0600 alongside the hub token, without disturbing it", () => {
+    const token = loadOrCreateHubToken(baseDir)
+    persistHubApiKey(baseDir, "key_1")
+
+    const path = hubIdentityFilePath(baseDir)
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expect(loadHubApiKey(baseDir)).toBe("key_1")
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ token, apiKey: "key_1" })
+    expect(loadOrCreateHubToken(baseDir)).toBe(token)
+  })
+
+  it("is idempotent — calling again with a different key rotates it", () => {
+    persistHubApiKey(baseDir, "key_1")
+    persistHubApiKey(baseDir, "key_2")
+
+    expect(loadHubApiKey(baseDir)).toBe("key_2")
+  })
+
+  it("creates the hub token file if it doesn't exist yet", () => {
+    persistHubApiKey(baseDir, "key_1")
+
+    expect(loadHubApiKey(baseDir)).toBe("key_1")
+    expect(loadOrCreateHubToken(baseDir).length).toBeGreaterThan(20)
   })
 })

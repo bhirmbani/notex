@@ -47,7 +47,10 @@ export type HubSelf = {
   registeredAt: string
 }
 
-type SatelliteRecord = RegisterRequest & { registeredAt: string; lastHeartbeatAt: string }
+/** Exported for TBR-143's switch op — the one caller outside this module that needs the fields
+ * `list()` deliberately projects away (`token`, in particular, to hand off to a browser on a
+ * successful switch). */
+export type SatelliteRecord = RegisterRequest & { registeredAt: string; lastHeartbeatAt: string }
 
 /** 3 misses at the default 15s heartbeat interval (TBR-133's resolution) — TBR-134/TBR-142. */
 export const DEFAULT_HEARTBEAT_TIMEOUT_MS = 45_000
@@ -80,6 +83,24 @@ export class InstanceRegistry {
 
   deregister(instanceId: string): void {
     this.satellites.delete(instanceId)
+  }
+
+  /** The full record for one registered satellite (TBR-143's switch op) — `undefined` for an
+   * unknown or already-pruned `instanceId`. Prunes first so a satellite that just went stale
+   * can't still be switched to as if it were live. Never looks at the hub's own record: a switch
+   * targets a satellite, not the hub itself (`satellite_not_registered` is the error either way). */
+  get(instanceId: string): SatelliteRecord | undefined {
+    this.pruneStale()
+    return this.satellites.get(instanceId)
+  }
+
+  /** Updates a registered satellite's `link` in place after TBR-143's switch op writes a new
+   * `.notex/notex.json` at its checkout — without this, `GET /v1/instances` and a follow-up
+   * switch's fast path would keep reporting the pre-switch link until the satellite happens to
+   * restart and re-register. A no-op for an unknown `instanceId`, mirroring `deregister`. */
+  updateLink(instanceId: string, link: InstanceLink): void {
+    const record = this.satellites.get(instanceId)
+    if (record) record.link = link
   }
 
   /** A satellite that missed its last few heartbeats (crashed, `kill -9`) is indistinguishable

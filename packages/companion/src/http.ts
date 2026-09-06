@@ -1,9 +1,12 @@
 // REST binding of the op module at /v1/<op> (companion-api.md §4), plus the unauthenticated
 // /v1/ping. Transport concerns only — CORS, bearer auth, request validation, error-code
-// mapping — everything graph-shaped is delegated to ops.ts.
+// mapping — everything graph-shaped is delegated to ops.ts. Hub-only routes (register,
+// heartbeat, deregister, instances, hub-key, switch — TBR-141/TBR-143) are dispatched here too,
+// delegating to registry.ts and switch.ts respectively; they exist only when `opts.registry` is set.
 
 import { timingSafeEqual } from "node:crypto"
 import { corsHeaders, preflightHeaders } from "./cors.ts"
+import { loadHubApiKey, persistHubApiKey } from "./hubIdentity.ts"
 import {
   API_VERSION,
   browse,
@@ -14,8 +17,10 @@ import {
   status,
   suggestedQuestions
 } from "./ops.ts"
+import { switchInstance } from "./switch.ts"
 import { ERROR_CODES,   OpError } from "./types.ts"
 import type { BrowseRequest, PathRequest, QueryRequest, SearchRequest } from "./ops.ts"
+import type { SwitchRequest } from "./switch.ts"
 import type { ErrorCode, ErrorResponse } from "./types.ts"
 import type { GraphIndex } from "./graph.ts"
 import type { InstanceLink, InstanceRegistry, RegisterRequest } from "./registry.ts"
@@ -31,8 +36,15 @@ export type HandlerOptions = {
   origins: Array<string>
   getGraphState: () => GraphState
   /** Present only when this process is the hub (TBR-141) — its presence is what turns on the
-   * satellite-facing register/heartbeat/deregister routes and the browser-facing instances one. */
+   * satellite-facing register/heartbeat/deregister routes and the browser-facing instances,
+   * hub-key and switch ones. */
   registry?: InstanceRegistry
+  /** Overrides `homedir()` for the machine-level hub identity file (`~/.notex-companion/hub.json`,
+   * TBR-143's persisted apiKey included) — tests only. Ignored when `registry` is unset. */
+  hubBaseDir?: string
+  /** Overrides the global `fetch` used for the hub's own outbound Notex API calls during
+   * `/v1/switch` validation (TBR-143) — tests only. Ignored when `registry` is unset. */
+  fetchImpl?: typeof fetch
 }
 
 const ERROR_STATUS: Record<ErrorCode, number> = {
@@ -45,6 +57,10 @@ const ERROR_STATUS: Record<ErrorCode, number> = {
   // exhaustive against the shared ErrorCode union the Notex-write MCP tools also use.
   [ERROR_CODES.forbidden]: 403,
   [ERROR_CODES.notexApiError]: 502,
+  // TBR-143's switch/hub-key write path.
+  [ERROR_CODES.satelliteNotRegistered]: 404,
+  [ERROR_CODES.hubKeyRequired]: 428,
+  [ERROR_CODES.writeFailed]: 500,
 }
 
 export function createHandler(opts: HandlerOptions): (req: Request) => Promise<Response> {
@@ -89,9 +105,19 @@ async function dispatch(req: Request, url: URL, opts: HandlerOptions): Promise<u
   requireAuth(req, opts.token)
 
   // Browser-facing (companion-api.md envelope conventions) — needs the registry, not the graph.
-  if (method === "GET" && pathname === "/v1/instances") {
-    if (!opts.registry) throw new OpError("not_found", `No such route: ${method} ${pathname}`)
-    return { instances: opts.registry.list() }
+  // Only reachable at all when this process is the hub; a satellite or standalone process falls
+  // through to the unmatched-route 404 below, same posture as the satellite-facing block above.
+  if (opts.registry) {
+    if (method === "GET" && pathname === "/v1/instances") {
+      return { instances: opts.registry.list() }
+    }
+    if (method === "POST" && pathname === "/v1/hub-key") {
+      persistHubApiKey(opts.hubBaseDir, requireString(await readJsonBody(req), "apiKey"))
+      return { ok: true }
+    }
+    if (method === "POST" && pathname === "/v1/switch") {
+      return switchInstance(opts.registry, loadHubApiKey(opts.hubBaseDir), parseSwitchRequest(await readJsonBody(req)), opts.fetchImpl)
+    }
   }
 
   const index = requireGraph(opts.getGraphState())
@@ -257,6 +283,15 @@ function parseRegisterRequest(body: Record<string, unknown>): RegisterRequest {
 function registerInstance(registry: InstanceRegistry, req: RegisterRequest): { ok: true } {
   registry.register(req)
   return { ok: true }
+}
+
+function parseSwitchRequest(body: Record<string, unknown>): SwitchRequest {
+  return {
+    instanceId: requireString(body, "instanceId"),
+    organizationId: requireString(body, "organizationId"),
+    projectId: requireString(body, "projectId"),
+    repositoryId: requireString(body, "repositoryId"),
+  }
 }
 
 function parseBrowseRequest(searchParams: URLSearchParams): BrowseRequest {

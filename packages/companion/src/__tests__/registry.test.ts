@@ -115,6 +115,45 @@ describe("InstanceRegistry", () => {
     expect(() => registry.deregister("never-registered")).not.toThrow()
   })
 
+  // ------------------------------------------------- get / updateLink (TBR-143)
+
+  it("get() returns the full record, including the token list() never exposes", () => {
+    const registry = new InstanceRegistry(hubSelf())
+    registry.register(registerRequest())
+
+    expect(registry.get("sat-1")).toMatchObject({ instanceId: "sat-1", token: "satellite-own-token" })
+  })
+
+  it("get() returns undefined for an unknown instanceId", () => {
+    const registry = new InstanceRegistry(hubSelf())
+    expect(registry.get("does-not-exist")).toBeUndefined()
+  })
+
+  it("get() prunes a stale satellite rather than returning it", async () => {
+    const registry = new InstanceRegistry(hubSelf(), 20)
+    registry.register(registerRequest())
+
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(registry.get("sat-1")).toBeUndefined()
+  })
+
+  it("updateLink() replaces a satellite's link in place", () => {
+    const registry = new InstanceRegistry(hubSelf())
+    registry.register(registerRequest({ link: { organizationId: "o1", projectId: "p1", repositoryId: "r1" } }))
+
+    const newLink = { organizationId: "o2", projectId: "p2", repositoryId: "r2" }
+    registry.updateLink("sat-1", newLink)
+
+    expect(registry.get("sat-1")?.link).toEqual(newLink)
+    expect(registry.list().find((i) => i.instanceId === "sat-1")?.link).toEqual(newLink)
+  })
+
+  it("updateLink() for an unknown instanceId is a harmless no-op", () => {
+    const registry = new InstanceRegistry(hubSelf())
+    expect(() => registry.updateLink("never-registered", null)).not.toThrow()
+  })
+
   // ------------------------------------------- staleness pruning (TBR-142)
 
   // Margins below are generous (tens of ms of slack either side of the configured timeout) —
