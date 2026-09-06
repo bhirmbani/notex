@@ -139,86 +139,105 @@ function ConnectionSection({
   setShowFlow: (v: boolean) => void
 }) {
   const notice = stateNotice(result)
+  const isConnected = result.state === "connected"
   const repairReason =
     result.state === "unauthorized" || result.state === "mismatched"
       ? result.state
       : undefined
   const [manualPairRequested, setManualPairRequested] = useState(false)
 
-  // Tried regardless of `result.state` (a `mismatched` companion — the common post-switch-setup
-  // case — can still answer `/v1/instances`, per TBR-138: every companion prints the *hub's*
-  // pairing line, hub or satellite). `null` in the `connected` branch below, which this hook call
-  // never reaches (it's declared before the early return, same as the other hooks in this
-  // component, but only *used* in the non-connected branch).
-  const pairing = result.state === "connected" ? null : getPairing(repositoryId)
+  // Tried regardless of `result.state`, `connected` included (fix for a real bootstrap gap: a
+  // Repository's *first-ever* manual pairing always lands on `connected`, because confirmPairing
+  // computes its stored checkoutId from whatever checkout was just fetched — so a pairing made
+  // against the hub's own checkout, when that isn't actually the checkout this Repository wants,
+  // self-confirms as "correct" with no way back into the picker to fix it. Trying this
+  // unconditionally means: connected to the hub directly → still get the picker, so a wrong-but-
+  // self-consistent first pairing is always recoverable in place. Connected via a *satellite's*
+  // own direct-handoff pairing (post-switch) still degrades gracefully to no picker, same as
+  // before — a satellite doesn't serve `/v1/instances` at all (only the hub does), so this just
+  // 404s and `instances` stays null.
+  const pairing = getPairing(repositoryId)
   const instancesQuery = useCompanionInstances(pairing)
   const instances = instancesQuery.data?.instances ?? null
 
-  if (result.state === "connected") {
+  const picker =
+    instances && pairing ? (
+      <InstancePicker
+        repositoryId={repositoryId}
+        organizationId={organizationId}
+        projectId={projectId}
+        pairing={pairing}
+        instances={instances}
+        onSwitched={() => {
+          setShowFlow(false)
+          setManualPairRequested(false)
+          void retry()
+        }}
+        // Omitted (not just hidden) when already connected: "pair a new companion manually" is a
+        // bootstrap fallback for reaching the picker in the first place, meaningless once there's
+        // already a live, working connection to switch away from via the list itself.
+        onManualPair={
+          isConnected
+            ? undefined
+            : () => {
+                setManualPairRequested(true)
+                setShowFlow(true)
+              }
+        }
+      />
+    ) : null
+
+  if (isConnected) {
     return (
-      <div className="mb-8 rounded-xl border bg-card p-5">
-        <h2 className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-          Checkout binding
-        </h2>
-        <dl className="space-y-1.5 text-xs">
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Checkout path</dt>
-            <dd className="truncate font-mono">
-              {result.status.graph.checkoutPath}
-            </dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">HEAD</dt>
-            <dd className="font-mono">
-              {result.status.graph.headSha
-                ? result.status.graph.headSha.slice(0, 7)
-                : "not a git checkout"}
-            </dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Graph</dt>
-            <dd>
-              built{" "}
-              {new Date(result.status.graph.builtAt).toLocaleDateString(
-                "en-US",
-                {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                }
-              )}{" "}
-              · {result.status.graph.nodeCount} nodes ·{" "}
-              {result.status.graph.graphHash}
-            </dd>
-          </div>
-        </dl>
-        <p className="mt-4 text-xs text-muted-foreground">
-          {stalenessMessage(result.status.graph)}
-        </p>
+      <div className="mb-8 space-y-4">
+        {picker}
+        <div className="rounded-xl border bg-card p-5">
+          <h2 className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+            Checkout binding
+          </h2>
+          <dl className="space-y-1.5 text-xs">
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Checkout path</dt>
+              <dd className="truncate font-mono">
+                {result.status.graph.checkoutPath}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">HEAD</dt>
+              <dd className="font-mono">
+                {result.status.graph.headSha
+                  ? result.status.graph.headSha.slice(0, 7)
+                  : "not a git checkout"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Graph</dt>
+              <dd>
+                built{" "}
+                {new Date(result.status.graph.builtAt).toLocaleDateString(
+                  "en-US",
+                  {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  }
+                )}{" "}
+                · {result.status.graph.nodeCount} nodes ·{" "}
+                {result.status.graph.graphHash}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-4 text-xs text-muted-foreground">
+            {stalenessMessage(result.status.graph)}
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="mb-8 space-y-4">
-      {instances && pairing ? (
-        <InstancePicker
-          repositoryId={repositoryId}
-          organizationId={organizationId}
-          projectId={projectId}
-          pairing={pairing}
-          instances={instances}
-          onSwitched={() => {
-            setShowFlow(false)
-            setManualPairRequested(false)
-            void retry()
-          }}
-          onManualPair={() => {
-            setManualPairRequested(true)
-            setShowFlow(true)
-          }}
-        />
-      ) : (
+      {picker ?? (
         <div className="rounded-xl border bg-card p-5">
           <p className="text-sm">{notice.message}</p>
           {!showFlow && notice.cta !== "none" && (

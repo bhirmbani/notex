@@ -36,7 +36,10 @@ type Props = {
   pairing: PairingRecord
   instances: Array<InstanceSummary>
   onSwitched: () => void
-  onManualPair: () => void
+  /** Omitted (not just a no-op) by the caller once already `connected` — the fallback link is a
+   * bootstrap path into this component in the first place, meaningless when there's already a
+   * live connection to switch away from via the list itself. */
+  onManualPair?: () => void
 }
 
 type Step = "idle" | "confirm" | "switching" | "error"
@@ -270,13 +273,15 @@ export function InstancePicker({
           )
         })}
       </div>
-      <button
-        type="button"
-        onClick={onManualPair}
-        className="mt-3 text-xs font-medium text-muted-foreground underline hover:text-foreground"
-      >
-        Or pair a new companion manually
-      </button>
+      {onManualPair && (
+        <button
+          type="button"
+          onClick={onManualPair}
+          className="mt-3 text-xs font-medium text-muted-foreground underline hover:text-foreground"
+        >
+          Or pair a new companion manually
+        </button>
+      )}
     </div>
   )
 }

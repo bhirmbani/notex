@@ -146,10 +146,15 @@ export const companionInstancesKeys = {
 }
 
 /**
- * The instance-picker's list (TBR-144) — decides whether `ConnectionSection`'s non-connected
- * branch shows the picker at all: `pairing` here is whatever this Repository already has
- * paired (typically the hub, per TBR-138's shared pairing line), tried regardless of the
- * resolved connection state, since a `mismatched` companion can still answer `/v1/instances`.
+ * The instance-picker's list (TBR-144) — decides whether `ConnectionSection` shows the picker at
+ * all, in *either* of its branches: `pairing` here is whatever this Repository already has
+ * paired (typically the hub, per TBR-138's shared pairing line), tried regardless of the resolved
+ * connection state — including `connected`. That last one matters: a Repository's first-ever
+ * manual pairing always self-confirms as `connected` (confirmPairing derives its stored
+ * checkoutId from whatever was just fetched), so a pairing that happens to land on the *wrong*
+ * checkout would otherwise have no way back into the picker to fix it. Connected via a
+ * satellite's own direct-handoff pairing (post-switch) still degrades to no picker, same as
+ * before — a satellite doesn't serve `/v1/instances` at all, only the hub does.
  * `enabled: !!pairing` alone (no extra state check) mirrors `useCompanionBrowse`'s posture — a
  * failed fetch (wrong companion, standalone mode) is swallowed by the caller checking `.data`,
  * not surfaced as an error state of its own. `retry: false` (unlike `useCompanionBrowse`/

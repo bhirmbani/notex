@@ -63,10 +63,18 @@ pairing is unaffected by hub/satellite being in the mix.
 ## 3. See the instance picker
 
 Open the **second** Repository's graph page (never paired) and **Connect companion** with the same
-pairing line. The hub's own checkout doesn't match this Repository, so it resolves to `mismatched`
-— but instead of just the old notice+CTA card, the instance list (TBR-137's Variant B) should now
-lead the card: both instances, correct role badges (`hub`/`satellite`), and link-status badges
-(`linked elsewhere` for the hub's checkout, `unlinked` for the satellite's).
+pairing line.
+
+**Note what happens here:** `ConnectFlow`'s own "Confirm this checkout" preview shows the *hub's*
+checkout (this repo) — not the second Repository's own satellite. If you click **Confirm binding**
+anyway, the page lands on `connected` right away, because `confirmPairing` derives its stored
+checkoutId from whatever was just fetched — a first-ever pairing is always self-consistent, even
+when it's bound to the wrong checkout for what you actually wanted. That's fine: click Confirm
+regardless. Even though the page now says `connected`, the instance list (TBR-137's Variant B)
+should still lead the card, above the "Checkout binding" details — both instances listed, correct
+role badges (`hub`/`satellite`), and link-status badges (`linked elsewhere` for the hub's checkout,
+`unlinked` for the satellite's). This is what lets you fix a wrong-but-self-confirmed first pairing
+in place, instead of having no way back into the picker at all.
 
 ## 4. One-click switch, including the hub-key prompt
 
@@ -114,8 +122,15 @@ switching unavailable this session`, not a hang or a crash.
 
 ## Known, accepted quirks (not bugs — don't file these)
 
-- **The picker never appears for a truly `unpaired` Repository.** It needs *some* existing pairing
-  to even attempt `GET /v1/instances` with — the manual "Connect companion" fallback link is the
-  only bootstrap for a Repository that has never been paired with anything on this browser before.
+- **The picker never appears for a truly `unpaired` Repository — zero pairings, ever.** It needs
+  *some* existing pairing to even attempt `GET /v1/instances` with; the manual "Connect companion"
+  fallback link (still present in the plain unpaired/unreachable/etc. states) is the only bootstrap
+  into it. This is different from — and narrower than — the wrong-checkout-but-`connected` case
+  §3 walks through, which the picker *does* now cover: once any pairing exists at all, even a
+  self-confirmed one against the wrong checkout, the picker is reachable from there.
+- **A satellite reached via its own direct-handoff pairing (post-switch) has no picker either.**
+  Only the hub serves `GET /v1/instances`; a satellite's own pairing 404s it. To switch again from
+  there, use a *different* Repository's tab that's still paired against the hub, or re-pair this
+  one against the hub's line via the fallback link.
 - **A denied/blocked LNA permission is out of scope here** — that's `companion-connect-flow.md`'s
   job, deployed-origin only.
