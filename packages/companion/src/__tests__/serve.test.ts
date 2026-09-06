@@ -4,7 +4,7 @@ import { join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { bindWithHandler, serve } from "../serve.ts"
 import { tryStartServer } from "../net.ts"
-import type { ServeHandle } from "../serve.ts"
+import type { SatelliteHandle, ServeHandle } from "../serve.ts"
 
 const FIXTURE_ROOT = resolve(import.meta.dir, "fixtures/sample-checkout")
 
@@ -336,6 +336,26 @@ describe("hub/satellite auto-promotion", () => {
     }
   })
 
+  it("keeps a crashed satellite listed immediately, but prunes it once the heartbeat-timeout window elapses", async () => {
+    handle = await serve({ checkoutPath, port: 18970, hubBaseDir, heartbeatTimeoutMs: 40 })
+    extraCheckoutPath = newCheckout()
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18970, hubBaseDir, heartbeatIntervalMs: 5_000 })
+    assertRole(secondHandle, "satellite")
+
+    // `kill -9`: the whole process dies at once — no deregister call, no more heartbeats.
+    secondHandle.stopHeartbeat()
+    secondHandle.server.stop(true)
+
+    const immediately = await json(await fetch(`${handle.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${handle.token}` } }))
+    expect(immediately.instances).toHaveLength(2)
+
+    await new Promise((r) => setTimeout(r, 70))
+
+    const after = await json(await fetch(`${handle.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${handle.token}` } }))
+    expect(after.instances).toHaveLength(1)
+    expect(after.instances[0].role).toBe("hub")
+  })
+
   it("falls back to standalone with a warning when the occupant on the target port never confirms it's a hub", async () => {
     // A raw TCP listener that accepts connections but never speaks HTTP — ping can never
     // confirm it, which is exactly the "something else is on this port" case TBR-133 covers.
@@ -351,5 +371,341 @@ describe("hub/satellite auto-promotion", () => {
     } finally {
       impostor.close()
     }
+  })
+})
+
+// ------------------------------------------------ hub death re-election (TBR-142)
+
+describe("hub death re-election", () => {
+  let hubBaseDir: string
+  let extraCheckoutPath: string | undefined
+  let thirdCheckoutPath: string | undefined
+  let secondHandle: ServeHandle | undefined
+  let thirdHandle: ServeHandle | undefined
+
+  beforeEach(() => {
+    hubBaseDir = mkdtempSync(join(tmpdir(), "companion-hub-identity-"))
+  })
+
+  afterEach(() => {
+    stopHandle(secondHandle)
+    stopHandle(thirdHandle)
+    secondHandle = undefined
+    thirdHandle = undefined
+    rmSync(hubBaseDir, { recursive: true, force: true })
+    if (extraCheckoutPath) {
+      rmSync(extraCheckoutPath, { recursive: true, force: true })
+      extraCheckoutPath = undefined
+    }
+    if (thirdCheckoutPath) {
+      rmSync(thirdCheckoutPath, { recursive: true, force: true })
+      thirdCheckoutPath = undefined
+    }
+  })
+
+  it("does not resurrect a losing satellite's handle after stopHeartbeat() fires mid re-registration", async () => {
+    handle = await serve({ checkoutPath, port: 18986, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    thirdCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    // Satellite A: detects the hub's death fast and reliably wins the bind race for 18986.
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18986, hubBaseDir, heartbeatIntervalMs: 10 })
+    expect(secondHandle.role).toBe("satellite")
+
+    // Satellite B: a much longer heartbeat interval so it always notices the mismatch (its
+    // heartbeats start succeeding against A with `{ ok: false }`, since A's registry has never
+    // heard of B — see startHeartbeatLoop) only after A has already won and become the new hub —
+    // guaranteeing B ends up in the "lost, must re-register" branch. Its second-ever /v1/register
+    // call (the re-registration against A, as opposed to its first, at startup, against the
+    // original hub) is artificially delayed, and signals exactly when it starts — a deterministic
+    // window to call stopHeartbeat() while that call is in flight, with no timing guesswork.
+    let registerCallCount = 0
+    let markSecondRegisterStarted: (() => void) | undefined
+    const secondRegisterStarted = new Promise<void>((done) => {
+      markSecondRegisterStarted = done
+    })
+    const delayingFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/register")) {
+        registerCallCount++
+        if (registerCallCount === 2) {
+          markSecondRegisterStarted?.()
+          return new Promise<Response>((done) => setTimeout(() => done(fetch(input, init)), 100))
+        }
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    thirdHandle = await serve({
+      checkoutPath: thirdCheckoutPath,
+      port: 18986,
+      hubBaseDir,
+      heartbeatIntervalMs: 200,
+      fetchImpl: delayingFetch,
+    })
+    expect(thirdHandle.role).toBe("satellite")
+
+    hubHandle.server.stop(true)
+    handle = undefined
+
+    // Let A win the bind race and become the new hub, well before B's own 200ms heartbeat tick.
+    await new Promise((r) => setTimeout(r, 100))
+    expect(secondHandle.role).toBe("hub")
+
+    // Waits exactly until B's delayed re-registration against A is in flight — no fixed sleep to
+    // tune, since B's own heartbeat, ping-confirm, and register sequence has no fixed duration.
+    await secondRegisterStarted
+    assertRole(thirdHandle, "satellite")
+    const stopHeartbeatAtStop = thirdHandle.stopHeartbeat
+    const deregisterAtStop = thirdHandle.deregister
+    stopHeartbeatAtStop()
+
+    // Past the 100ms register delay, so the in-flight re-registration has resolved by now —
+    // if `stopHeartbeat()` failed to prevent it, `Object.assign` would have replaced these two
+    // fields with a fresh heartbeat loop's closures despite the caller already asking to stop.
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(thirdHandle.stopHeartbeat).toBe(stopHeartbeatAtStop)
+    expect(thirdHandle.deregister).toBe(deregisterAtStop)
+  })
+
+  it("does not trigger re-election from a disposed heartbeat whose response body was still being parsed", async () => {
+    handle = await serve({ checkoutPath, port: 18989, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+
+    // The heartbeat call itself resolves immediately with a real-looking response, but reading
+    // its body (`res.json()`) is what's artificially delayed — the exact window between
+    // startHeartbeatLoop's two `disposed` checks (before and after that second await).
+    let heartbeatCount = 0
+    const slowBodyFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/heartbeat")) {
+        heartbeatCount++
+        if (heartbeatCount === 1) {
+          return Promise.resolve({
+            json: () => new Promise((done) => setTimeout(() => done({ ok: false }), 100)),
+          } as unknown as Response)
+        }
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    secondHandle = await serve({
+      checkoutPath: extraCheckoutPath,
+      port: 18989,
+      hubBaseDir,
+      heartbeatIntervalMs: 10,
+      fetchImpl: slowBodyFetch,
+    })
+    assertRole(secondHandle, "satellite")
+
+    // The first heartbeat tick has fired and is awaiting its slow res.json() by now; stop before
+    // that 100ms delay elapses.
+    await new Promise((r) => setTimeout(r, 20))
+    secondHandle.stopHeartbeat()
+    const roleAtStop = secondHandle.role
+
+    // Past the 100ms body-parse delay — if the second `disposed` check were missing, the stale
+    // `{ ok: false }` would still have fired onHubDown and mutated this handle by now.
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(secondHandle.role).toBe(roleAtStop)
+  })
+
+  it("does not resurrect a losing satellite's handle after deregister() fires mid re-registration", async () => {
+    handle = await serve({ checkoutPath, port: 18987, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    thirdCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    // Same setup as the stopHeartbeat() variant above, but exercising deregister() directly —
+    // deregister() calls stopHeartbeat() internally, so this checks that path actually reaches
+    // the same `disposed` flag rather than only setting it when stopHeartbeat() is called
+    // directly.
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18987, hubBaseDir, heartbeatIntervalMs: 10 })
+    expect(secondHandle.role).toBe("satellite")
+
+    let registerCallCount = 0
+    let markSecondRegisterStarted: (() => void) | undefined
+    const secondRegisterStarted = new Promise<void>((done) => {
+      markSecondRegisterStarted = done
+    })
+    const delayingFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/register")) {
+        registerCallCount++
+        if (registerCallCount === 2) {
+          markSecondRegisterStarted?.()
+          return new Promise<Response>((done) => setTimeout(() => done(fetch(input, init)), 100))
+        }
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    thirdHandle = await serve({
+      checkoutPath: thirdCheckoutPath,
+      port: 18987,
+      hubBaseDir,
+      heartbeatIntervalMs: 200,
+      fetchImpl: delayingFetch,
+    })
+    expect(thirdHandle.role).toBe("satellite")
+
+    hubHandle.server.stop(true)
+    handle = undefined
+
+    await new Promise((r) => setTimeout(r, 100))
+    expect(secondHandle.role).toBe("hub")
+
+    await secondRegisterStarted
+    assertRole(thirdHandle, "satellite")
+    const stopHeartbeatAtStop = thirdHandle.stopHeartbeat
+    const deregisterAtStop = thirdHandle.deregister
+    await deregisterAtStop()
+
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(thirdHandle.stopHeartbeat).toBe(stopHeartbeatAtStop)
+    expect(thirdHandle.deregister).toBe(deregisterAtStop)
+  })
+
+  it("is safe to call stopHeartbeat()/deregister() on a stale pre-promotion reference after promotion", async () => {
+    handle = await serve({ checkoutPath, port: 18988, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18988, hubBaseDir, heartbeatIntervalMs: 10 })
+    expect(secondHandle.role).toBe("satellite")
+    // Captured before promotion — mirrors a caller (the CLI's SIGINT handler, or any other
+    // holder of this same object) that got a `SatelliteHandle`-typed reference and doesn't
+    // re-check `.role` before calling one of these, since the type itself never said it might
+    // stop meaning what it used to. A plain cast, not `assertRole`, so it doesn't narrow
+    // `secondHandle` itself — this test still needs to observe its `.role` change to "hub" below.
+    const staleSatelliteRef = secondHandle as SatelliteHandle
+
+    hubHandle.server.stop(true)
+    handle = undefined
+
+    await new Promise((r) => setTimeout(r, 150))
+    expect(secondHandle.role).toBe("hub")
+
+    expect(() => staleSatelliteRef.stopHeartbeat()).not.toThrow()
+    await expect(staleSatelliteRef.deregister()).resolves.toBeUndefined()
+  })
+
+  it("stops heartbeating once promoted to hub, rather than continuing to tick against itself", async () => {
+    handle = await serve({ checkoutPath, port: 18985, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    let heartbeatCount = 0
+    const countingFetch = ((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/heartbeat")) heartbeatCount++
+      return fetch(input, init)
+    }) as typeof fetch
+
+    secondHandle = await serve({
+      checkoutPath: extraCheckoutPath,
+      port: 18985,
+      hubBaseDir,
+      heartbeatIntervalMs: 10,
+      fetchImpl: countingFetch,
+    })
+    expect(secondHandle.role).toBe("satellite")
+
+    hubHandle.server.stop(true)
+    handle = undefined
+
+    await new Promise((r) => setTimeout(r, 150))
+    expect(secondHandle.role).toBe("hub")
+
+    const countAtPromotion = heartbeatCount
+    // Several more heartbeat-interval's worth of wait — if the old loop were still ticking
+    // against the (now nonexistent) old hub URL, this would have grown well past countAtPromotion.
+    await new Promise((r) => setTimeout(r, 150))
+    expect(heartbeatCount).toBe(countAtPromotion)
+  })
+
+  it("promotes the surviving satellite to hub via the ECONNREFUSED fast path, reusing the original hub's token", async () => {
+    handle = await serve({ checkoutPath, port: 18980, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18980, hubBaseDir, heartbeatIntervalMs: 10 })
+    assertRole(handle, "hub")
+    expect(secondHandle.role).toBe("satellite")
+    const originalHubToken = handle.token
+
+    // `kill -9` on the hub: its listening socket disappears with no deregister, no warning.
+    handle.server.stop(true)
+    handle = undefined
+
+    // Several heartbeat ticks' worth of wait, but nowhere near a 45s heartbeat-timeout window —
+    // if promotion only happened via that timeout, this assertion would still be failing here.
+    await new Promise((r) => setTimeout(r, 150))
+
+    expect(secondHandle.role).toBe("hub")
+    assertRole(secondHandle, "hub")
+    expect(secondHandle.baseUrl).toBe("http://127.0.0.1:18980")
+    expect(secondHandle.registry).toBeDefined()
+    // AC: a browser pairing token obtained against the original hub still authenticates against
+    // the new hub process.
+    expect(secondHandle.token).toBe(originalHubToken)
+
+    const res = await fetch(`${secondHandle.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${originalHubToken}` } })
+    expect(res.status).toBe(200)
+  })
+
+  it("re-registers the losing satellite against the newly-elected hub, not the dead one", async () => {
+    handle = await serve({ checkoutPath, port: 18981, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    thirdCheckoutPath = newCheckout()
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18981, hubBaseDir, heartbeatIntervalMs: 10 })
+    thirdHandle = await serve({ checkoutPath: thirdCheckoutPath, port: 18981, hubBaseDir, heartbeatIntervalMs: 10 })
+    assertRole(handle, "hub")
+
+    handle.server.stop(true)
+    handle = undefined
+
+    await new Promise((r) => setTimeout(r, 150))
+
+    const roles = [secondHandle.role, thirdHandle.role].sort()
+    expect(roles).toEqual(["hub", "satellite"])
+
+    const newHub = secondHandle.role === "hub" ? secondHandle : thirdHandle
+    assertRole(newHub, "hub")
+    const list = await json(await fetch(`${newHub.baseUrl}/v1/instances`, { headers: { Authorization: `Bearer ${newHub.token}` } }))
+    expect(list.instances).toHaveLength(2)
+    expect(list.instances.map((i: { role: string }) => i.role).sort()).toEqual(["hub", "satellite"])
+  })
+
+  it("re-elects immediately when the hub dies between the satellite's ping-confirmation and its own register call", async () => {
+    handle = await serve({ checkoutPath, port: 18982, hubBaseDir })
+    extraCheckoutPath = newCheckout()
+    assertRole(handle, "hub")
+    const hubHandle = handle
+
+    let killedHub = false
+    const killingFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith("/v1/register") && !killedHub) {
+        killedHub = true
+        hubHandle.server.stop(true)
+        // Gives the OS time to actually release the port, so this call hits a clean
+        // ECONNREFUSED (nothing listening) rather than racing an ECONNRESET on a connection
+        // that was still mid-handshake when the hub's socket closed underneath it.
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      return fetch(input, init)
+    }) as typeof fetch
+
+    secondHandle = await serve({ checkoutPath: extraCheckoutPath, port: 18982, hubBaseDir, fetchImpl: killingFetch })
+    expect(secondHandle.role).toBe("hub")
+    handle = undefined
   })
 })

@@ -1,8 +1,12 @@
 // The hub's in-memory record of every registered satellite (TBR-141, TBR-133's resolution).
-// Registration is satellite -> hub only for this ticket's happy path; staleness-based pruning
-// after missed heartbeats is TBR-142's crash/restart-recovery job, not this one's — a clean
-// shutdown removes an entry immediately via `deregister`, and that is the only removal path
-// implemented here.
+// A clean shutdown removes an entry immediately via `deregister`; a satellite that exits
+// uncleanly (`kill -9`, crash) instead goes stale, and TBR-134's resolution prunes it after a
+// few missed heartbeats (default 45s = 3 misses at the default 15s interval) rather than
+// leaving a dead entry in `GET /v1/instances` forever.
+//
+// Pruning happens lazily, inside `list()`, rather than on its own timer: the only consumer of
+// this state is that one read path, so there's nothing to prune eagerly for and nobody to
+// notice a stale entry linger a little past its deadline until the next read.
 
 export type InstanceLink = { organizationId: string; projectId: string; repositoryId: string } | null
 
@@ -45,13 +49,19 @@ export type HubSelf = {
 
 type SatelliteRecord = RegisterRequest & { registeredAt: string; lastHeartbeatAt: string }
 
+/** 3 misses at the default 15s heartbeat interval (TBR-133's resolution) — TBR-134/TBR-142. */
+export const DEFAULT_HEARTBEAT_TIMEOUT_MS = 45_000
+
 /** Holds the hub's own record plus every registered satellite. `list()` is what `GET
  * /v1/instances` (companion-api.md, hub-only) echoes verbatim — its shape is deliberately a
  * strict subset of what's stored, so a token can never leak through a response. */
 export class InstanceRegistry {
   private readonly satellites = new Map<string, SatelliteRecord>()
 
-  constructor(private readonly hub: HubSelf) {}
+  constructor(
+    private readonly hub: HubSelf,
+    private readonly heartbeatTimeoutMs: number = DEFAULT_HEARTBEAT_TIMEOUT_MS,
+  ) {}
 
   register(req: RegisterRequest): void {
     const now = new Date().toISOString()
@@ -72,7 +82,20 @@ export class InstanceRegistry {
     this.satellites.delete(instanceId)
   }
 
+  /** A satellite that missed its last few heartbeats (crashed, `kill -9`) is indistinguishable
+   * from one about to heartbeat again this instant — `heartbeatTimeoutMs` is how long `list()`
+   * waits before treating silence as proof it's gone, not a hint. */
+  private pruneStale(): void {
+    const now = Date.now()
+    for (const [instanceId, record] of this.satellites) {
+      if (now - new Date(record.lastHeartbeatAt).getTime() > this.heartbeatTimeoutMs) {
+        this.satellites.delete(instanceId)
+      }
+    }
+  }
+
   list(): Array<InstanceSummary> {
+    this.pruneStale()
     const hubSummary: InstanceSummary = {
       instanceId: this.hub.instanceId,
       checkoutPath: this.hub.checkoutPath,

@@ -12,19 +12,25 @@
 // standalone mode on an OS-assigned port, same as today's behaviour, with a warning that
 // hub/satellite switching is unavailable this session.
 //
-// Crash/restart recovery (a satellite's hub disappearing mid-session, staleness-based pruning
-// of a satellite that exited uncleanly) is TBR-142's job, not this module's.
+// Crash/restart recovery (TBR-142, decided by TBR-133/TBR-134): a satellite that stops
+// heartbeating without deregistering (crash, `kill -9`) is pruned by the hub after a few missed
+// heartbeats (registry.ts). A satellite whose heartbeat or register call gets `ECONNREFUSED` —
+// unambiguous proof the hub process is gone, unlike a mere timeout — immediately re-runs the
+// same bind-attempt-then-verify race from scratch (`reElectHub` below) rather than waiting out
+// that same heartbeat-timeout window: whoever wins becomes the new hub (reusing the still-
+// persisted `hub.json` token so already-paired browsers keep working), everyone else re-
+// registers against it exactly like a fresh start.
 
 import { randomUUID } from "node:crypto"
 import { readGitRemote, readHeadSha, loadGraph } from "./graph.ts"
 import { createHandler } from "./http.ts"
 import { resolveOrigins } from "./cors.ts"
 import { loadOrCreateHubToken } from "./hubIdentity.ts"
-import { tryStartServer } from "./net.ts"
+import { isConnRefused, tryStartServer } from "./net.ts"
 import { pairingLine as buildPairingLine, loadOrCreateToken } from "./pairing.ts"
 import { readLinkIds } from "./notexConfig.ts"
 import { API_VERSION } from "./ops.ts"
-import { InstanceRegistry } from "./registry.ts"
+import { DEFAULT_HEARTBEAT_TIMEOUT_MS, InstanceRegistry } from "./registry.ts"
 import { OpError } from "./types.ts"
 import type { FetchHandler, MinimalServer } from "./net.ts"
 import type { GraphState } from "./http.ts"
@@ -58,6 +64,10 @@ export type ServeOptions = {
   fetchImpl?: typeof fetch
   /** Satellite heartbeat interval. Default 15s (TBR-133's resolution; tunable, not load-bearing). */
   heartbeatIntervalMs?: number
+  /** How long the hub waits without a heartbeat before pruning a satellite (TBR-134's
+   * resolution). Default 45s = 3 missed heartbeats at the default interval; tunable, not
+   * load-bearing. */
+  heartbeatTimeoutMs?: number
   /** How many times to retry confirming a hub is alive on `EADDRINUSE` before falling back to
    * standalone mode. Default 2 (tunable, not load-bearing). */
   pingRetries?: number
@@ -124,6 +134,35 @@ function buildGraphState(checkoutPath: string, onGraphState?: (state: GraphState
 
 function linkFor(checkoutPath: string): InstanceLink {
   return readLinkIds(checkoutPath)
+}
+
+/**
+ * Builds the registry + REST handler a hub binds to `targetPort` — shared by `startHub` (the
+ * first process on this machine) and `reElectHub` (TBR-142: a satellite winning the race to
+ * replace a hub that just died). Constructing the registry here, not before the caller's own
+ * bind attempt, is what defers its two synchronous `git` subprocess spawns to whichever process
+ * actually wins — see `startHub`'s call site for why that matters.
+ */
+function buildHubRegistryAndHandler(
+  opts: ServeOptions,
+  origins: Array<string>,
+  targetPort: number,
+  hubToken: string,
+): { handler: FetchHandler; registry: InstanceRegistry } {
+  const registry = new InstanceRegistry(
+    {
+      instanceId: randomUUID(),
+      checkoutPath: opts.checkoutPath,
+      port: targetPort,
+      gitRemote: readGitRemote(opts.checkoutPath),
+      headSha: readHeadSha(opts.checkoutPath),
+      link: linkFor(opts.checkoutPath),
+      registeredAt: new Date().toISOString(),
+    },
+    opts.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS,
+  )
+  const { getGraphState } = buildGraphState(opts.checkoutPath, opts.onGraphState)
+  return { handler: createHandler({ token: hubToken, origins, getGraphState, registry }), registry }
 }
 
 /**
@@ -240,21 +279,112 @@ async function registerWithHub(hubBaseUrl: string, fetchImpl: typeof fetch, body
   if (!res.ok) throw new Error(`notex-companion: hub rejected registration (HTTP ${res.status})`)
 }
 
-function startHeartbeatLoop(hubBaseUrl: string, fetchImpl: typeof fetch, instanceId: string, intervalMs: number): () => void {
+/**
+ * A shared, mutable "this satellite has been told to stop" signal — created once per satellite
+ * lifetime (`startSatellite`) and threaded through every recovery function (`startHeartbeatLoop`,
+ * `registerSatellite`, `reElectHub`, `triggerReElection`). Recovery is all background work kicked
+ * off from a `setInterval` tick or a retry `setTimeout`, entirely decoupled from whatever a caller
+ * does with the `SatelliteHandle` it was handed — without this, a caller's `stopHeartbeat()` (or
+ * `deregister()`, which calls it) can only ever clear whichever interval happens to exist *right
+ * now*; it has no way to reach a `reElectHub` call already in flight, which would otherwise
+ * resurrect the handle by mutating it once that call finishes (TBR-142 code review, round 4).
+ */
+type Disposed = { current: boolean }
+
+/**
+ * Shared no-ops for a `SatelliteHandle`'s `stopHeartbeat`/`deregister` once `reElectHub` has
+ * mutated its owner past being a satellite (into a hub or standalone) — see the assignment sites
+ * for why these replace `undefined` rather than leaving the fields absent.
+ */
+function noopStopHeartbeat(): void {}
+async function noopDeregister(): Promise<void> {}
+
+/**
+ * `onHubDown` fires at most once per loop, on either of two signals — a slow-but-alive hub (a
+ * timeout, DNS blip, or 5xx) is still just next-interval's problem to notice (staleness pruning,
+ * TBR-134/TBR-142 on the hub's side):
+ *
+ * - `ECONNREFUSED`: nothing is listening on that port anymore, which a timeout or an HTTP error
+ *   status never proves — the original TBR-142 fast path.
+ * - `{ ok: false }`: the port *is* answering, but the process behind it doesn't recognize this
+ *   `instanceId` — proof a *different* hub is now there, one this satellite never registered
+ *   with. This matters whenever this satellite's own heartbeat tick lands *after* some other
+ *   satellite has already raced to bind the port and become the new hub (the common case beyond
+ *   a lone surviving satellite, since promotion itself is near-instant): its heartbeats would
+ *   otherwise keep "succeeding" against that new hub — no rejection ever fires — while never
+ *   actually being registered with it, forever (TBR-142 code review, round 5).
+ *
+ * `clearInterval` alone doesn't guarantee at-most-once: it only stops *future* ticks, not
+ * heartbeats already in flight from earlier ones — a short `intervalMs` (or plain event-loop lag)
+ * can leave two outstanding when the hub dies, and both would resolve with one of the two signals
+ * above around the same time. The `firedOnce` guard is what actually prevents a second, now-stale
+ * tick from calling `onHubDown` again while the first call is still re-electing — without it, two
+ * concurrent `reElectHub` runs would race to mutate the same `handle` object.
+ *
+ * `inFlight` is a separate guard for a separate hazard: skipping a tick outright while the
+ * previous one is still awaiting its response caps this at one outstanding heartbeat request at a
+ * time, rather than letting them accumulate unboundedly whenever `intervalMs` is short relative to
+ * round-trip latency (this package's own tests use a heartbeatIntervalMs far below the 15s
+ * production default specifically to force many ticks quickly).
+ *
+ * `disposed` is checked too: a request already in flight when `stopHeartbeat()` sets it can still
+ * resolve with either signal after the caller asked to stop — without this check, that stale
+ * response would still call `onHubDown` and kick off a re-election the caller no longer wants.
+ */
+function startHeartbeatLoop(
+  hubBaseUrl: string,
+  fetchImpl: typeof fetch,
+  instanceId: string,
+  intervalMs: number,
+  onHubDown: () => void,
+  disposed: Disposed,
+): () => void {
+  let firedOnce = false
+  let inFlight = false
   const timer = setInterval(() => {
-    void fetchImpl(`${hubBaseUrl}/v1/heartbeat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instanceId }),
-    }).catch(() => {
-      // A missed heartbeat is the hub's problem to notice (staleness pruning, TBR-142) — a
-      // satellite that can't reach the hub this tick just tries again next interval.
-    })
+    if (inFlight || disposed.current) return
+    inFlight = true
+    void (async () => {
+      try {
+        const res = await fetchImpl(`${hubBaseUrl}/v1/heartbeat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instanceId }),
+        })
+        if (firedOnce || disposed.current) return
+        const body = (await res.json().catch(() => null)) as { ok?: unknown } | null
+        // Re-checked after this second await, not just the one above `fetchImpl` itself: parsing
+        // the response body is itself asynchronous, and `stopHeartbeat()` firing during that
+        // narrow window must not still land a re-election the caller already asked to stop.
+        // eslint can't see that `disposed.current` may have flipped during that await — it's a
+        // mutable field on an object this function doesn't own, not a value flow-narrowed once
+        // and never touched again — so it wrongly reads the earlier check as making this one
+        // redundant.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (body?.ok !== false || disposed.current) return
+        firedOnce = true
+        clearInterval(timer)
+        onHubDown()
+      } catch (err) {
+        if (!isConnRefused(err) || firedOnce || disposed.current) return
+        firedOnce = true
+        clearInterval(timer)
+        onHubDown()
+      } finally {
+        inFlight = false
+      }
+    })()
   }, intervalMs)
   // Node/Bun timers keep the event loop alive by default; a heartbeat ticking forever must
   // never be the reason `notex-companion serve` can't exit on its own.
   timer.unref?.()
-  return () => clearInterval(timer)
+  // Setting `disposed.current` here, not just clearing the interval, is what a caller's
+  // `stopHeartbeat()` needs to also reach a `reElectHub` call this same loop already kicked off
+  // and which is still in flight — see `Disposed`'s own doc comment.
+  return () => {
+    disposed.current = true
+    clearInterval(timer)
+  }
 }
 
 /**
@@ -322,22 +452,13 @@ async function startHub(
     // any browser already connected to it, from a process that turns out not to be the hub.
     if (opts.rotateToken) resolvedHubToken = loadOrCreateHubToken(opts.hubBaseDir, { rotate: true })
 
-    // Constructing the registry (two synchronous `git` subprocess spawns) inside this closure,
-    // not before calling `bindWithHandler`, is what actually defers that cost to the winner
+    // Building the registry+handler inside this closure, not before calling `bindWithHandler`,
+    // is what actually defers that cost (two synchronous `git` subprocess spawns) to the winner
     // only — building it unconditionally up front would pay it on every losing attempt too,
     // which is the common case on a machine that already has a hub running.
-    registry = new InstanceRegistry({
-      instanceId: randomUUID(),
-      checkoutPath: opts.checkoutPath,
-      port: targetPort,
-      gitRemote: readGitRemote(opts.checkoutPath),
-      headSha: readHeadSha(opts.checkoutPath),
-      link: linkFor(opts.checkoutPath),
-      registeredAt: new Date().toISOString(),
-    })
-
-    const { getGraphState } = buildGraphState(opts.checkoutPath, opts.onGraphState)
-    return createHandler({ token: resolvedHubToken, origins, getGraphState, registry })
+    const built = buildHubRegistryAndHandler(opts, origins, targetPort, resolvedHubToken)
+    registry = built.registry
+    return built.handler
   })
   if (!bind.ok) return { ok: false }
 
@@ -357,51 +478,72 @@ async function startHub(
   }
 }
 
-async function startSatellite(
+/**
+ * Registers `handle`'s own already-bound server against `hubBaseUrl`, then wires up its
+ * heartbeat loop and `deregister`. Shared between a satellite's first-ever registration
+ * (`startSatellite`) and TBR-142's recovery path re-registering against a newly-elected hub
+ * (`reElectHub`) — "the same registration flow as a fresh start, no separate re-register op" is
+ * this function, called from both places.
+ *
+ * On `ECONNREFUSED` (the hub died in the narrow window between this caller's `/v1/ping`
+ * confirmation and this very call), this doesn't surface a registration failure — it immediately
+ * falls into the same re-election race a heartbeat's `ECONNREFUSED` would, rather than making the
+ * caller treat "the hub died a moment too early" as a harder failure than "the hub died a moment
+ * later".
+ */
+async function registerSatellite(
   opts: ServeOptions,
   origins: Array<string>,
-  hubBaseUrl: string,
   fetchImpl: typeof fetch,
-): Promise<SatelliteHandle> {
-  const token = loadOrCreateToken(opts.checkoutPath, { rotate: opts.rotateToken })
-  const { getGraphState } = buildGraphState(opts.checkoutPath, opts.onGraphState)
-  const handler = createHandler({ token, origins, getGraphState })
-
-  const bind = await tryStartServer({ hostname: "127.0.0.1", port: 0, fetch: handler })
-  if (!bind.ok) throw new Error("notex-companion: could not bind an OS-assigned port for satellite mode")
-
+  targetPort: number,
+  hubBaseUrl: string,
+  handle: SatelliteHandle,
+  disposed: Disposed,
+): Promise<void> {
   const instanceId = randomUUID()
   try {
     await registerWithHub(hubBaseUrl, fetchImpl, {
       instanceId,
       checkoutPath: opts.checkoutPath,
-      port: bind.server.port,
+      port: handle.server.port,
       pid: process.pid,
       gitRemote: readGitRemote(opts.checkoutPath),
       headSha: readHeadSha(opts.checkoutPath),
-      token,
+      token: handle.token,
       link: linkFor(opts.checkoutPath),
     })
   } catch (err) {
-    // A registration failure must not leave an unstoppable listening socket behind: `serve()`
-    // is a library entry point (index.ts), not just the CLI's — the CLI's own process.exit(1)
-    // would reclaim the port either way, but another caller catching this rejection wouldn't.
-    bind.server.stop(true)
-    throw err
+    if (!isConnRefused(err)) throw err
+    if (disposed.current) return
+    await reElectHub(opts, origins, targetPort, fetchImpl, handle, disposed)
+    return
   }
 
-  const stopHeartbeat = startHeartbeatLoop(hubBaseUrl, fetchImpl, instanceId, opts.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS)
+  // The caller asked to stop while this registration was in flight: the network side effect
+  // already happened (the new hub now has a record of this instanceId), but that's harmless —
+  // with no heartbeat loop ever started for it below, it'll simply go stale and get pruned by the
+  // hub's own staleness timeout (registry.ts) like any other satellite that stopped heartbeating.
+  // What matters is not mutating `handle` back into a live-looking satellite the caller already
+  // asked to shut down.
+  if (disposed.current) return
 
-  // Re-read rather than reuse the `hubToken` `serve()` resolved before this function's own
-  // bind/ping/register sequence ran: that sequence can span retries and backoff delays, and if
-  // the real hub gets restarted-with-rotation during that window, a value carried across it
+  const stopHeartbeat = startHeartbeatLoop(
+    hubBaseUrl,
+    fetchImpl,
+    instanceId,
+    opts.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS,
+    () => triggerReElection(opts, origins, targetPort, fetchImpl, handle, disposed),
+    disposed,
+  )
+
+  // Re-read rather than reuse the `hubToken` `serve()`/`reElectHub` resolved before this
+  // function's own register sequence ran: that sequence can span retries and backoff delays, and
+  // if the real hub gets restarted-with-rotation during that window, a value carried across it
   // would print a pairing line the hub no longer accepts. This read is a cheap, idempotent
   // load-or-create — never a rotate — so it can't step on the hub's own rotation.
   const currentHubToken = loadOrCreateHubToken(opts.hubBaseDir)
 
-  return {
-    server: bind.server,
-    token,
+  Object.assign(handle, {
     baseUrl: hubBaseUrl,
     pairingLine: buildPairingLine(hubBaseUrl, currentHubToken),
     role: "satellite",
@@ -410,7 +552,170 @@ async function startSatellite(
       stopHeartbeat()
       await deregisterFromHub(hubBaseUrl, fetchImpl, instanceId, opts.deregisterTimeoutMs ?? DEFAULT_DEREGISTER_TIMEOUT_MS)
     },
+  })
+}
+
+/**
+ * TBR-142's fast path: called the instant a satellite's heartbeat or register call proves
+ * (`ECONNREFUSED`) that the hub process is gone. Re-runs TBR-141's own bind-attempt-then-verify
+ * race on `targetPort` from scratch rather than waiting out the heartbeat-timeout window — the
+ * winner mutates `handle` in place into a `HubHandle` (reusing the still-persisted `hub.json`
+ * token, never rotating it, so an already-paired browser keeps working across the handover); a
+ * loser confirms the winner and re-registers `handle`'s still-running server against it exactly
+ * like a fresh start (`registerSatellite`), which can itself recurse back into this function if
+ * that new hub turns out to be just as dead.
+ *
+ * `handle` is mutated rather than replaced because it's the same object identity a caller (the
+ * CLI's SIGINT handler) may already be holding — mutating in place is what lets that caller's
+ * later `handle.role` / `handle.server` reads observe the handover without needing a new return
+ * value nobody asked for.
+ *
+ * `disposed` is checked after every `await` below: a caller can call `stopHeartbeat()` (or
+ * `deregister()`) at any point while this function is suspended on network I/O, and none of that
+ * mid-flight work should still land a mutation, or a newly-bound listening socket, on a handle the
+ * caller already asked to shut down.
+ */
+async function reElectHub(
+  opts: ServeOptions,
+  origins: Array<string>,
+  targetPort: number,
+  fetchImpl: typeof fetch,
+  handle: SatelliteHandle,
+  disposed: Disposed,
+): Promise<void> {
+  const hubToken = loadOrCreateHubToken(opts.hubBaseDir)
+  let registry: InstanceRegistry | undefined
+
+  const bind = await bindWithHandler(targetPort, () => {
+    const built = buildHubRegistryAndHandler(opts, origins, targetPort, hubToken)
+    registry = built.registry
+    return built.handler
+  })
+
+  if (bind.ok) {
+    if (disposed.current) {
+      bind.server.stop(true)
+      return
+    }
+    const oldServer = handle.server
+    const baseUrl = `http://127.0.0.1:${bind.server.port}`
+    Object.assign(handle as unknown as Record<string, unknown>, {
+      role: "hub",
+      server: bind.server,
+      token: hubToken,
+      baseUrl,
+      pairingLine: buildPairingLine(baseUrl, hubToken),
+      registry: registry!,
+      // Not `undefined`: `handle` was typed `SatelliteHandle` (non-optional `stopHeartbeat`/
+      // `deregister`) at the moment a caller — the CLI's SIGINT handler, or any other holder of
+      // that same reference — first got it. `handle.role` is what tells a caller these are no
+      // longer meaningful post-promotion, but nothing forces them to re-check it before calling
+      // one anyway; a safe no-op here is the difference between that being a wasted call and an
+      // `undefined is not a function` crash.
+      stopHeartbeat: noopStopHeartbeat,
+      deregister: noopDeregister,
+    })
+    oldServer.stop(true)
+    return
   }
+
+  const hubBaseUrl = `http://127.0.0.1:${targetPort}`
+  const confirmed = await pingConfirmsHub(
+    hubBaseUrl,
+    fetchImpl,
+    opts.pingRetries ?? DEFAULT_PING_RETRIES,
+    opts.pingRetryDelayMs ?? DEFAULT_PING_RETRY_DELAY_MS,
+    opts.pingTimeoutMs ?? DEFAULT_PING_TIMEOUT_MS,
+  )
+  if (disposed.current) return
+  if (!confirmed) {
+    // Lost the bind race, but the occupant isn't a wire-compatible hub either (mirrors
+    // `serve()`'s own standalone fallback) — there's no hub left to re-register against, so this
+    // satellite's still-running server settles into standalone rather than looping on registration
+    // attempts against a port that will never confirm.
+    const baseUrl = `http://127.0.0.1:${handle.server.port}`
+    Object.assign(handle as unknown as Record<string, unknown>, {
+      role: "standalone",
+      baseUrl,
+      pairingLine: buildPairingLine(baseUrl, handle.token),
+      standaloneWarning: `couldn't confirm a new hub on ${targetPort} after the previous one disappeared — running standalone, one-click switching unavailable this session.`,
+      stopHeartbeat: noopStopHeartbeat,
+      deregister: noopDeregister,
+    })
+    return
+  }
+  await registerSatellite(opts, origins, fetchImpl, targetPort, hubBaseUrl, handle, disposed)
+}
+
+const REELECTION_RETRY_DELAY_MS = 1_000
+
+/**
+ * `startHeartbeatLoop`'s `onHubDown` fires from inside a `setInterval` tick with nothing
+ * awaiting it — an uncaught rejection there would be a genuinely unhandled one, capable of
+ * crashing the whole process over what should be, worst case, a satellite stuck without a hub
+ * until its next natural retry. `reElectHub` already turns its own recoverable dead ends
+ * (nothing to re-register against) into a `standalone` handle rather than throwing, so this only
+ * has to guard the truly unexpected case — e.g. a `git` subprocess failure while building a
+ * newly-promoted hub's registry.
+ *
+ * Since `startHeartbeatLoop` already stopped this satellite's own heartbeat interval before
+ * calling here, simply logging and giving up would leave it stuck indefinitely with no hub and
+ * no further retries scheduled — worse than the transient failure it's recovering from. Instead
+ * this retries the whole race after a short delay until it lands on a terminal state (hub,
+ * satellite, or standalone), the same way a heartbeat tick would have kept trying had the loop
+ * still been running — unless `disposed` fired in the meantime, in which case there's no longer
+ * anyone left who wants this to keep retrying.
+ */
+function triggerReElection(
+  opts: ServeOptions,
+  origins: Array<string>,
+  targetPort: number,
+  fetchImpl: typeof fetch,
+  handle: SatelliteHandle,
+  disposed: Disposed,
+): void {
+  if (disposed.current) return
+  reElectHub(opts, origins, targetPort, fetchImpl, handle, disposed).catch((err: unknown) => {
+    if (disposed.current) return
+    console.error(`notex-companion: hub re-election failed, retrying: ${err instanceof Error ? err.message : String(err)}`)
+    const retryTimer = setTimeout(
+      () => triggerReElection(opts, origins, targetPort, fetchImpl, handle, disposed),
+      REELECTION_RETRY_DELAY_MS,
+    )
+    retryTimer.unref?.()
+  })
+}
+
+async function startSatellite(
+  opts: ServeOptions,
+  origins: Array<string>,
+  hubBaseUrl: string,
+  fetchImpl: typeof fetch,
+  targetPort: number,
+): Promise<ServeHandle> {
+  const token = loadOrCreateToken(opts.checkoutPath, { rotate: opts.rotateToken })
+  const { getGraphState } = buildGraphState(opts.checkoutPath, opts.onGraphState)
+  const handler = createHandler({ token, origins, getGraphState })
+
+  const bind = await tryStartServer({ hostname: "127.0.0.1", port: 0, fetch: handler })
+  if (!bind.ok) throw new Error("notex-companion: could not bind an OS-assigned port for satellite mode")
+
+  // Built once and then mutated in place (by `registerSatellite`/`reElectHub`, TBR-142) for the
+  // rest of this process's life — see `reElectHub`'s comment for why identity has to be stable.
+  const handle = { server: bind.server, token, role: "satellite" } as unknown as SatelliteHandle
+  const disposed: Disposed = { current: false }
+
+  try {
+    await registerSatellite(opts, origins, fetchImpl, targetPort, hubBaseUrl, handle, disposed)
+  } catch (err) {
+    // A registration failure must not leave an unstoppable listening socket behind: `serve()`
+    // is a library entry point (index.ts), not just the CLI's — the CLI's own process.exit(1)
+    // would reclaim the port either way, but another caller catching this rejection wouldn't.
+    bind.server.stop(true)
+    throw err
+  }
+
+  return handle
 }
 
 export async function serve(opts: ServeOptions): Promise<ServeHandle> {
@@ -444,7 +749,7 @@ export async function serve(opts: ServeOptions): Promise<ServeHandle> {
     opts.pingRetryDelayMs ?? DEFAULT_PING_RETRY_DELAY_MS,
     opts.pingTimeoutMs ?? DEFAULT_PING_TIMEOUT_MS,
   )
-  if (confirmed) return startSatellite(opts, origins, hubBaseUrl, fetchImpl)
+  if (confirmed) return startSatellite(opts, origins, hubBaseUrl, fetchImpl, targetPort)
 
   return startStandalone(
     opts,
