@@ -73,6 +73,30 @@ describe("useCompanionConnection", () => {
     await waitFor(() => expect(result.current.data?.state).toBe("connected"))
     expect(resolveSpy).toHaveBeenCalledTimes(2)
   })
+
+  // TBR-149: without this, `useBootstrapPairing`'s `enabled` flag stays `true` across a Retry
+  // click (no false→true edge to trigger a refetch), so a bootstrap candidate that only became
+  // live *after* the first failed attempt would never be discovered until an unrelated remount.
+  it("retry also invalidates the bootstrap-pairing and instances queries, not just its own", async () => {
+    vi.spyOn(connectionState, "resolveConnectionState").mockResolvedValue({ state: "unreachable" })
+    const bootstrapSpy = vi
+      .spyOn(bootstrapPairing, "resolveBootstrapPairing")
+      .mockResolvedValue({ pairing: PAIRING, instances: [] })
+
+    const { result } = renderHook(
+      () => ({
+        connection: useCompanionConnection("repo-1"),
+        bootstrap: useBootstrapPairing("repo-1", PAIRING, { alsoTryWhenUnreachable: true }),
+      }),
+      { wrapper }
+    )
+
+    await waitFor(() => expect(bootstrapSpy).toHaveBeenCalledTimes(1))
+
+    await result.current.connection.retry()
+
+    await waitFor(() => expect(bootstrapSpy).toHaveBeenCalledTimes(2))
+  })
 })
 
 const PAIRING = {
@@ -240,6 +264,68 @@ describe("useBootstrapPairing", () => {
         instances: [],
       })
     )
+  })
+
+  // TBR-149: a direct-handoff pairing that's gone stale (satellite restarted, new ephemeral
+  // port) still has a non-null `ownPairing` — without an opt-in, this stays disabled exactly
+  // like the has-a-pairing case above, so a caller must explicitly ask for it.
+  it("still does not resolve when this Repository has its own pairing and alsoTryWhenUnreachable is false", () => {
+    const spy = vi.spyOn(bootstrapPairing, "resolveBootstrapPairing")
+    renderHook(
+      () => useBootstrapPairing("repo-1", PAIRING, { alsoTryWhenUnreachable: false }),
+      { wrapper }
+    )
+
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it("resolves a bootstrap pairing when this Repository's own pairing exists but is unreachable and alsoTryWhenUnreachable is true", async () => {
+    const spy = vi
+      .spyOn(bootstrapPairing, "resolveBootstrapPairing")
+      .mockResolvedValue({ pairing: PAIRING, instances: [] })
+
+    const { result } = renderHook(
+      () => useBootstrapPairing("repo-1", PAIRING, { alsoTryWhenUnreachable: true }),
+      { wrapper }
+    )
+
+    await waitFor(() => expect(spy).toHaveBeenCalledWith("repo-1"))
+    await waitFor(() =>
+      expect(result.current.data).toEqual({ pairing: PAIRING, instances: [] })
+    )
+  })
+
+  // Broadening `enabled` beyond "never paired" means the exclusion `resolveBootstrapPairing`
+  // applies (skip candidates stored under this exact repositoryId) now genuinely differs per
+  // repository — a shared, non-repository-keyed cache entry would let one repository's stale
+  // result leak into another's. Two different repositories sharing one QueryClient (as a real
+  // page navigation would, via the app's single QueryClientProvider) must each resolve their
+  // own candidates.
+  it("keys the cached result per repositoryId, so two different repositories don't share one bootstrap result", async () => {
+    const spy = vi
+      .spyOn(bootstrapPairing, "resolveBootstrapPairing")
+      .mockImplementation((repositoryId) =>
+        Promise.resolve({
+          pairing: { ...PAIRING, checkoutId: repositoryId },
+          instances: [],
+        })
+      )
+
+    const { result } = renderHook(
+      () => ({
+        a: useBootstrapPairing("repo-a", null),
+        b: useBootstrapPairing("repo-b", null),
+      }),
+      { wrapper }
+    )
+
+    await waitFor(() => expect(result.current.a.data).toBeTruthy())
+    await waitFor(() => expect(result.current.b.data).toBeTruthy())
+
+    expect(spy).toHaveBeenCalledWith("repo-a")
+    expect(spy).toHaveBeenCalledWith("repo-b")
+    expect(result.current.a.data?.pairing.checkoutId).toBe("repo-a")
+    expect(result.current.b.data?.pairing.checkoutId).toBe("repo-b")
   })
 })
 
