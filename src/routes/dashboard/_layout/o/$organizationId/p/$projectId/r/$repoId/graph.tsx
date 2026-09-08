@@ -125,7 +125,23 @@ function connectFlowMode(manualPairRequested: boolean, cta: StateNotice["cta"]):
   return cta === "reconnect" ? "reconnect" : "repair"
 }
 
-function ConnectionSection({
+/** The fallback link both no-picker branches show: connected-via-satellite (TBR-145, no
+ * `GET /v1/instances`) and `unreachable` with nothing else to bootstrap from (TBR-149). Both
+ * force a fresh `"pair"` flow via `connectFlowMode`'s `manualPairRequested`, so this is only
+ * ever the `onClick` half — each caller supplies its own surrounding copy. */
+function ManualPairFallbackLink({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-3 text-xs font-medium text-muted-foreground underline hover:text-foreground"
+    >
+      Pair a different companion manually
+    </button>
+  )
+}
+
+export function ConnectionSection({
   repositoryId,
   organizationId,
   projectId,
@@ -164,14 +180,34 @@ function ConnectionSection({
   // 404s and `instances` stays null.
   const pairing = getPairing(repositoryId)
   const instancesQuery = useCompanionInstances(pairing)
+  // TBR-149: `unreachable` collapses two different causes in `connectionState.ts` — `ping`
+  // failing outright (a direct-handoff pairing's satellite restarted on a new ephemeral port,
+  // the port genuinely dead) or a live companion's `fetchStatus` call blipping once (`ping`
+  // itself already succeeded). Widening the bootstrap path below to *also* run in this state
+  // is safe regardless of which caused it: `instancesQuery` above is still tried unconditionally
+  // against `pairing` exactly as before, so a merely-transient blip that still lets its own
+  // `GET /v1/instances` succeed keeps its data below and the bootstrap fallback never gets a
+  // chance to override it — this only ever matters once `instancesQuery` has actually failed,
+  // which is the "port genuinely dead" case this fix targets.
+  const unreachable = result.state === "unreachable"
   // TBR-147: a Repository with no pairing of its own borrows any other pairing this browser
   // already holds, trying candidates until one resolves to a hub (resolveBootstrapPairing) —
-  // `enabled` there is the exact inverse of `useCompanionInstances`'s, so exactly one of the two
-  // ever fetches for a given Repository. `bootstrapPairing` never gets written to this
+  // `enabled` there was the exact inverse of `useCompanionInstances`'s until TBR-149's
+  // `alsoTryWhenUnreachable` widened it to also run alongside a non-null `pairing` once
+  // `instancesQuery` might be failing against it. `bootstrapPairing` never gets written to this
   // Repository's own storage; it exists only to seed the picker below, which persists its own
   // pairing via `confirmPairing` once the human actually picks a checkout to switch to.
-  const bootstrapQuery = useBootstrapPairing(repositoryId, pairing)
-  const effectivePairing = pairing ?? bootstrapQuery.data?.pairing ?? null
+  const bootstrapQuery = useBootstrapPairing(repositoryId, pairing, {
+    alsoTryWhenUnreachable: unreachable,
+  })
+  // Whichever query's fetch actually produced data wins — never a flag derived from `result.state`
+  // (react-query data that can lag a render or two behind a synchronous `getPairing` read), so a
+  // just-confirmed switch's fresh `pairing` takes over the instant `instancesQuery` re-resolves
+  // against it, with no window where a stale `unreachable` read would keep preferring bootstrap's
+  // now-irrelevant borrowed pairing.
+  const effectivePairing = instancesQuery.data
+    ? pairing
+    : (bootstrapQuery.data?.pairing ?? pairing ?? null)
   const instances =
     instancesQuery.data?.instances ?? bootstrapQuery.data?.instances ?? null
 
@@ -242,16 +278,12 @@ function ConnectionSection({
               Connected directly to a satellite checkout — this machine&apos;s other companion
               instances aren&apos;t listed here (only the hub serves that list).
             </p>
-            <button
-              type="button"
+            <ManualPairFallbackLink
               onClick={() => {
                 setManualPairRequested(true)
                 setShowFlow(true)
               }}
-              className="mt-3 text-xs font-medium text-muted-foreground underline hover:text-foreground"
-            >
-              Pair a different companion manually
-            </button>
+            />
           </div>
         )}
         <div className="rounded-xl border bg-card p-5">
@@ -322,6 +354,17 @@ function ConnectionSection({
                 {notice.cta === "retry" && "Retry"}
               </Button>
             </div>
+          )}
+          {/* TBR-149: the bootstrap widening above only helps when *some* other pairing in this
+           * browser resolves to a hub — when it doesn't (or hasn't resolved yet), Retry alone
+           * re-pings the same dead `baseUrl` forever with no way back into pairing otherwise. */}
+          {unreachable && !showFlow && (
+            <ManualPairFallbackLink
+              onClick={() => {
+                setManualPairRequested(true)
+                setShowFlow(true)
+              }}
+            />
           )}
         </div>
       )}

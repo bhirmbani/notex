@@ -42,10 +42,26 @@ export function useCompanionConnection(
     staleTime: Infinity,
   })
 
+  // TBR-149: also invalidates `companionBootstrapPairingKeys`/`companionInstancesKeys` — not
+  // just this hook's own `companionConnectionKeys` — so a Retry click on an `unreachable`
+  // Repository actually re-tries discovery, not only the identical dead `baseUrl` ping.
+  // Without this, `useBootstrapPairing`'s `enabled` flag (graph.tsx's `alsoTryWhenUnreachable`)
+  // stays `true` across the click (no false→true edge to trigger a refetch), so a bootstrap
+  // candidate that only came up *after* the first failed attempt — e.g. the user just started a
+  // companion elsewhere — would never be discovered until an unrelated remount or refocus.
+  // `companionInstancesKeys.all` is a prefix match (not `.detail(baseUrl)`): this hook doesn't
+  // know `pairing`, and invalidating every currently-mounted instances query is harmless — each
+  // just refetches against whatever `baseUrl` it's already keyed to.
   const retry = () =>
-    queryClient.invalidateQueries({
-      queryKey: companionConnectionKeys.detail(repositoryId),
-    })
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: companionConnectionKeys.detail(repositoryId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: companionBootstrapPairingKeys.detail(repositoryId),
+      }),
+      queryClient.invalidateQueries({ queryKey: companionInstancesKeys.all }),
+    ])
 
   return { ...query, retry }
 }
@@ -178,30 +194,46 @@ export function useCompanionInstances(pairing: PairingRecord | null) {
 }
 
 export const companionBootstrapPairingKeys = {
-  // Not per-repositoryId: `resolveBootstrapPairing`'s own `repositoryId !== entry.repositoryId`
-  // exclusion is a no-op whenever this hook is enabled at all (an unpaired Repository, by
-  // definition, has no stored pairing of its own to exclude), so the result is identical for
-  // every currently-unpaired Repository — one shared cache entry avoids re-trying the same
-  // candidates across each.
   all: ["companion", "bootstrapPairing"] as const,
+  // Per-repositoryId (TBR-149): `resolveBootstrapPairing`'s own `repositoryId !==
+  // entry.repositoryId` exclusion only ever excludes *this* repository's own stored entry —
+  // a no-op when `ownPairing` is null (nothing stored to exclude), but genuinely different once
+  // `alsoTryWhenUnreachable` lets this hook run for a Repository that *does* have a (stale)
+  // stored pairing of its own. A single shared cache entry would let one repository's result
+  // (computed with its own exclusion applied) leak into a different repository's read.
+  detail: (repositoryId: string) => [...companionBootstrapPairingKeys.all, repositoryId] as const,
 }
 
 /**
  * TBR-147's bootstrap path: when `ownPairing` is null — this Repository has never been paired —
  * tries every other pairing already stored in this browser until one resolves to a hub (see
- * `resolveBootstrapPairing`). `enabled: ownPairing === null` is the exact inverse of
- * `useCompanionInstances`'s `enabled: !!pairing`, so the two hooks are mutually exclusive by
- * construction — never both fetching for the same Repository at once. `retry: false` for the
+ * `resolveBootstrapPairing`). `enabled: ownPairing === null` was the exact inverse of
+ * `useCompanionInstances`'s `enabled: !!pairing` until TBR-149's `alsoTryWhenUnreachable` (below)
+ * widened it — the two are no longer mutually exclusive by construction; see that option's own
+ * doc for when both legitimately fetch for the same Repository at once. `retry: false` for the
  * same reason `useCompanionInstances` disables it: a satellite candidate's 404 is deterministic.
+ *
+ * `alsoTryWhenUnreachable` (TBR-149) widens `enabled` to also cover the case where `ownPairing`
+ * is non-null but stale — a direct-handoff pairing (TBR-144) pins a satellite's exact
+ * `baseUrl:port`, and a satellite's port changes on every restart, so a Repository connected
+ * that way is otherwise permanently stuck: `resolveConnectionState` resolves it to
+ * `unreachable`, whose only CTA (`stateNotice.ts`) is Retry — which just re-pings the same dead
+ * `baseUrl` forever. Passing `true` here lets the caller (graph.tsx's `ConnectionSection`) try
+ * every *other* stored pairing instead, the same recovery path TBR-147 already gives a
+ * never-paired Repository — deliberately run *alongside* `useCompanionInstances`, not instead of
+ * it, so a still-live `ownPairing` (e.g. `unreachable` from a merely transient `fetchStatus`
+ * blip, not a dead `baseUrl`) keeps winning once its own fetch resolves (see graph.tsx's
+ * `effectivePairing`/`instances`, which prefer `instancesQuery.data` whenever present).
  */
 export function useBootstrapPairing(
   repositoryId: string,
-  ownPairing: PairingRecord | null
+  ownPairing: PairingRecord | null,
+  opts: { alsoTryWhenUnreachable?: boolean } = {}
 ) {
   return useQuery({
-    queryKey: companionBootstrapPairingKeys.all,
+    queryKey: companionBootstrapPairingKeys.detail(repositoryId),
     queryFn: () => resolveBootstrapPairing(repositoryId),
-    enabled: ownPairing === null,
+    enabled: ownPairing === null || opts.alsoTryWhenUnreachable === true,
     retry: false,
     staleTime: 10_000,
   })

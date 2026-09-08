@@ -9,12 +9,31 @@ import {
   waitFor,
 } from "@testing-library/react"
 import { MAX_BROWSE_GROUP_LIMIT } from "notex-companion/client"
-import { NodePicker, PathPanel, SearchPanel } from "./graph"
+import { ConnectionSection, NodePicker, PathPanel, SearchPanel } from "./graph"
+import { useState } from "react"
 import type { ReactNode } from "react"
 
+import type { ConnectionResult } from "@/features/companion/connectionState"
 import type { ResolvedNode } from "@/features/companion/types"
 import * as client from "@/features/companion/client"
+import { setPairing } from "@/features/companion/pairing"
 import { EDITOR_SCHEME_STORAGE_KEY } from "@/lib/editorScheme"
+
+// InstancePicker.tsx renders a `Link` — no route tree exists in an isolated component test, so
+// mock it as a plain anchor (matching InstancePicker.test.tsx's own precedent), keeping every
+// other export (notably `createFileRoute`, which this file's own `Route` needs at import time)
+// real via `importOriginal`, mirroring index.test.tsx's own precedent in this same directory.
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-router")>()
+  return {
+    ...actual,
+    Link: ({ to, children, ...props }: { to: string; children: ReactNode }) => (
+      <a href={to} {...props}>
+        {children}
+      </a>
+    ),
+  }
+})
 
 afterEach(() => {
   cleanup()
@@ -46,6 +65,102 @@ const RESULT_NODE = {
   community: null,
   score: 3.5,
 }
+
+const IDS = { organizationId: "org-1", projectId: "proj-1" }
+const OWN_BASE = "http://127.0.0.1:61652"
+const OTHER_BASE = "http://127.0.0.1:7717"
+
+function instanceSummary({ checkoutPath }: { checkoutPath: string }) {
+  return {
+    instanceId: checkoutPath,
+    checkoutPath,
+    port: 7717,
+    role: "hub" as const,
+    registeredAt: "2026-01-01T00:00:00.000Z",
+    lastHeartbeatAt: "2026-01-01T00:00:00.000Z",
+    gitRemote: null,
+    headSha: null,
+    link: null,
+  }
+}
+
+function ConnectionSectionHarness({
+  repositoryId,
+  result,
+}: {
+  repositoryId: string
+  result: ConnectionResult
+}) {
+  const [showFlow, setShowFlow] = useState(false)
+  return (
+    <ConnectionSection
+      repositoryId={repositoryId}
+      organizationId={IDS.organizationId}
+      projectId={IDS.projectId}
+      siblingRepositories={[]}
+      result={result}
+      retry={() => {}}
+      showFlow={showFlow}
+      setShowFlow={setShowFlow}
+    />
+  )
+}
+
+describe("ConnectionSection unreachable recovery (TBR-149)", () => {
+  it("shows a picker borrowed from another stored pairing when this Repository's own is unreachable and its own GET /v1/instances fails", async () => {
+    setPairing("repo-1", { baseUrl: OWN_BASE, token: "own-tok", checkoutId: "own-c" })
+    setPairing("repo-2", { baseUrl: OTHER_BASE, token: "other-tok", checkoutId: "other-c" })
+    vi.spyOn(client, "fetchInstances").mockImplementation((baseUrl) =>
+      baseUrl === OWN_BASE
+        ? Promise.reject(new Error("connection refused"))
+        : Promise.resolve({ instances: [instanceSummary({ checkoutPath: "/other/checkout" })] })
+    )
+
+    render(<ConnectionSectionHarness repositoryId="repo-1" result={{ state: "unreachable" }} />, { wrapper })
+
+    await waitFor(() => expect(screen.getByText("Companion instances on this machine")).toBeTruthy())
+    expect(screen.getByText("/other/checkout")).toBeTruthy()
+    expect(screen.queryByText(/Companion isn't running/)).toBeNull()
+  })
+
+  it("keeps showing this Repository's own instances, not a borrowed picker, when unreachable is a transient blip and its own GET /v1/instances still succeeds", async () => {
+    setPairing("repo-1", { baseUrl: OWN_BASE, token: "own-tok", checkoutId: "own-c" })
+    setPairing("repo-2", { baseUrl: OTHER_BASE, token: "other-tok", checkoutId: "other-c" })
+    vi.spyOn(client, "fetchInstances").mockImplementation((baseUrl) =>
+      Promise.resolve({
+        instances: [
+          instanceSummary({
+            checkoutPath: baseUrl === OWN_BASE ? "/own/checkout" : "/other/checkout",
+          }),
+        ],
+      })
+    )
+
+    render(<ConnectionSectionHarness repositoryId="repo-1" result={{ state: "unreachable" }} />, { wrapper })
+
+    await waitFor(() => expect(screen.getByText("/own/checkout")).toBeTruthy())
+    expect(screen.queryByText("/other/checkout")).toBeNull()
+  })
+
+  it("falls back to the plain unreachable notice, with Retry and a manual-pair link, when no other pairing resolves to a hub either", async () => {
+    setPairing("repo-1", { baseUrl: OWN_BASE, token: "own-tok", checkoutId: "own-c" })
+    vi.spyOn(client, "fetchInstances").mockRejectedValue(new Error("connection refused"))
+
+    render(<ConnectionSectionHarness repositoryId="repo-1" result={{ state: "unreachable" }} />, { wrapper })
+
+    await waitFor(() => expect(screen.getByText(/Companion isn't running/)).toBeTruthy())
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy()
+
+    fireEvent.click(screen.getByText("Pair a different companion manually"))
+
+    // "pair" mode's own first step is the LNA permission explainer, not the paste form directly
+    // (ConnectFlow.tsx's `initialStep`) — this is enough to prove the link actually opened
+    // ConnectFlow in "pair" mode, without driving through its own separately-tested flow.
+    await waitFor(() =>
+      expect(screen.getByText("Connect your companion")).toBeTruthy()
+    )
+  })
+})
 
 describe("NodePicker", () => {
   it("searches on input, resolves a suggestion into a chip, and clears back to a search box", async () => {
