@@ -1,20 +1,81 @@
-# TanStack Start + shadcn/ui
+# Notex
 
-This is a template for a new TanStack Start project with React, TypeScript, and shadcn/ui.
+Notex organizes engineering knowledge as Projects, Repositories, Questions, and Answers, tied
+directly to the code they're about. A local Companion process reads your repository's code graph
+and drafts cited Answers, so what your team knows about the code doesn't drift into a wiki nobody
+keeps up to date.
 
-## Adding components
+- **Grounded, not guessed.** Every drafted Answer is stamped with the build time and commit of the
+  graph it came from. A stale graph is reported, never hidden or silently trusted.
+- **Local-first Companion.** [`notex-companion`](https://www.npmjs.com/package/notex-companion)
+  binds `127.0.0.1` only, holds no LLM, and never talks to Notex's database — your source code and
+  code graph never leave your machine.
+- **Built on graphify, not a rebuild of it.** The code graph comes from
+  [graphify](https://github.com/Graphify-Labs/graphify); Notex adds the layer graphify was never
+  going to build: Questions, Answers, staleness reporting, and a browser your team actually uses.
+- **Bring your own LLM key.** Vocabulary expansion and answer synthesis run with your own
+  Anthropic or OpenAI-compatible Provider key, stored only in your browser.
+- **Stack:** TanStack Start, Cloudflare Workers + D1 (via Drizzle ORM), shadcn/ui.
 
-To add components to your app, run the following command:
+```
+❯ notex-companion
+notex-companion serving ~/code/your-repo
+notex-companion: standalone
+paste this pairing line into Notex → Connect companion:
+nt_9f2a...
+
+# in Notex: ask a Question, then "Draft from graph"
+graph_query({ terms: ["draft synthesis"] })
+//=> 4 nodes, 1 hub -> cited Answer, stamped with commit a1b2c3d
+```
+
+## Getting started
+
+1. Install [Bun](https://bun.sh) `1.3.14` (pinned in `packageManager`).
+2. Clone and install — `postinstall` builds `packages/companion` automatically:
+   ```bash
+   git clone https://github.com/bhirmbani/notex.git
+   cd notex
+   bun install
+   ```
+3. Copy the dev secrets template:
+   ```bash
+   cp .dev.vars.example .dev.vars
+   ```
+4. Apply local D1 migrations (see [Database](#database-d1) below for the full picture):
+   ```bash
+   bunx wrangler d1 migrations apply notex --local
+   ```
+5. Start the dev server:
+   ```bash
+   bun run dev
+   ```
+   Open `http://localhost:3000`.
+
+## License
+
+[GNU AGPL-3.0](LICENSE). You can self-host, modify, and redistribute Notex freely, but if you run a
+modified version as a network service, you must offer that service's users the modified source
+(AGPL §13) — the point is to stop a fork of Notex being used to run a competing hosted service with
+no obligation back to its own users.
+
+As sole copyright holder, the official hosted Notex service is run under separate commercial terms,
+not the AGPL — dual-licensing your own code this way is standard practice and doesn't affect the
+rights this LICENSE grants everyone else. If Notex ever takes outside contributions, a CLA (or
+equivalent) will be needed to keep that dual-licensing option intact, since a contributor otherwise
+keeps copyright over their own contribution.
+
+---
+
+## Adding UI components
+
+This project uses [shadcn/ui](https://ui.shadcn.com). To add a component:
 
 ```bash
 npx shadcn@latest add button
 ```
 
-This will place the ui components in the `components` directory.
-
-## Using components
-
-To use the components in your app, import them as follows:
+This places it under `src/components/ui`. Import it as:
 
 ```tsx
 import { Button } from "@/components/ui/button";
@@ -39,7 +100,7 @@ locally-hosted models (Ollama, LM Studio).
 
 ## Code graph (graphify)
 
-`graphify-out/graph.json` is the code graph the `notex-companion` MCP server's `graph_*` and `notex_*` tools read from (see [Running the MCP server](docs/testing/mcp-server-setup.md)). It's built by the `graphify` Claude Code skill and isn't regenerated automatically — rerun it after code changes so queries and drafted Answers reflect the current source, not a stale graph.
+`graphify-out/graph.json` is the code graph the `notex-companion` MCP server's `graph_*` and `notex_*` tools read from (see [Running the MCP server](docs/testing/mcp-server-setup.md)). It's built by the [graphify](https://github.com/Graphify-Labs/graphify) Claude Code skill and isn't regenerated automatically — rerun it after code changes so queries and drafted Answers reflect the current source, not a stale graph.
 
 Scan root is `src` (tracked in `graphify-out/.graphify_root`). From a Claude Code session in the repo root:
 

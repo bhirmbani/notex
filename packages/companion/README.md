@@ -31,8 +31,9 @@ npx notex-companion@latest
 ```
 
 Run this from inside a checkout that already has a `graphify-out/graph.json`. It prints which
-checkout it's serving, the graph's node/edge/community counts, and one pairing line — paste that
-line into Notex's "Connect companion" flow to pair your browser.
+checkout it's serving, the graph's node/edge/community counts, its role (see
+[Running more than one checkout](#running-more-than-one-checkout) below), and one pairing line —
+paste that line into Notex's "Connect companion" flow to pair your browser.
 
 If `graphify-out/graph.json` is missing, it prints an actionable message and exits (code 1) instead
 of starting a broken server.
@@ -42,11 +43,30 @@ of starting a broken server.
 ```bash
 notex-companion [serve] [options]   # start the loopback HTTP server — the default command
 notex-companion mcp                 # start the stdio MCP server — graph_status, graph_search,
-                                     # graph_query, graph_path, graph_node, plus notex_list_questions,
-                                     # notex_get_question, notex_get_answer, notex_save_answer
-                                     # (require .notex/notex.json — see docs/specs/notex-mcp-server.md)
+                                     # graph_query, graph_path, graph_node, graph_suggested_questions,
+                                     # plus notex_list_questions, notex_get_question, notex_get_answer,
+                                     # notex_save_answer (the notex_* tools require .notex/notex.json —
+                                     # see docs/specs/notex-mcp-server.md)
 notex-companion link [options]      # write .notex/notex.json, pairing this checkout to a Notex Repository
 ```
+
+### Running more than one checkout
+
+The first `notex-companion serve` to bind the target port (`7717` by default) on a machine becomes
+the **hub**; every later one detects that (`EADDRINUSE`), confirms the occupant is a
+wire-compatible `notex-companion` (`GET /v1/ping`), and runs as a **satellite** instead — its own
+server on an OS-assigned port, registered with the hub and heartbeating it every 15s. Every
+checkout, hub or satellite, prints the identical pairing line, so pairing your browser once covers
+all of them; the browser's instance picker is what lets you switch which checkout a Question is
+asking against.
+
+If the hub disappears (crash, `Ctrl+C` without a clean deregister), a satellite notices on its next
+heartbeat and re-runs the same bind-then-verify race to elect a new hub, reusing the already-issued
+pairing token so already-paired browsers keep working without re-pairing. If the target port is
+occupied by something that never confirms as a compatible `notex-companion` (something else bound
+to it, or a slow-starting hub that hasn't answered yet), the process falls back to **standalone**
+mode on an OS-assigned port — same as a lone checkout today — and prints a warning that hub/satellite
+switching is unavailable for that session.
 
 Setup, how it picks which checkout to serve, and a manual verification walkthrough:
 [`docs/testing/mcp-server-setup.md`](https://github.com/bhirmbani/notex/blob/main/docs/testing/mcp-server-setup.md).
@@ -76,10 +96,21 @@ message and writes nothing.
 
 ## Pairing
 
-On first run the companion generates a 32-byte token, persists it to `.notex/companion.json`
-(mode `0600`), and reuses it across restarts. Every op except `/v1/ping` requires it as
-`Authorization: Bearer <token>`. The token never leaves your machine — Notex stores it only in your
-browser's `localStorage`, keyed by Repository, and it is never sent to the Notex server or database.
+Running standalone (a single checkout, no hub/satellite promotion), the companion generates a
+32-byte token on first run, persists it to `.notex/companion.json` (mode `0600`), and reuses it
+across restarts. Running as a hub or satellite, every process on the machine instead shares one
+token from `~/.notex-companion/hub.json` (mode `0600`) — this is what lets every checkout print the
+same pairing line, so pairing your browser once covers all of them, and lets a re-elected hub keep
+already-paired browsers working across a crash. Either way, every op except `/v1/ping` requires the
+token as `Authorization: Bearer <token>`. The token never leaves your machine — Notex stores it only
+in your browser's `localStorage`, keyed by Repository, and it is never sent to the Notex server or
+database.
+
+The same `hub.json` file also holds a Notex API key, once a browser submits one via the "switch
+checkout" flow — reused by the hub to validate and link whichever satellite you switch a Question
+to next, so you aren't asked for it again per checkout. `--rotate-token` drops that stored key along
+with rotating the token itself: every already-paired browser has to re-pair anyway, so it re-submits
+the key at the same time.
 
 ## `apiVersion`
 
