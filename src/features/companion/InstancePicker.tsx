@@ -23,6 +23,7 @@ import { confirmPairing } from "./pairingFlow"
 import { computeCheckoutId } from "./checkoutId"
 import { isSwitchConfirmed, setConfirmedSwitchBinding } from "./switchConfirmation"
 import { switchErrorCopy } from "./switchErrorCopy"
+import { findSiblingPromotion, type SiblingRepository } from "./siblingPromotion"
 import type { InstanceLink, InstanceSummary } from "notex-companion/client"
 import type { PairingRecord } from "./types"
 import { Button } from "@/components/ui/button"
@@ -35,6 +36,10 @@ type Props = {
   projectId: string
   pairing: PairingRecord
   instances: Array<InstanceSummary>
+  /** This Project's own repository list (useRepositories) — cross-referenced against each
+   * instance's `link` to find one already connected to a sibling Repository in this Project
+   * (TBR-148). Defaults to empty, so callers that don't have it yet just see no promotion. */
+  siblingRepositories?: Array<SiblingRepository>
   onSwitched: () => void
   /** Omitted (not just a no-op) by the caller once already `connected` — the fallback link is a
    * bootstrap path into this component in the first place, meaningless when there's already a
@@ -105,6 +110,7 @@ export function InstancePicker({
   projectId,
   pairing,
   instances,
+  siblingRepositories = [],
   onSwitched,
   onManualPair,
 }: Props) {
@@ -176,6 +182,20 @@ export function InstancePicker({
     await performSwitch(instance)
   }
 
+  // TBR-148: promote the one instance (if any) already linked to a sibling Repository in this
+  // Project above the rest of the plain list — never removing or hiding the others. Reordering
+  // is frozen once a row is mid-interaction (`activeInstanceId` set): `siblingRepositories`
+  // resolves independently of (and often later than) `instances`, so without this guard a row
+  // whose confirm/switching panel is already open could jump to position 0 out from under the
+  // user the moment the repository list finishes loading.
+  const promotion =
+    activeInstanceId === null
+      ? findSiblingPromotion(instances, siblingRepositories, { organizationId, projectId, repositoryId })
+      : null
+  const orderedInstances = promotion
+    ? [promotion.instance, ...instances.filter((i) => i.instanceId !== promotion.instance.instanceId)]
+    : instances
+
   return (
     <div className="rounded-xl border bg-card p-5">
       <h2 className="mb-1 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
@@ -185,7 +205,7 @@ export function InstancePicker({
         Pick a running checkout to serve this Repository&apos;s graph.
       </p>
       <div className="divide-y rounded-lg border px-3">
-        {instances.map((instance) => {
+        {orderedInstances.map((instance) => {
           const isLinked = linkMatches(instance.link, { organizationId, projectId, repositoryId })
           const isLive = isLiveConnection(pairing, instance)
           // The hub is a broker, never a switch target — switchInstance's registry lookup only
@@ -194,9 +214,17 @@ export function InstancePicker({
           const isHub = instance.role === "hub"
           const isActive = instance.instanceId === activeInstanceId
           const isSwitchingThis = isActive && step === "switching"
+          const isPromoted = promotion?.instance.instanceId === instance.instanceId
 
           return (
             <div key={instance.instanceId} className="py-2.5">
+              {isPromoted && (
+                <div className="mb-2 rounded-lg bg-primary/10 px-2.5 py-1.5">
+                  <p className="text-xs font-semibold text-primary">
+                    Already connected to {promotion.siblingRepositoryName} in this Project
+                  </p>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-mono text-xs">{instance.checkoutPath}</p>

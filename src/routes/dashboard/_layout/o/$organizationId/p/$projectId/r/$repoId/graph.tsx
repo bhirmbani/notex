@@ -11,7 +11,7 @@ import type { FocusEvent, ReactNode } from "react"
 import type { PairingRecord, ResolvedNode } from "@/features/companion/types"
 import type { StateNotice } from "@/features/companion/stateNotice"
 import { useProject } from "@/features/projects/hooks"
-import { useRepository } from "@/features/repositories/hooks"
+import { useRepositories, useRepository } from "@/features/repositories/hooks"
 import { Breadcrumb } from "@/components/Breadcrumb"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,7 @@ import {
 } from "@/features/companion/hooks"
 import { InstancePicker } from "@/features/companion/InstancePicker"
 import { getPairing } from "@/features/companion/pairing"
+import type { SiblingRepository } from "@/features/companion/siblingPromotion"
 import { NotexJsonCard } from "@/features/companion/NotexJsonCard"
 import { stalenessMessage } from "@/features/companion/staleness"
 import { stateNotice } from "@/features/companion/stateNotice"
@@ -43,6 +44,7 @@ function GraphPage() {
   const { organizationId, projectId, repoId } = Route.useParams()
   const { data: project } = useProject(organizationId, projectId)
   const { data: repo } = useRepository(organizationId, repoId)
+  const { data: repositories } = useRepositories(organizationId, projectId)
   const connection = useCompanionConnection(repoId)
   const [showFlow, setShowFlow] = useState(false)
 
@@ -91,6 +93,7 @@ function GraphPage() {
           repositoryId={repoId}
           organizationId={organizationId}
           projectId={projectId}
+          siblingRepositories={repositories ?? []}
           result={connection.data}
           retry={connection.retry}
           showFlow={showFlow}
@@ -126,6 +129,7 @@ function ConnectionSection({
   repositoryId,
   organizationId,
   projectId,
+  siblingRepositories,
   result,
   retry,
   showFlow,
@@ -134,6 +138,7 @@ function ConnectionSection({
   repositoryId: string
   organizationId: string
   projectId: string
+  siblingRepositories: Array<SiblingRepository>
   result: ReturnType<typeof useCompanionConnection>["data"] & {}
   retry: () => Promise<unknown> | void
   showFlow: boolean
@@ -178,6 +183,7 @@ function ConnectionSection({
         projectId={projectId}
         pairing={effectivePairing}
         instances={instances}
+        siblingRepositories={siblingRepositories}
         onSwitched={() => {
           setShowFlow(false)
           setManualPairRequested(false)
