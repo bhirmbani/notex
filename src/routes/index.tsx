@@ -444,6 +444,58 @@ function HomePage() {
           </div>
         </section>
 
+        <section id="more" className="border-t border-border">
+          <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
+            <h2 className="text-2xl font-bold sm:text-3xl">
+              There's more in a Project than Questions and Answers
+            </h2>
+            <p className="mt-3 max-w-2xl text-muted-foreground">
+              Three things that don't fit the glossary above, because they
+              cut across it instead of adding another entity to it.
+            </p>
+            <div className="mt-10 grid gap-10 lg:grid-cols-3 lg:gap-8">
+              <div>
+                <h3 className="font-mono text-sm font-bold text-primary">
+                  Notes and diagrams
+                </h3>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  A Project holds more than Questions and Answers. Add a
+                  Note, a full markdown editor with live preview, for
+                  anything that doesn't fit a Question, or a Mermaid
+                  diagram when a picture says it faster than prose. Both
+                  live in the Project alongside everything else.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-mono text-sm font-bold text-primary">
+                  A mind map, not just a hierarchy
+                </h3>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Every Repository, Question, Answer, Note, and diagram in
+                  a Project can be linked to any other one directly, on
+                  purpose, past the fixed Project owns Repository owns
+                  Question chain above. The mind map draws the result: how
+                  your team's knowledge actually connects, not just how
+                  it's filed.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-mono text-sm font-bold text-primary">
+                  Nobody gets a Project by default
+                </h3>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Inviting someone to your Organization doesn't hand them
+                  every Project. The invite is a single-use, expiring link;
+                  once accepted, an admin decides which Projects that
+                  person can read, and which they can write to, one
+                  Project at a time. Admins get every Project without a
+                  Grant. Everyone else starts with none.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="graphify" className="border-t border-border">
           <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
             <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
