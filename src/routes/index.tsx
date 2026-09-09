@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { buttonVariants } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { authClient } from '@/features/auth/lib/client'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -327,6 +328,8 @@ function PrivacyPolicyModal({
 
 function HomePage() {
   const [privacyOpen, setPrivacyOpen] = useState(false)
+  const { data: session } = authClient.useSession()
+  const isAuthed = Boolean(session)
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -349,20 +352,31 @@ function HomePage() {
               <GitHubIcon className="h-5 w-5" />
             </a>
             <ThemeToggle />
-            <Link
-              to="/login"
-              className={buttonVariants({ variant: 'ghost', className: 'h-11 px-4' })}
-            >
-              Sign in
-            </Link>
-            <Link
-              to="/register"
-              className={buttonVariants({
-                className: 'hidden h-11 px-4 sm:inline-flex',
-              })}
-            >
-              Create free account
-            </Link>
+            {isAuthed ? (
+              <Link
+                to="/dashboard"
+                className={buttonVariants({ className: 'h-11 px-4' })}
+              >
+                Go to app
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className={buttonVariants({ variant: 'ghost', className: 'h-11 px-4' })}
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/register"
+                  className={buttonVariants({
+                    className: 'hidden h-11 px-4 sm:inline-flex',
+                  })}
+                >
+                  Create free account
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -385,10 +399,10 @@ function HomePage() {
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
-                  to="/register"
+                  to={isAuthed ? '/dashboard' : '/register'}
                   className={buttonVariants({ className: 'h-11 px-5' })}
                 >
-                  Create a free account
+                  {isAuthed ? 'Go to app' : 'Create a free account'}
                 </Link>
                 <a
                   href="#how-it-works"
@@ -838,21 +852,32 @@ function HomePage() {
               Give your team's questions a place to live next to the code.
             </h2>
             <div className="flex flex-wrap gap-3">
-              <Link
-                to="/register"
-                className={buttonVariants({ className: 'h-11 px-5' })}
-              >
-                Create a free account
-              </Link>
-              <Link
-                to="/login"
-                className={buttonVariants({
-                  variant: 'outline',
-                  className: 'h-11 px-5',
-                })}
-              >
-                Sign in
-              </Link>
+              {isAuthed ? (
+                <Link
+                  to="/dashboard"
+                  className={buttonVariants({ className: 'h-11 px-5' })}
+                >
+                  Go to app
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/register"
+                    className={buttonVariants({ className: 'h-11 px-5' })}
+                  >
+                    Create a free account
+                  </Link>
+                  <Link
+                    to="/login"
+                    className={buttonVariants({
+                      variant: 'outline',
+                      className: 'h-11 px-5',
+                    })}
+                  >
+                    Sign in
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </section>
