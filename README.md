@@ -1,9 +1,11 @@
 # Notex
 
-Notex organizes engineering knowledge as Projects, Repositories, Questions, and Answers, tied
-directly to the code they're about. A local Companion process reads your repository's code graph
-and drafts cited Answers, so what your team knows about the code doesn't drift into a wiki nobody
-keeps up to date.
+Notex is the GUI for [graphify](https://github.com/Graphify-Labs/graphify).
+
+It organizes engineering knowledge as Projects, Repositories, Questions, and Answers, tied directly to the code they're about.
+
+A local Companion process reads your repository's code graph and drafts cited Answers, so what your
+team knows about the code doesn't drift into a wiki nobody keeps up to date.
 
 - **Grounded, not guessed.** Every drafted Answer is stamped with the build time and commit of the
   graph it came from. A stale graph is reported, never hidden or silently trusted.
